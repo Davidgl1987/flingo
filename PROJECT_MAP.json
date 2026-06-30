@@ -1,0 +1,49 @@
+{
+  "name": "slingshot-dungeon-mvp",
+  "version": "0.1.1",
+  "purpose": "MVP web/mobile-first para validar un roguelite de habitaciones con lanzamiento tipo billar/Angry Birds.",
+  "start_here": [
+    "AGENTS.md",
+    "README.md",
+    "docs/MVP_STATUS.md",
+    "docs/definitions/GAMEPLAY_CONTRACT.md",
+    "docs/instructions/NEXT_SESSION_PROMPT.md"
+  ],
+  "commands": {
+    "install": "npm install",
+    "dev": "npm run dev",
+    "test": "npm test",
+    "build": "npm run build",
+    "check": "npm run check",
+    "context": "npm run context"
+  },
+  "important_paths": {
+    "game_core": "src/game/core",
+    "state_store": "src/game/stores/useGameStore.ts",
+    "render_components": "src/game/components",
+    "hooks": "src/game/hooks",
+    "tests": "tests/run-tests.ts",
+    "manual_tests": "tests/manual/PLAYTEST_CHECKLIST.md",
+    "definitions": "docs/definitions",
+    "ai_instructions": "docs/instructions",
+    "agent_roles": "docs/agents",
+    "skills": "docs/skills",
+    "docs": "docs"
+  },
+  "current_scope": [
+    "drag-release movement",
+    "room-based combat",
+    "body/projectile risk-reward",
+    "hazards",
+    "simple upgrades",
+    "manual rooms"
+  ],
+  "out_of_scope_for_now": [
+    "final art",
+    "monetization",
+    "online",
+    "procedural generation",
+    "complex inventory",
+    "full Capacitor integration"
+  ]
+}

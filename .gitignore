@@ -1,0 +1,8 @@
+dist
+dist-tests
+dist-node
+.vite
+node_modules
+*.tsbuildinfo
+.DS_Store
+backup/

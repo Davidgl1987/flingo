@@ -1,0 +1,480 @@
+{
+  "id": "fosos1",
+  "name": "Sala borrador",
+  "width": 9,
+  "height": 13,
+  "playerStart": {
+    "x": 0,
+    "y": 4
+  },
+  "enemies": [
+    {
+      "id": "room-draft-spike-1",
+      "type": "spike",
+      "pos": {
+        "x": -2,
+        "y": -4
+      },
+      "radius": 0.52,
+      "hp": 3,
+      "maxHp": 3,
+      "spikeDir": {
+        "x": -1,
+        "y": 0
+      },
+      "patrolTarget": {
+        "x": 2,
+        "y": -4
+      }
+    },
+    {
+      "id": "room-draft-trail-1",
+      "type": "trail",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "radius": 0.46,
+      "hp": 3,
+      "maxHp": 3,
+      "patrolTarget": {
+        "x": -2,
+        "y": 1
+      }
+    }
+  ],
+  "hazards": [
+    {
+      "id": "room-draft-rock-1",
+      "type": "rock",
+      "pos": {
+        "x": 0,
+        "y": 0
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-1",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-2",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": -5
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-3",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": -3
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-4",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": -4
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-5",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": -2
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-6",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": -1
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-7",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": 0
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-8",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": 2
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-9",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": 1
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-10",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": 3
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-11",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": 4
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-12",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": 5
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-13",
+      "type": "pit",
+      "pos": {
+        "x": -4,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-14",
+      "type": "pit",
+      "pos": {
+        "x": -3,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-15",
+      "type": "pit",
+      "pos": {
+        "x": -2,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-16",
+      "type": "pit",
+      "pos": {
+        "x": -1,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-17",
+      "type": "pit",
+      "pos": {
+        "x": 0,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-18",
+      "type": "pit",
+      "pos": {
+        "x": 1,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-19",
+      "type": "pit",
+      "pos": {
+        "x": 2,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-20",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-21",
+      "type": "pit",
+      "pos": {
+        "x": 3,
+        "y": -6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-22",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": -5
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-23",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": -4
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-24",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": -3
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-25",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": -2
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-26",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": -1
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-27",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": 0
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-28",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": 1
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-29",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": 2
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-30",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": 3
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-31",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": 4
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-32",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": 5
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-33",
+      "type": "pit",
+      "pos": {
+        "x": 4,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-34",
+      "type": "pit",
+      "pos": {
+        "x": 3,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-35",
+      "type": "pit",
+      "pos": {
+        "x": 2,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-36",
+      "type": "pit",
+      "pos": {
+        "x": 1,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-37",
+      "type": "pit",
+      "pos": {
+        "x": 0,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-38",
+      "type": "pit",
+      "pos": {
+        "x": -1,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-39",
+      "type": "pit",
+      "pos": {
+        "x": -2,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    },
+    {
+      "id": "room-draft-pit-40",
+      "type": "pit",
+      "pos": {
+        "x": -3,
+        "y": 6
+      },
+      "width": 1,
+      "height": 1
+    }
+  ],
+  "items": [
+    {
+      "id": "room-draft-coin-1",
+      "type": "coin",
+      "pos": {
+        "x": 0,
+        "y": -2
+      },
+      "radius": 0.32,
+      "collected": false
+    },
+    {
+      "id": "room-draft-potion-1",
+      "type": "potion",
+      "pos": {
+        "x": 0,
+        "y": -1
+      },
+      "radius": 0.34,
+      "collected": false
+    }
+  ]
+}
