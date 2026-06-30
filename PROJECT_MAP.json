@@ -1,5 +1,5 @@
 {
-  "name": "slingshot-dungeon-mvp",
+  "name": "flingo",
   "version": "0.1.1",
   "purpose": "MVP web/mobile-first para validar un roguelite de habitaciones con lanzamiento tipo billar/Angry Birds.",
   "start_here": [

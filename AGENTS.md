@@ -1,4 +1,4 @@
-# AGENTS.md — Slingshot Dungeon MVP
+# AGENTS.md — Flingo
 
 Este archivo es el punto de entrada para cualquier nueva sesión con IA. Léelo antes de modificar código.
 

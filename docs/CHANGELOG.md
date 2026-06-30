@@ -1,5 +1,14 @@
 # CHANGELOG.md
 
+## 2026-06-30 — Rename a Flingo + GitHub Pages
+
+- Renombrado el proyecto visible de `Slingshot Dungeon MVP` / `slingshot-dungeon-mvp` a `Flingo` / `flingo` en metadatos, titulo HTML, README y guias de sesion.
+- `vite.config.mts`: produccion usa `base: '/flingo/'` para que GitHub Pages y `vite preview` carguen JS/CSS/assets desde el subpath correcto.
+- `App.tsx`: las rutas se normalizan con `import.meta.env.BASE_URL`, manteniendo `/editor` funcional como `/flingo/editor` en Pages.
+- Añadido `.github/workflows/deploy-pages.yml`: instala con `npm ci`, ejecuta `npm test`, genera `npm run build` y publica `dist` con las acciones oficiales de GitHub Pages.
+- Añadido `public/.nojekyll` para evitar procesamiento Jekyll del artefacto estatico.
+- `package-lock.json`: normalizados los tarballs `resolved` al registro publico de npm para que `npm ci` funcione en GitHub Actions.
+
 ## 2026-06-30 — Escenarios no cuadrados · Flag `USE_VARIABLE_LAYOUT` ELIMINADO
 
 El layout variable es ya el único camino; la rejilla uniforme queda **solo como fallback** de seguridad.

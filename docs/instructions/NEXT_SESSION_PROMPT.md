@@ -4,7 +4,7 @@ Puedes pegar este prompt al iniciar otra sesión con IA junto con el ZIP del pro
 
 ---
 
-Estoy trabajando en un prototipo llamado Slingshot Dungeon MVP. Antes de tocar código, lee `AGENTS.md`, `docs/MVP_STATUS.md`, `docs/definitions/GAMEPLAY_CONTRACT.md` e `docs/instructions/CODING_STANDARDS.md`.
+Estoy trabajando en un prototipo llamado Flingo. Antes de tocar código, lee `AGENTS.md`, `docs/MVP_STATUS.md`, `docs/definitions/GAMEPLAY_CONTRACT.md` e `docs/instructions/CODING_STANDARDS.md`.
 
 Quiero iterar de forma segura:
 

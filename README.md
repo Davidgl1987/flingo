@@ -1,4 +1,4 @@
-# Slingshot Dungeon MVP
+# Flingo
 
 Prototipo web/mobile-first para validar una idea de roguelite por habitaciones: lanzas al héroe como una bola de billar, rebotas, matas enemigos por impacto, evitas fosos/trampas, alternas entre lanzar el cuerpo o disparar proyectiles y eliges mejoras entre salas.
 
@@ -19,6 +19,21 @@ npm run dev
 ```
 
 Abre la URL que indique Vite, normalmente `http://localhost:5173`.
+
+## Publicar en GitHub Pages
+
+El proyecto está preparado para publicarse desde GitHub Actions en:
+
+https://davidgl1987.github.io/flingo/
+
+La configuración importante está en `vite.config.mts`: producción usa `base: '/flingo/'` para que los assets carguen correctamente desde GitHub Pages. Para comprobarlo en local:
+
+```bash
+npm run build
+npm run preview
+```
+
+Abre `http://localhost:4173/flingo/`.
 
 ## Tests
 

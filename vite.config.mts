@@ -47,9 +47,10 @@ function roomEditorSavePlugin() {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  base: mode === 'production' ? '/flingo/' : '/',
   plugins: [react(), tailwindcss(), roomEditorSavePlugin()],
   server: {
     port: 5173,
   },
-});
+}));

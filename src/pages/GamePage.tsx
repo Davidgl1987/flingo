@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Game } from '../game/Game';
 import { useGameStore } from '../game/stores/useGameStore';
 import type { RoomDefinition, Vec2 } from '../game/core/types';
+import { editorPlaytestStorageKey } from './room-editor/constants';
 
 const DEBUG_AIM_DIRECTIONS: Record<string, Vec2> = {
   up: { x: 0, y: -1 },
@@ -16,13 +17,13 @@ export function GamePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('editorRoom') === '1') {
-      const serializedRoom = window.localStorage.getItem('slingshot-editor-room') ?? window.sessionStorage.getItem('slingshot-editor-room');
+      const serializedRoom = window.localStorage.getItem(editorPlaytestStorageKey) ?? window.sessionStorage.getItem(editorPlaytestStorageKey);
       if (serializedRoom) {
         try {
           useGameStore.getState().loadEditorRoomScenario(JSON.parse(serializedRoom) as RoomDefinition);
         } catch {
-          window.localStorage.removeItem('slingshot-editor-room');
-          window.sessionStorage.removeItem('slingshot-editor-room');
+          window.localStorage.removeItem(editorPlaytestStorageKey);
+          window.sessionStorage.removeItem(editorPlaytestStorageKey);
         }
       }
     }

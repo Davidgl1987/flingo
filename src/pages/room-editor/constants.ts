@@ -89,5 +89,5 @@ export const panelClass = 'rounded-lg border border-white/10 bg-slate-950/80 p-3
 export const buttonBase = 'rounded-md border px-3 py-2 text-sm font-semibold transition disabled:opacity-40';
 export const editorCellSize = 40;
 export const editorCellGap = 1;
-export const editorDraftStorageKey = 'slingshot-editor-draft';
-export const editorPlaytestStorageKey = 'slingshot-editor-room';
+export const editorDraftStorageKey = 'flingo-editor-draft';
+export const editorPlaytestStorageKey = 'flingo-editor-room';
