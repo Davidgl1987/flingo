@@ -1,15 +1,11 @@
-import { GamePage } from '../pages/GamePage';
-import { RoomEditorPage } from '../pages/RoomEditorPage';
+import { GameRoot } from '../game/render/GameRoot';
 
+/**
+ * Raíz de la aplicación.
+ *
+ * Fase 1: solo existe la ruta del juego. El editor de salas (src/editor/)
+ * se añadirá en una fase posterior con su propia ruta.
+ */
 export function App() {
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-  const appPath = basePath && window.location.pathname.startsWith(basePath)
-    ? window.location.pathname.slice(basePath.length) || '/'
-    : window.location.pathname;
-
-  if (appPath === '/editor') {
-    return <RoomEditorPage />;
-  }
-
-  return <GamePage />;
+  return <GameRoot />;
 }

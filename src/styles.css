@@ -1,23 +1,93 @@
-@import "tailwindcss";
+/* Estilos globales — móvil primero: sin scroll, sin zoom, fondo oscuro. */
 
 * {
   box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
 }
 
 html,
 body,
 #root {
-  width: 100%;
-  height: 100%;
+  height: 100dvh;
   margin: 0;
+  padding: 0;
   overflow: hidden;
-  background: #0f172a;
-  color: #f8fafc;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  touch-action: none;
+  overscroll-behavior: none;
 }
 
-button {
-  font: inherit;
+body {
+  background: #0b0d14;
+  color: #e8e8f0;
+  font-family: system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas {
+  touch-action: none;
+  display: block;
+}
+
+.game-root {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+}
+
+/* ── HUD ── */
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 0;
+  pointer-events: none;
+}
+
+.hud-hearts {
+  display: flex;
+  gap: 2px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.heart-full {
+  color: #ff5964;
+}
+
+.heart-empty {
+  color: #39405c;
+}
+
+.hud-coins {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 19px;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+.hud-coin-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe9a8, #ffd166 55%, #c98f1b);
+}
+
+.hud-notice {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 52px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 21, 34, 0.88);
+  border: 1px solid #39405c;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  white-space: nowrap;
 }

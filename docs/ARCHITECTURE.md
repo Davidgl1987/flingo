@@ -1,98 +1,79 @@
-# ARCHITECTURE.md
+# Arquitectura técnica v2
 
-## Resumen
+*Contrato técnico para implementar el juego descrito en [GDD.md](./GDD.md). Reglas no negociables salvo decisión explícita del orquestador.*
 
-La arquitectura separa la lógica pura del render.
+## Stack
 
-- `src/game/core/`: simulación, daño, upgrades, rooms, tipos y utilidades matemáticas.
-- `src/game/stores/`: Zustand, puente entre lógica y UI.
-- `src/game/components/`: representación visual en React Three Fiber.
-- `src/game/hooks/`: input, loop y atajos.
-- `tests/`: pruebas de lógica pura.
+- **Vite + React 19 + TypeScript estricto** (`strict: true`, sin `any` implícito).
+- **@react-three/fiber** para render. **@react-three/drei** solo para utilidades puntuales (nada pesado).
+- **zustand** exclusivamente para estado de UI de baja frecuencia (fase de juego, HP, monedas, mejoras, modales). Nunca para estado que cambia cada frame.
+- **Física propia en 2D** (plano XZ). Sin Rapier, sin motor externo: el juego solo necesita círculos contra AABBs y reflexión de vectores. Decisión firme: ya se probó Rapier y empeoró rendimiento y comportamiento.
+- **vitest** para tests headless de la simulación.
 
-## Flujo de datos
+## Principio rector: simulación pura, render tonto
 
-1. El usuario interactúa con la escena o UI.
-2. Hooks llaman acciones del store.
-3. El store llama funciones puras de `core`.
-4. Las funciones devuelven un nuevo `GameState`.
-5. React renderiza el nuevo estado.
-
-## Por qué lógica pura
-
-Permite testear:
-
-- daño por impacto;
-- fosos;
-- explosiones;
-- upgrades;
-- progresión de salas;
-- comportamiento de proyectiles.
-
-Sin arrancar navegador ni WebGL.
-
-## Estado global
-
-Archivo principal:
-
-```txt
-src/game/stores/useGameStore.ts
+```
+src/
+  app/            # App, rutas (juego, editor), viewport móvil
+  game/
+    sim/          # ★ Simulación pura: SIN imports de React ni three.js
+      world.ts    #   estado del mundo (tipos + factoría)
+      step.ts     #   tick de simulación: física, IA, combate, hazards, flujo
+      physics.ts  #   círculo-vs-AABB, reflexión, integración
+      ai.ts       #   comportamientos de los 5 enemigos
+      combat.ts   #   daño, knockback, i-frames, proyectiles
+      hazards.ts  #   foso, pinchos, barril, barro, boost, rastro
+      dungeon.ts  #   generación procedural + flujo de puertas
+      events.ts   #   cola de eventos de gameplay (impacto, muerte, explosión…)
+    content/      # constantes de tuning (1 fichero), definiciones de enemigos/mejoras, salas de serie
+    render/       # componentes R3F que LEEN la sim (nunca la mutan)
+    input/        # puntería por PointerEvents (estado en refs)
+    juice/        # partículas, shake, hit-stop, estelas (consumen events.ts)
+    ui/           # HUD, modales (React DOM encima del canvas, no drei/Html)
+    store.ts      # zustand UI
+  editor/         # editor de salas (React DOM + vista R3F reutilizando render/)
+  levels/         # salas .json
 ```
 
-El store debe mantenerse pequeño. Si crece demasiado, dividir en módulos, pero evitar premature abstraction.
+- La **sim** es un objeto mutable poseído por un hook raíz; se hace tick con **timestep fijo de 60 Hz** (acumulador + interpolación de render). Determinista con RNG con semilla.
+- **React nunca está en el hot path**: los componentes R3F leen la sim en `useFrame` y mutan `object3D` directamente (posición, escala, color). El estado de zustand se actualiza solo cuando cambia un valor de UI (HP, monedas, fase), no por frame.
+- La sim publica **eventos** (`impact`, `enemy-died`, `barrel-explosion`, `player-damaged`…) en una cola que juice/ y ui/ drenan cada frame. Nada de callbacks cruzados.
+- Los sistemas de reacción (partículas, shake) son **independientes de la sala**: geometría pura, sin acoplarse al flujo de puertas.
 
-## Render
+## Presupuesto de rendimiento (móvil gama media, 60 fps)
 
-La escena se renderiza en:
+- **Cero asignaciones por frame** en sim y juice: pools preasignados (proyectiles, partículas, eventos, vectores scratch).
+- **Instancing obligatorio** para partículas (1 `InstancedMesh`, pool ~256), monedas, rastros y cualquier cosa repetida.
+- Geometrías y materiales **compartidos y creados una vez** (módulo de assets); prohibido crear materiales en render.
+- **Sin sombras dinámicas**: blob shadows (plano con textura radial). 1 luz direccional + ambiente. Materiales lambert/basic, paleta plana.
+- `dpr` limitado a `[1, 2]`, `powerPreference: 'high-performance'`, sin postprocesado.
+- Cámara: seguimiento suavizado del héroe con offset elevado/inclinado; el shake se aplica como offset aditivo amortiguado.
 
-```txt
-src/game/components/Scene.tsx
-```
+## Juice (implementación)
 
-Los componentes visuales deben recibir datos y renderizar. No deberían contener reglas de juego importantes.
+- **Shake:** valor de *trauma* [0,1] que decae; offset = trauma² × ruido. Aditivo a la cámara.
+- **Hit-stop:** escala temporal de la sim (`dt *= timeScale`) durante ~60–100 ms en golpes fuertes. Nunca congela el render.
+- **Squash & stretch:** escala del mesh del héroe según velocidad/impacto, en render, sin tocar la sim.
+- **Háptica:** `navigator.vibrate` corto en eventos fuertes, con guard de soporte.
 
-## Física actual
+## Móvil
 
-Motor cinemático propio:
+- `touch-action: none` en el canvas, viewport `user-scalable=no`, `overscroll-behavior: none`, alto `100dvh`.
+- Apuntado por Pointer Events unificados (ratón = dedo). `setPointerCapture` para no perder el drag.
+- HUD con botones de ≥48 px táctiles.
 
-```txt
-src/game/core/simulation.ts
-```
+## Editor y niveles
 
-Usa Vec2 y representa el mundo sobre el plano X/Z del render.
+- Formato de sala: JSON según el contrato del GDD §13, versionado con campo `version`.
+- Borrador autoguardado en `localStorage`; exportar/importar el JSON de sala; en dev, plugin de middleware de Vite para escribir en `src/levels/`.
+- El generador procedural (`sim/dungeon.ts`) es una función pura `(seed, pool) → mapa` con las validaciones del GDD §10.2, testeada en vitest.
 
-Ventajas:
+## Testing y verificación
 
-- simple;
-- testeable;
-- predecible;
-- fácil de ajustar.
+- Tests headless de sim en vitest: física (rebotes, fricción), daño por velocidad, IA por arquetipo, generador de mazmorra (validaciones), formato de sala.
+- Verificación en navegador **siempre en navegación fresca** (recarga completa, no confiar en HMR: preserva estado muerto).
 
-Limitaciones:
+## Prohibiciones
 
-- colisiones simples;
-- sin rotaciones reales;
-- sin cuerpos complejos;
-- no gestiona bien geometrías arbitrarias.
-
-## Migración futura a Rapier
-
-No migrar aún salvo que el prototipo demuestre diversión y el motor propio limite mucho.
-
-Posible estrategia:
-
-1. Mantener `GameState` como fuente de verdad.
-2. Sustituir integración física por Rapier.
-3. Mantener tests de daño/progresión/upgrades.
-4. Añadir tests/manual checks para casos físicos.
-
-## Normas para añadir mecánicas
-
-Cada mecánica nueva debería incluir:
-
-- tipo en `types.ts`;
-- datos en `rooms.ts` o `upgrades.ts`;
-- lógica en `core`;
-- componente visual simple;
-- al menos un test si afecta reglas;
-- una línea en `docs/CHANGELOG.md`.
+- Mirar o reutilizar código de las ramas/carpetas anteriores (`src/game` viejo, `src/game-rapier`, historial git). Este proyecto se implementa solo desde GDD.md + este documento.
+- `useState`/`setState` por frame; `new` en el hot path; drei `<Html>` para HUD; sombras dinámicas; postprocesado.
