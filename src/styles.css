@@ -38,6 +38,12 @@ canvas {
 
 .hud {
   position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-top {
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -45,7 +51,18 @@ canvas {
   justify-content: space-between;
   align-items: center;
   padding: calc(env(safe-area-inset-top) + 10px) 16px 0;
-  pointer-events: none;
+}
+
+.hud-top-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-key {
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 224, 130, 0.8));
 }
 
 .hud-hearts {
@@ -90,4 +107,172 @@ canvas {
   border-radius: 999px;
   font-size: 14px;
   white-space: nowrap;
+}
+
+/* ── Selector de armas (GDD §3/§12) ── */
+
+.weapon-bar {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.weapon-btn {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 2px solid #39405c;
+  background: rgba(18, 21, 34, 0.88);
+  color: #aab2d4;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.weapon-btn-active {
+  border-color: #54c7ff;
+  color: #e8f6ff;
+  box-shadow: 0 0 12px rgba(84, 199, 255, 0.35);
+}
+
+.weapon-btn-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.weapon-btn-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Cortina de recarga: se escala en Y desde arriba vía rAF (sin setState). */
+.weapon-btn-cooldown {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 13, 20, 0.72);
+  transform-origin: top;
+  transform: scaleY(0);
+  pointer-events: none;
+}
+
+/* ── Modales (GDD §12: tarjetas grandes, usables con el pulgar) ── */
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 14, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10;
+}
+
+.modal {
+  background: #141827;
+  border: 1px solid #39405c;
+  border-radius: 20px;
+  padding: 24px 20px;
+  width: min(420px, 100%);
+  text-align: center;
+}
+
+.modal-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.modal-subtitle {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: #aab2d4;
+}
+
+.upgrade-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upgrade-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  min-height: 64px;
+  border-radius: 14px;
+  border: 2px solid #39405c;
+  background: #1b2033;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.upgrade-card:active {
+  border-color: #54c7ff;
+  background: #202741;
+}
+
+.upgrade-card-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.upgrade-card-desc {
+  font-size: 13px;
+  color: #aab2d4;
+}
+
+.game-over-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 18px 0 22px;
+}
+
+.game-over-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 15px;
+}
+
+.game-over-stat dt {
+  color: #aab2d4;
+}
+
+.game-over-stat dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.modal-primary-btn {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  border: none;
+  background: #54c7ff;
+  color: #0b0d14;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-primary-btn:active {
+  background: #7fd6ff;
 }

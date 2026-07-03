@@ -41,6 +41,9 @@ export const RAM_DAMAGE_PER_SPEED = 0.32;
 export const HERO_IFRAME_DURATION = 0.7;
 /** Intervalo entre ticks de daño por contacto sostenido (s). */
 export const CONTACT_DAMAGE_COOLDOWN = 0.42;
+export const CONTACT_DAMAGE = 1;
+/** Invulnerabilidad tras bloquear con el escudo (s). */
+export const SHIELD_IFRAME_DURATION = 0.45;
 
 // ── Armas ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +66,16 @@ export const PROJECTILE_RECOIL = 1.15;
 /** La fuerza del arrastre modula la velocidad del proyectil en este rango. */
 export const PROJECTILE_FORCE_SPEED_MIN = 0.7;
 export const PROJECTILE_FORCE_SPEED_MAX = 1.2;
+/** Radio de colisión de flecha/hechizo; el hechizo crece con Hechizo Arcano. */
+export const PROJECTILE_RADIUS = 0.18;
+export const SPELL_RADIUS_UPGRADED = 0.25;
+/** Multiplicador de recarga flecha/hechizo con la mejora Pulso Firme. */
+export const STEADY_PULSE_RELOAD_MULTIPLIER = 0.72;
+
+// ── Enemigo hostil: proyectil del Shooter ─────────────────────────────────
+
+export const SHOOTER_PROJECTILE_DAMAGE = 1;
+export const SHOOTER_PROJECTILE_RADIUS = 0.16;
 
 // ── Enemigos (fase 2; definidos ya por contrato) ──────────────────────────
 
@@ -98,9 +111,26 @@ export const SHOOTER_CHASE_DURATION = 1.0;
 export const SHOOTER_CHARGE_DURATION = 1.0;
 export const SHOOTER_PROJECTILE_SPEED = 6.6;
 
+// ── Navegación de IA (steering local con evitación) ───────────────────────
+
+/** Distancia de sondeo (raycast corto) por delante del enemigo para detectar obstáculos/hazards. */
+export const AI_AVOID_LOOKAHEAD = 0.9;
+/** Ángulo (rad) de desvío aplicado cuando el sondeo frontal detecta bloqueo. */
+export const AI_AVOID_STEER_ANGLE = Math.PI / 3;
+/** Margen extra sobre el radio del enemigo al comprobar bloqueo contra AABBs. */
+export const AI_AVOID_SKIN = 0.12;
+
 /** Knockback al golpear a un enemigo: empuje en velocidad + desplazamiento. */
 export const ENEMY_KNOCKBACK_SPEED = 2.4;
 export const ENEMY_KNOCKBACK_OFFSET = 0.18;
+/** Radio de colisión por defecto de un enemigo. */
+export const ENEMY_RADIUS = 0.4;
+/** Duración del flash blanco al ser golpeado (s). */
+export const ENEMY_HIT_FLASH_DURATION = 0.15;
+/** Spike: producto escalar mínimo entre la normal de contacto y su cara peligrosa para considerarlo frontal. */
+export const SPIKE_DANGEROUS_DOT_THRESHOLD = 0.25;
+/** Radio de la explosión de Choque Explosivo (embestida con daño en área). */
+export const EXPLOSIVE_RAM_RADIUS = 1.6;
 
 // ── Hazards (fase 2; definidos ya por contrato) ───────────────────────────
 
@@ -116,6 +146,14 @@ export const BARREL_BLAST_RADIUS = 2.0;
 export const MUD_SLOW_FACTOR_PER_TICK = 0.92;
 /** Acelerador: impulso en la dirección de movimiento (u/s²). */
 export const BOOST_ACCELERATION = 8;
+/** Velocidad mínima para que el acelerador empuje (evita acelerar desde parado sin intención). */
+export const BOOST_MIN_SPEED = 0.05;
+/** Daño periódico de pinchos a enemigos y cadencia entre ticks (s). */
+export const SPIKES_ENEMY_DAMAGE_INTERVAL = 0.5;
+/** Radio de recogida de items (moneda/poción/llave). */
+export const ITEM_PICKUP_RADIUS = 0.5;
+/** Curación de la poción (corazones). */
+export const POTION_HEAL = 1;
 
 // ── Mundo y run ───────────────────────────────────────────────────────────
 

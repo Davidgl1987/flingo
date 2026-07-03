@@ -105,7 +105,7 @@ El mismo gesto (arrastrar y soltar) tiene tres modos, seleccionables en cualquie
 
 ## 7. Enemigos
 
-Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos rodean obstáculos con inteligencia (no se atascan contra rocas ni caen solos a los fosos: los esquivan). Todos reciben knockback al ser golpeados. Al morir sueltan una moneda y estallan en partículas.
+Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos rodean obstáculos con inteligencia (no se atascan contra rocas, no caen solos a los fosos y **no pisan pinchos ni barriles sin explotar**: los esquivan al navegar). Que un enemigo muera por un hazard solo debe poder ocurrir si el jugador lo provoca (knockback, explosión encadenada) — nunca por decisión propia de la IA. Todos reciben knockback al ser golpeados. Al morir sueltan una moneda y estallan en partículas.
 
 ### 7.1 Dummy (rojo) — el básico
 - 2 HP. Lento.

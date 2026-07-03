@@ -164,7 +164,11 @@ export function collideInnerBounds(
  *    menor que el muro de 0.42 u ⇒ sin tunneling con detección discreta),
  * 2) integración de posición,
  * 3) colisiones (paredes interiores + rocas) con push-out inmediato,
- * 4) fricción exponencial y umbral de parada total.
+ * 4) fricción exponencial (modulada por mejoras de fricción) y umbral de parada.
+ *
+ * NOTA de rendimiento: el héroe es la única entidad con fricción variable por
+ * mejoras, así que `Math.pow` aquí es una única operación escalar por tick
+ * (no una asignación); el resto de entidades usan la constante precomputada.
  */
 export function stepHeroPhysics(world: World, events: EventQueue): void {
   const hero = world.hero;
@@ -187,10 +191,38 @@ export function stepHeroPhysics(world: World, events: EventQueue): void {
     collideCircleAabb(position, velocity, hero.radius, obstacles[i].aabb, events);
   }
 
-  velocity.x *= FRICTION_DECAY_PER_TICK;
-  velocity.y *= FRICTION_DECAY_PER_TICK;
+  const frictionMultiplier = hero.modifiers.frictionMultiplier;
+  const decay =
+    frictionMultiplier === 1 ? FRICTION_DECAY_PER_TICK : Math.pow(FRICTION_DECAY_PER_TICK, frictionMultiplier);
+  velocity.x *= decay;
+  velocity.y *= decay;
   if (velocity.x * velocity.x + velocity.y * velocity.y < STOP_THRESHOLD * STOP_THRESHOLD) {
     velocity.x = 0;
     velocity.y = 0;
+  }
+}
+
+/**
+ * Resuelve la posición de los enemigos contra las paredes interiores y las
+ * rocas: el steering de la IA ya evita la mayoría de acercamientos, esto es
+ * un cinturón de seguridad de push-out (sin rebote elástico: los enemigos no
+ * "rebotan", simplemente no atraviesan sólidos). Knockback (velocidad tras un
+ * golpe) sí se ve amortiguado por el push-out, que es el comportamiento
+ * deseado (un enemigo empujado contra una roca se frena ahí, no la atraviesa).
+ */
+export function stepEnemyCollisions(world: World): void {
+  const bounds = world.bounds;
+  const obstacles = world.obstacles;
+  const enemies = world.enemies;
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    if (enemy.hp <= 0) continue;
+    collideInnerBounds(enemy.position, enemy.velocity, enemy.radius, bounds, null);
+    for (let j = 0; j < obstacles.length; j++) {
+      collideCircleAabb(enemy.position, enemy.velocity, enemy.radius, obstacles[j].aabb, null);
+    }
+    // Fricción suave del knockback (los enemigos no deslizan indefinidamente).
+    enemy.velocity.x *= FRICTION_DECAY_PER_TICK;
+    enemy.velocity.y *= FRICTION_DECAY_PER_TICK;
   }
 }

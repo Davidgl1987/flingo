@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 import * as THREE from 'three';
 import { MAX_DRAG_DISTANCE, MIN_LAUNCH_FORCE } from '../content/constants';
 import type { GameSession } from '../session';
+import { resolveWeaponRelease } from '../sim/combat';
 import { launchHero } from '../sim/launch';
 import { useUiStore } from '../store';
 
@@ -68,6 +69,8 @@ export function AimInput({ session }: { session: GameSession }) {
 
     const onPointerDown = (e: PointerEvent): void => {
       if (activePointer !== -1 || !e.isPrimary) return;
+      // Con la sim pausada (modal de mejora / game-over) no se apunta ni dispara.
+      if (session.world.phase !== 'playing') return;
       if (!projectToGround(e)) return;
       activePointer = e.pointerId;
       start.x = hit.x;
@@ -100,7 +103,13 @@ export function AimInput({ session }: { session: GameSession }) {
         useUiStore.getState().showNotice('Tiro demasiado flojo');
         return;
       }
-      launchHero(session.world, aim.dirX, aim.dirY, aim.force, session.events);
+      if (session.world.phase !== 'playing') return; // la fase pudo cambiar durante el drag
+      const mode = session.world.hero.weaponMode;
+      if (mode === 'body') {
+        launchHero(session.world, aim.dirX, aim.dirY, aim.force, session.events);
+      } else {
+        resolveWeaponRelease(session.world, aim.dirX, aim.dirY, aim.force, session.events);
+      }
     };
 
     /** Cancelación (gesto interrumpido, pérdida de captura): anula sin coste. */

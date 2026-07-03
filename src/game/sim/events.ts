@@ -12,7 +12,21 @@
  * campos numéricos/string al slot (siempre reutilizables, nunca objetos nuevos).
  */
 
-export type GameEventType = 'launch' | 'wall-bounce';
+export type GameEventType =
+  | 'launch'
+  | 'wall-bounce'
+  | 'enemy-hit'
+  | 'enemy-died'
+  | 'player-damaged'
+  | 'player-died'
+  | 'shield-block'
+  | 'pit-fall'
+  | 'pit-respawn'
+  | 'spikes-hit'
+  | 'barrel-explosion'
+  | 'item-pickup'
+  | 'room-cleared'
+  | 'upgrade-applied';
 
 export interface GameEvent {
   type: GameEventType;
