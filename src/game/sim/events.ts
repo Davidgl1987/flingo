@@ -26,7 +26,11 @@ export type GameEventType =
   | 'barrel-explosion'
   | 'item-pickup'
   | 'room-cleared'
-  | 'upgrade-applied';
+  | 'upgrade-applied'
+  | 'room-entered'
+  | 'doors-open'
+  | 'door-locked'
+  | 'victory';
 
 export interface GameEvent {
   type: GameEventType;
@@ -38,6 +42,8 @@ export interface GameEvent {
    * velocidad normal de impacto (u/s) en 'wall-bounce'.
    */
   intensity: number;
+  /** Etiqueta textual opcional (ej. nombre de sala en 'room-entered'); '' si no aplica. */
+  label: string;
 }
 
 export interface EventQueue {
@@ -52,7 +58,7 @@ export interface EventQueue {
 export function createEventQueue(capacity = 64): EventQueue {
   const slots: GameEvent[] = [];
   for (let i = 0; i < capacity; i++) {
-    slots.push({ type: 'launch', x: 0, y: 0, intensity: 0 });
+    slots.push({ type: 'launch', x: 0, y: 0, intensity: 0, label: '' });
   }
   return { slots, capacity, head: 0, count: 0 };
 }
@@ -68,6 +74,7 @@ export function pushEvent(
   x: number,
   y: number,
   intensity: number,
+  label = '',
 ): void {
   let index: number;
   if (queue.count === queue.capacity) {
@@ -82,6 +89,7 @@ export function pushEvent(
   slot.x = x;
   slot.y = y;
   slot.intensity = intensity;
+  slot.label = label;
 }
 
 /**

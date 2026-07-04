@@ -181,7 +181,10 @@ export function stepProjectiles(world: World, dt: number, events: EventQueue): v
 /** Devuelve false si el proyectil se desactivó dentro de esta función. */
 function stepHeroProjectileCollisions(world: World, p: Projectile, events: EventQueue): boolean {
   // Paredes/rocas: la flecha se detiene, el hechizo rebota (con presupuesto de rebotes).
-  const hitBounds = collideInnerBounds(p.position, p.velocity, p.radius, world.bounds, null);
+  // Mazmorra multi-sala: los muros ya son obstáculos AABB (con hueco de puerta
+  // abierta); `world.bounds` (sala actual) se omite para no frenar el
+  // proyectil al cruzar un hueco hacia la sala contigua.
+  const hitBounds = world.dungeon === null && collideInnerBounds(p.position, p.velocity, p.radius, world.bounds, null);
   let hitObstacle = false;
   const obstacles = world.obstacles;
   for (let j = 0; j < obstacles.length; j++) {
@@ -244,7 +247,8 @@ function stepEnemyProjectileCollision(world: World, p: Projectile, events: Event
     return false;
   }
   // Los proyectiles enemigos desaparecen contra paredes/rocas (sin rebote).
-  const hitBounds = collideInnerBounds(p.position, p.velocity, p.radius, world.bounds, null);
+  // Ver nota de multi-sala en stepHeroProjectileCollisions.
+  const hitBounds = world.dungeon === null && collideInnerBounds(p.position, p.velocity, p.radius, world.bounds, null);
   let hitObstacle = false;
   const obstacles = world.obstacles;
   for (let j = 0; j < obstacles.length; j++) {

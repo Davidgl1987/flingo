@@ -44,6 +44,10 @@ export const heroMaterial = new THREE.MeshLambertMaterial({ color: '#54c7ff' });
 export const floorMaterial = new THREE.MeshLambertMaterial({ color: '#20243a' });
 export const wallMaterial = new THREE.MeshLambertMaterial({ color: '#3b4266' });
 export const rockMaterial = new THREE.MeshLambertMaterial({ color: '#767d99' });
+/** Portón de puerta cerrada (se abre al limpiar la sala). */
+export const doorMaterial = new THREE.MeshLambertMaterial({ color: '#5a6db3' });
+/** Portón de la puerta del jefe (requiere llave): dorado, inconfundible. */
+export const doorKeyMaterial = new THREE.MeshLambertMaterial({ color: '#d9a531' });
 
 export const blobShadowMaterial = new THREE.MeshBasicMaterial({
   map: createRadialTexture(),

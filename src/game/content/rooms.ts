@@ -7,6 +7,13 @@
  * el norte.
  */
 
+import boossDenJson from '../../levels/boss-den.json';
+import combatArenaJson from '../../levels/combat-arena.json';
+import combatCrossroadsJson from '../../levels/combat-crossroads.json';
+import combatSpikefieldJson from '../../levels/combat-spikefield.json';
+import keyVaultJson from '../../levels/key-vault.json';
+import startHallJson from '../../levels/start-hall.json';
+import { parseRoomData } from '../sim/room-format';
 import type { RoomData } from '../sim/world';
 
 /**
@@ -67,3 +74,65 @@ export const testRoom: RoomData = {
     { id: 'key-1', kind: 'key', position: { x: -4.5, y: -6.5 } },
   ],
 };
+
+// ── Pool de salas de serie (GDD §10.2/§13) ────────────────────────────────
+//
+// Cargadas desde src/levels/*.json y validadas con el mismo parser que usa
+// el editor para importar/exportar (room-format.ts): si un JSON de serie
+// estuviera mal formado, falla aquí en tiempo de carga del módulo (arranque
+// del juego), no en mitad de una run.
+
+const SERIES_LEVEL_JSON: readonly unknown[] = [
+  startHallJson,
+  combatCrossroadsJson,
+  combatSpikefieldJson,
+  combatArenaJson,
+  keyVaultJson,
+  boossDenJson,
+];
+
+function loadSeriesRooms(): RoomData[] {
+  const rooms: RoomData[] = [];
+  for (const json of SERIES_LEVEL_JSON) {
+    const result = parseRoomData(json);
+    if (!result.valid || !result.room) {
+      throw new Error(`Sala de serie inválida en src/levels: ${result.errors.join('; ')}`);
+    }
+    rooms.push(result.room);
+  }
+  return rooms;
+}
+
+/** Salas de serie ya validadas (base del pool del generador procedural). */
+export const seriesRooms: RoomData[] = loadSeriesRooms();
+
+/**
+ * Pool completo para `generateDungeon`: salas de serie + salas exportadas
+ * desde el editor (localStorage, ver src/editor/). Función (no constante)
+ * porque el pool del editor puede crecer en tiempo de ejecución sin recargar
+ * la página.
+ */
+export function getRoomPool(): RoomData[] {
+  return [...seriesRooms, ...loadEditorExportedRooms()];
+}
+
+const EDITOR_ROOMS_STORAGE_KEY = 'flingo-editor-exported-rooms';
+
+/** Salas que el editor ha exportado a localStorage (además de descargar el .json). */
+function loadEditorExportedRooms(): RoomData[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(EDITOR_ROOMS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const rooms: RoomData[] = [];
+    for (const entry of parsed) {
+      const result = parseRoomData(entry);
+      if (result.valid && result.room) rooms.push(result.room);
+    }
+    return rooms;
+  } catch {
+    return [];
+  }
+}

@@ -172,8 +172,9 @@ function isBlocked(world: World, enemy: Enemy, dx: number, dy: number, dist: num
     }
     if (pointInAvoidHazard(world, px, py, skin, enemy.radius)) return true;
 
-    // No salirse de la sala.
-    const b = world.bounds;
+    // No salirse de SU sala (mazmorra multi-sala: cada enemigo se limita a la
+    // sala en la que vive, no a la sala actual del héroe).
+    const b = enemy.roomId !== undefined ? (world.roomRuntimes.get(enemy.roomId)?.bounds ?? world.bounds) : world.bounds;
     if (px < b.minX + skin || px > b.maxX - skin || py < b.minY + skin || py > b.maxY - skin) {
       return true;
     }
@@ -359,6 +360,13 @@ export function stepEnemyAi(world: World, dt: number): void {
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
     if (enemy.hp <= 0) continue;
+    // Mazmorra multi-sala: los enemigos de salas que el héroe no ha visitado
+    // todavía no patrullan ni persiguen (GDD §10.2). En modo sala única
+    // (roomId undefined, tests de fase 1-2) no hay restricción.
+    if (enemy.roomId !== undefined) {
+      const runtime = world.roomRuntimes.get(enemy.roomId);
+      if (runtime !== undefined && !runtime.visited) continue;
+    }
     // Mientras dura el knockback, la física (stepEnemyCollisions) gobierna la
     // velocidad; la IA no la sobreescribe para que el empuje se note.
     if (world.time < enemy.knockbackUntil) continue;

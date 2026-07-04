@@ -185,7 +185,15 @@ export function stepHeroPhysics(world: World, events: EventQueue): void {
   position.x += velocity.x * FIXED_DT;
   position.y += velocity.y * FIXED_DT;
 
-  collideInnerBounds(position, velocity, hero.radius, world.bounds, events);
+  // Mazmorra multi-sala: no hay un único límite exterior (el héroe cruza de
+  // sala en sala por los huecos de puerta); los muros de cada sala ya viven
+  // como obstáculos AABB en `world.obstacles` (con hueco donde la puerta está
+  // abierta), así que `collideInnerBounds` contra `world.bounds` (la sala
+  // ACTUAL) se omite para no empujar al héroe de vuelta al cruzar un hueco.
+  // Modo sala única (world.dungeon === null): comportamiento histórico intacto.
+  if (world.dungeon === null) {
+    collideInnerBounds(position, velocity, hero.radius, world.bounds, events);
+  }
   const obstacles = world.obstacles;
   for (let i = 0; i < obstacles.length; i++) {
     collideCircleAabb(position, velocity, hero.radius, obstacles[i].aabb, events);
@@ -217,7 +225,13 @@ export function stepEnemyCollisions(world: World): void {
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
     if (enemy.hp <= 0) continue;
-    collideInnerBounds(enemy.position, enemy.velocity, enemy.radius, bounds, null);
+    // Mazmorra multi-sala: cada enemigo se contiene contra los límites de SU
+    // PROPIA sala (nunca sale de ella, GDD §10.2), no los de la sala actual
+    // del héroe. Modo sala única (roomId undefined): usa `world.bounds` como
+    // antes.
+    const enemyBounds =
+      enemy.roomId !== undefined ? (world.roomRuntimes.get(enemy.roomId)?.bounds ?? bounds) : bounds;
+    collideInnerBounds(enemy.position, enemy.velocity, enemy.radius, enemyBounds, null);
     for (let j = 0; j < obstacles.length; j++) {
       collideCircleAabb(enemy.position, enemy.velocity, enemy.radius, obstacles[j].aabb, null);
     }

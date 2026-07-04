@@ -8,6 +8,7 @@
     "moduleResolution": "bundler",
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
     "jsx": "react-jsx",
@@ -18,5 +19,5 @@
     "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "types"]
 }

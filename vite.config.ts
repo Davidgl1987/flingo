@@ -1,11 +1,83 @@
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+
+// Los tipos de node:fs/node:path vienen de types/node-shim.d.ts (el proyecto
+// no incluye @types/node a propósito: la app es 100% navegador).
+declare const process: { cwd(): string };
+
+/** Forma mínima de la petición/respuesta HTTP de Connect que usa el middleware. */
+interface DevRequest {
+  method?: string;
+  on(event: 'data', listener: (chunk: { toString(encoding: 'utf8'): string }) => void): void;
+  on(event: 'end', listener: () => void): void;
+}
+interface DevResponse {
+  statusCode: number;
+  setHeader(name: string, value: string): void;
+  end(body?: string): void;
+}
+
+/**
+ * Middleware SOLO en dev (GDD §13): el editor hace POST /api/editor/rooms con
+ * el JSON de una sala y aquí se escribe en src/levels/<id>.json, para que las
+ * salas creadas en el editor entren al repo (y al pool de serie) sin copiar
+ * ficheros a mano. En build/producción este endpoint no existe.
+ */
+function editorRoomsEndpoint(): Plugin {
+  return {
+    name: 'flingo-editor-rooms-endpoint',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/api/editor/rooms', (rawReq, rawRes) => {
+        const req = rawReq as unknown as DevRequest;
+        const res = rawRes as unknown as DevResponse;
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end('Method Not Allowed');
+          return;
+        }
+        let body = '';
+        req.on('data', (chunk) => {
+          body += chunk.toString('utf8');
+        });
+        req.on('end', () => {
+          void (async () => {
+            try {
+              const parsed: unknown = JSON.parse(body);
+              const id =
+                typeof parsed === 'object' && parsed !== null && 'id' in parsed
+                  ? String((parsed as { id: unknown }).id)
+                  : '';
+              // El id se usa como nombre de fichero: solo caracteres seguros.
+              if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+                res.statusCode = 400;
+                res.end('Identificador de sala inválido para nombre de fichero.');
+                return;
+              }
+              const { mkdirSync, writeFileSync } = await import('node:fs');
+              const { resolve } = await import('node:path');
+              const levelsDir = resolve(process.cwd(), 'src/levels');
+              mkdirSync(levelsDir, { recursive: true });
+              writeFileSync(resolve(levelsDir, `${id}.json`), JSON.stringify(parsed, null, 2) + '\n', 'utf8');
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: true, file: `src/levels/${id}.json` }));
+            } catch {
+              res.statusCode = 400;
+              res.end('JSON inválido.');
+            }
+          })();
+        });
+      });
+    },
+  };
+}
 
 // base './' → rutas relativas, necesario para servir desde GitHub Pages.
 export default defineConfig({
   base: './',
-  plugins: [react()],
+  plugins: [react(), editorRoomsEndpoint()],
   test: {
     // Solo tests headless de la simulación (sin DOM ni three.js).
     include: ['src/**/*.test.ts'],

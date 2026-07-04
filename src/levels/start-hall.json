@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "id": "start-hall",
+  "name": "Vestíbulo",
+  "width": 9,
+  "height": 9,
+  "playerStart": { "x": 0, "y": 3 },
+  "tags": ["inicio"],
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [],
+  "hazards": [
+    { "id": "rock-1", "kind": "rock", "position": { "x": -2.5, "y": -1 }, "width": 1, "height": 1 },
+    { "id": "rock-2", "kind": "rock", "position": { "x": 2.5, "y": -1 }, "width": 1, "height": 1 }
+  ],
+  "items": [
+    { "id": "coin-1", "kind": "coin", "position": { "x": -1.5, "y": 3 } },
+    { "id": "coin-2", "kind": "coin", "position": { "x": 1.5, "y": 3 } }
+  ]
+}

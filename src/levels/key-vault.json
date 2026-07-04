@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "key-vault",
+  "name": "Cámara de la Llave",
+  "width": 9,
+  "height": 11,
+  "playerStart": { "x": 0, "y": 4 },
+  "tags": ["llave"],
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [
+    { "id": "dummy-1", "kind": "dummy", "position": { "x": -2.5, "y": -2 }, "patrolTarget": { "x": -2.5, "y": 1 } },
+    {
+      "id": "spike-1",
+      "kind": "spike",
+      "position": { "x": 0, "y": -3 },
+      "patrolTarget": { "x": 2.5, "y": -3 },
+      "facing": { "x": 0, "y": -1 }
+    }
+  ],
+  "hazards": [{ "id": "rock-1", "kind": "rock", "position": { "x": 2.5, "y": 1 }, "width": 1, "height": 1 }],
+  "items": [{ "id": "key-item", "kind": "key", "position": { "x": 0, "y": -4.5 } }]
+}

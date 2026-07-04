@@ -24,6 +24,14 @@ const NOTICE_BY_EVENT: Partial<Record<GameEvent['type'], string>> = {
   'pit-fall': 'Has caído al foso',
 };
 
+/** Índice 1-based de la sala actual dentro del orden de la mazmorra (orden de generación/BFS desde el inicio). */
+function computeRoomProgress(world: GameSession['world']): { roomIndex: number | null; totalRooms: number | null } {
+  const dungeon = world.dungeon;
+  if (!dungeon) return { roomIndex: null, totalRooms: null };
+  const index = dungeon.rooms.findIndex((r) => r.room.id === world.currentRoomId);
+  return { roomIndex: index >= 0 ? index + 1 : null, totalRooms: dungeon.rooms.length };
+}
+
 export function useGameLoop(session: GameSession): void {
   // Snapshot de los últimos valores sincronizados al store, para no llamar
   // setState si nada de baja frecuencia cambió este frame.
@@ -35,7 +43,19 @@ export function useGameLoop(session: GameSession): void {
     phase: GamePhase;
     roomsCleared: number;
     score: number;
-  }>({ hp: -1, maxHp: -1, coins: -1, hasKey: false, phase: 'playing', roomsCleared: -1, score: -1 });
+    roomIndex: number | null;
+    currentRoomName: string;
+  }>({
+    hp: -1,
+    maxHp: -1,
+    coins: -1,
+    hasKey: false,
+    phase: 'playing',
+    roomsCleared: -1,
+    score: -1,
+    roomIndex: -2,
+    currentRoomName: '',
+  });
 
   const runFrame = (delta: number): void => {
     const world = session.world;
@@ -51,6 +71,20 @@ export function useGameLoop(session: GameSession): void {
     session.renderAlpha = accumulator / FIXED_DT;
 
     drainEvents(session.events, (event) => {
+      if (event.type === 'room-entered') {
+        useUiStore.getState().showNotice(event.label);
+        return;
+      }
+      if (event.type === 'door-locked') {
+        if (event.label === 'unlocked') {
+          useUiStore.getState().showNotice('Puerta del jefe abierta');
+        } else if (event.label === 'locked') {
+          useUiStore.getState().showNotice('Necesitas la llave');
+        }
+        // label === runtime.name (apertura por sala limpiada): sin aviso propio,
+        // 'room-cleared' ya lo cubre.
+        return;
+      }
       const notice = NOTICE_BY_EVENT[event.type];
       if (notice) {
         useUiStore.getState().showNotice(notice);
@@ -63,6 +97,8 @@ export function useGameLoop(session: GameSession): void {
 
     const hero = world.hero;
     const snap = lastSynced.current;
+    const { roomIndex, totalRooms } = computeRoomProgress(world);
+    const currentRoomName = world.room.name;
     if (
       hero.hp !== snap.hp ||
       hero.maxHp !== snap.maxHp ||
@@ -70,7 +106,9 @@ export function useGameLoop(session: GameSession): void {
       hero.hasKey !== snap.hasKey ||
       world.phase !== snap.phase ||
       world.stats.roomsCleared !== snap.roomsCleared ||
-      world.stats.score !== snap.score
+      world.stats.score !== snap.score ||
+      roomIndex !== snap.roomIndex ||
+      currentRoomName !== snap.currentRoomName
     ) {
       snap.hp = hero.hp;
       snap.maxHp = hero.maxHp;
@@ -79,6 +117,8 @@ export function useGameLoop(session: GameSession): void {
       snap.phase = world.phase;
       snap.roomsCleared = world.stats.roomsCleared;
       snap.score = world.stats.score;
+      snap.roomIndex = roomIndex;
+      snap.currentRoomName = currentRoomName;
       useUiStore.getState().syncFromWorld({
         hp: hero.hp,
         maxHp: hero.maxHp,
@@ -87,6 +127,9 @@ export function useGameLoop(session: GameSession): void {
         phase: world.phase,
         roomsCleared: world.stats.roomsCleared,
         score: world.stats.score,
+        roomIndex,
+        totalRooms,
+        currentRoomName,
       });
     }
   };

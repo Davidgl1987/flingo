@@ -45,6 +45,10 @@ export interface EnemySpawn {
   patrolTarget?: Vec2;
   /** Dirección de la púa del Spike (unitaria); por defecto (0,1). */
   facing?: Vec2;
+  /** Vida inicial personalizada (editor, GDD §13); por defecto la del arquetipo. */
+  hp?: number;
+  /** Radio de colisión personalizado (editor, GDD §13); por defecto ENEMY_RADIUS. */
+  radius?: number;
 }
 
 export type HazardKind = 'pit' | 'spikes' | 'barrel' | 'rock' | 'slow' | 'boost';
@@ -66,6 +70,33 @@ export interface ItemSpawn {
   id: string;
   kind: ItemKind;
   position: Vec2;
+}
+
+/** Estado en vivo de una puerta de una sala en la mazmorra multi-sala. */
+export interface RoomDoorRuntime {
+  /** Índice en `dungeon.connections`. */
+  connectionIndex: number;
+  side: DoorSide;
+  /** Centro del hueco en coordenadas de mundo. */
+  center: Vec2;
+  requiresKey: boolean;
+  open: boolean;
+}
+
+/** Estado en vivo de una sala colocada en la mazmorra multi-sala. */
+export interface RoomRuntime {
+  id: string;
+  name: string;
+  tags: RoomTag[];
+  origin: Vec2;
+  /** Interior jugable en coordenadas de MUNDO. */
+  bounds: AABB;
+  /** true cuando el héroe ha entrado alguna vez (activa a sus enemigos). */
+  visited: boolean;
+  /** true cuando todos sus enemigos han muerto (abre sus puertas, ofrece mejora). */
+  cleared: boolean;
+  enemyIds: string[];
+  doors: RoomDoorRuntime[];
 }
 
 /** Sala serializable: la moneda de intercambio entre editor, juego y generador procedural. */
@@ -119,10 +150,12 @@ export interface Hero {
   modifiers: HeroModifiers;
 }
 
-/** Obstáculo sólido derivado de los hazards 'rock' de la sala. */
+/** Obstáculo sólido derivado de los hazards 'rock' de la sala o de un segmento de muro/puerta cerrada. */
 export interface Obstacle {
   id: string;
   aabb: AABB;
+  /** Sala dueña del obstáculo (mazmorra multi-sala); undefined en el modo sala única de los tests. */
+  roomId?: string;
 }
 
 export type ProjectileOwner = 'hero' | 'enemy';
@@ -150,6 +183,8 @@ export type ShooterPhase = 'chase' | 'charge';
 export interface Enemy {
   id: string;
   kind: EnemyKind;
+  /** Sala dueña del enemigo (mazmorra multi-sala); undefined en el modo sala única de los tests. */
+  roomId?: string;
   position: Vec2;
   velocity: Vec2;
   radius: number;
@@ -197,6 +232,7 @@ export interface Item {
   kind: ItemKind;
   position: Vec2;
   active: boolean;
+  roomId?: string;
 }
 
 /** Barril vivo: puede explotar una sola vez (encadena con otros al morir). */
@@ -205,9 +241,15 @@ export interface Barrel {
   position: Vec2;
   radius: number;
   exploded: boolean;
+  roomId?: string;
 }
 
-export type GamePhase = 'playing' | 'room-cleared' | 'game-over';
+/** Hazard estático con su sala dueña (mazmorra multi-sala). */
+export interface HazardRuntime extends HazardSpawn {
+  roomId?: string;
+}
+
+export type GamePhase = 'playing' | 'room-cleared' | 'game-over' | 'victory';
 
 export interface RunStats {
   roomsCleared: number;
@@ -218,7 +260,7 @@ export interface RunStats {
 
 export interface World {
   room: RoomData;
-  /** Interior jugable: las caras internas de las 4 paredes. */
+  /** Interior jugable de la sala ACTUAL del héroe: las caras internas de sus 4 paredes. */
   bounds: AABB;
   obstacles: Obstacle[];
   hero: Hero;
@@ -228,7 +270,7 @@ export interface World {
   items: Item[];
   barrels: Barrel[];
   /** Hazards no-roca, no-barril (pit/spikes/slow/boost), estáticos durante la sala. */
-  hazards: HazardSpawn[];
+  hazards: HazardRuntime[];
   /** Última posición firme (fuera de fosos) del héroe, para respawn tras caer. */
   safePosition: Vec2;
   /** world.time hasta el que dura la animación de caída (0 = no está cayendo). */
@@ -236,6 +278,20 @@ export interface World {
   phase: GamePhase;
   stats: RunStats;
   rng: Rng;
+  /** Mazmorra multi-sala activa (null en el modo sala única de los tests de fase 1-2). */
+  dungeon: import('./dungeon').DungeonMap | null;
+  /** Estado en vivo por sala (limpiada/visitada/puertas abiertas), indexado por room id. */
+  roomRuntimes: Map<string, RoomRuntime>;
+  /** Id de la sala donde está físicamente el héroe ahora mismo. */
+  currentRoomId: string;
+  /**
+   * Contador incrementado cada vez que se reconstruyen los muros (puerta
+   * abierta). El render lo sondea en useFrame para saber si debe reconstruir
+   * las mallas de muro (evento rarísimo, no hot-path); evita comparar arrays.
+   */
+  wallVersion: number;
+  /** world.time hasta el que no se repite el aviso "necesitas la llave" (anti-spam a 60 Hz). */
+  lockedNoticeCooldownUntil: number;
   /**
    * true mientras el jugador tiene el gesto de puntería activo (drag en
    * curso). Lo escribe el driver de render/input antes de cada tick; el
@@ -259,7 +315,7 @@ export interface World {
 const PROJECTILE_POOL_SIZE = 32;
 const PUDDLE_POOL_SIZE = 32;
 
-function createProjectilePool(): Projectile[] {
+export function createProjectilePool(): Projectile[] {
   const pool: Projectile[] = [];
   for (let i = 0; i < PROJECTILE_POOL_SIZE; i++) {
     pool.push({
@@ -279,7 +335,7 @@ function createProjectilePool(): Projectile[] {
   return pool;
 }
 
-function createPuddlePool(): Puddle[] {
+export function createPuddlePool(): Puddle[] {
   const pool: Puddle[] = [];
   for (let i = 0; i < PUDDLE_POOL_SIZE; i++) {
     pool.push({ active: false, position: { x: 0, y: 0 }, radius: 0, ttl: 0 });
@@ -287,7 +343,7 @@ function createPuddlePool(): Puddle[] {
   return pool;
 }
 
-function createDefaultModifiers(): HeroModifiers {
+export function createDefaultModifiers(): HeroModifiers {
   return {
     ramDamageBonus: 0,
     arrowDamageBonus: 0,
@@ -328,18 +384,20 @@ function enemyHpFor(kind: EnemyKind, rng: Rng): number {
   }
 }
 
-function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng): Enemy {
-  const patrolFrom = { x: spawn.position.x, y: spawn.position.y };
+function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng, origin: Vec2, roomId?: string): Enemy {
+  const spawnPos = { x: spawn.position.x + origin.x, y: spawn.position.y + origin.y };
+  const patrolFrom = { x: spawnPos.x, y: spawnPos.y };
   const patrolTo = spawn.patrolTarget
-    ? { x: spawn.patrolTarget.x, y: spawn.patrolTarget.y }
-    : deriveAutoPatrolTarget(bounds, spawn.position, 1.6);
-  const hp = enemyHpFor(spawn.kind, rng);
+    ? { x: spawn.patrolTarget.x + origin.x, y: spawn.patrolTarget.y + origin.y }
+    : deriveAutoPatrolTarget(bounds, spawnPos, 1.6);
+  const hp = spawn.hp ?? enemyHpFor(spawn.kind, rng);
   return {
     id: spawn.id,
     kind: spawn.kind,
-    position: { x: spawn.position.x, y: spawn.position.y },
+    roomId,
+    position: { x: spawnPos.x, y: spawnPos.y },
     velocity: { x: 0, y: 0 },
-    radius: 0.4,
+    radius: spawn.radius ?? 0.4,
     hp,
     maxHp: hp,
     patrolFrom,
@@ -357,47 +415,88 @@ function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng): Enemy {
   };
 }
 
+/** Resultado de construir las entidades de una sala colocada en coordenadas de mundo. */
+export interface RoomEntityBundle {
+  obstacles: Obstacle[];
+  hazards: HazardRuntime[];
+  barrels: Barrel[];
+  enemies: Enemy[];
+  items: Item[];
+}
+
+/**
+ * Construye las entidades vivas de una sala (enemigos/hazards/barriles/items)
+ * trasladadas por `origin` a coordenadas de mundo. Usado tanto por
+ * `createWorld` (origin {0,0}, modo sala única) como por `createDungeonWorld`
+ * (una llamada por sala colocada, origin = PlacedRoom.origin).
+ */
+export function buildRoomEntities(
+  room: RoomData,
+  origin: Vec2,
+  bounds: AABB,
+  rng: Rng,
+  roomId?: string,
+): RoomEntityBundle {
+  // Los ids de las entidades son locales a cada sala (dos salas del pool
+  // pueden tener ambas un 'dummy-1'): en la mazmorra multi-sala se
+  // prefijan con el id de sala para que sean únicos en el mundo fusionado —
+  // los cooldowns de contacto, el registro de drops y las keys de React
+  // indexan por id global.
+  const globalId = (localId: string): string => (roomId !== undefined ? `${roomId}:${localId}` : localId);
+
+  const obstacles: Obstacle[] = [];
+  const hazards: HazardRuntime[] = [];
+  const barrels: Barrel[] = [];
+  for (const hazard of room.hazards) {
+    const worldPos = { x: hazard.position.x + origin.x, y: hazard.position.y + origin.y };
+    if (hazard.kind === 'rock') {
+      obstacles.push({
+        id: globalId(hazard.id),
+        roomId,
+        aabb: {
+          minX: worldPos.x - hazard.width / 2,
+          maxX: worldPos.x + hazard.width / 2,
+          minY: worldPos.y - hazard.height / 2,
+          maxY: worldPos.y + hazard.height / 2,
+        },
+      });
+    } else if (hazard.kind === 'barrel') {
+      barrels.push({
+        id: globalId(hazard.id),
+        roomId,
+        position: worldPos,
+        radius: Math.max(hazard.width, hazard.height) / 2,
+        exploded: false,
+      });
+    } else {
+      hazards.push({ ...hazard, id: globalId(hazard.id), position: worldPos, roomId });
+    }
+  }
+
+  const enemies = room.enemies.map((spawn) =>
+    createEnemy(roomId !== undefined ? { ...spawn, id: globalId(spawn.id) } : spawn, bounds, rng, origin, roomId),
+  );
+
+  const items: Item[] = room.items.map((spawn) => ({
+    id: globalId(spawn.id),
+    kind: spawn.kind,
+    position: { x: spawn.position.x + origin.x, y: spawn.position.y + origin.y },
+    active: true,
+    roomId,
+  }));
+
+  return { obstacles, hazards, barrels, enemies, items };
+}
+
 /** Construye el estado vivo inicial a partir de los datos de una sala. Determinista: RNG con semilla. */
 export function createWorld(room: RoomData, seed = 1): World {
   const halfW = room.width / 2;
   const halfH = room.height / 2;
   const bounds: AABB = { minX: -halfW, minY: -halfH, maxX: halfW, maxY: halfH };
   const rng = createRng(seed);
+  const origin: Vec2 = { x: 0, y: 0 };
 
-  const obstacles: Obstacle[] = [];
-  const hazards: HazardSpawn[] = [];
-  const barrels: Barrel[] = [];
-  for (const hazard of room.hazards) {
-    if (hazard.kind === 'rock') {
-      obstacles.push({
-        id: hazard.id,
-        aabb: {
-          minX: hazard.position.x - hazard.width / 2,
-          maxX: hazard.position.x + hazard.width / 2,
-          minY: hazard.position.y - hazard.height / 2,
-          maxY: hazard.position.y + hazard.height / 2,
-        },
-      });
-    } else if (hazard.kind === 'barrel') {
-      barrels.push({
-        id: hazard.id,
-        position: { x: hazard.position.x, y: hazard.position.y },
-        radius: Math.max(hazard.width, hazard.height) / 2,
-        exploded: false,
-      });
-    } else {
-      hazards.push(hazard);
-    }
-  }
-
-  const enemies = room.enemies.map((spawn) => createEnemy(spawn, bounds, rng));
-
-  const items: Item[] = room.items.map((spawn) => ({
-    id: spawn.id,
-    kind: spawn.kind,
-    position: { x: spawn.position.x, y: spawn.position.y },
-    active: true,
-  }));
+  const { obstacles, hazards, barrels, enemies, items } = buildRoomEntities(room, origin, bounds, rng);
 
   const playerStart = { x: room.playerStart.x, y: room.playerStart.y };
 
@@ -435,5 +534,10 @@ export function createWorld(room: RoomData, seed = 1): World {
     spikeDamageCooldowns: new Map(),
     deadEnemiesDropped: new Set(),
     time: 0,
+    dungeon: null,
+    roomRuntimes: new Map(),
+    currentRoomId: room.id,
+    wallVersion: 0,
+    lockedNoticeCooldownUntil: 0,
   };
 }

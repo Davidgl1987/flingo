@@ -4,7 +4,9 @@
  * en un ref/useState-inicial); NUNCA se usa como estado de React.
  */
 
-import { UPGRADE_CHOICES } from './content/constants';
+import { ROOMS_PER_RUN, UPGRADE_CHOICES } from './content/constants';
+import { generateDungeon } from './sim/dungeon';
+import { createDungeonWorld } from './sim/dungeon-world';
 import { createEventQueue, type EventQueue } from './sim/events';
 import { applyUpgrade, rollUpgradeChoices, type UpgradeDef, type UpgradeId } from './sim/upgrades';
 import { createWorld, type RoomData, type World } from './sim/world';
@@ -34,10 +36,20 @@ export interface GameSession {
   offeredUpgrades: Set<UpgradeId>;
   /** Las 3 opciones actuales del modal de mejora (recalculadas al limpiar sala). */
   upgradeChoices: UpgradeDef[];
-  /** Sala original con la que se creó el mundo (para reiniciar la run). */
+  /** Sala original con la que se creó el mundo (modo sala única: playtest del editor). */
   room: RoomData;
+  /** Pool de salas y semilla usados para (re)generar la mazmorra (modo run completa); null en modo sala única. */
+  dungeonPool: RoomData[] | null;
+  seed: number;
+  /**
+   * Semilla forzada (?seed=N en la URL, para verificación/depuración): si no
+   * es null, los reinicios regeneran SIEMPRE el mismo mapa en vez de sortear
+   * una semilla nueva.
+   */
+  forcedSeed: number | null;
 }
 
+/** Sesión de sala única (playtest del editor, fases 1-2): sin mazmorra multi-sala. */
 export function createGameSession(room: RoomData): GameSession {
   const world = createWorld(room);
   return {
@@ -51,6 +63,40 @@ export function createGameSession(room: RoomData): GameSession {
     offeredUpgrades: new Set(),
     upgradeChoices: [],
     room,
+    dungeonPool: null,
+    seed: 1,
+    forcedSeed: null,
+  };
+}
+
+/** Semilla aleatoria para una nueva run (no determinista: solo el generador en sí lo es dada una semilla). */
+export function randomSeed(): number {
+  return Math.floor(Math.random() * 0xffffffff);
+}
+
+/**
+ * Sesión de run completa (GDD §10): genera una mazmorra de ROOMS_PER_RUN
+ * salas a partir del pool. `forcedSeed` (de ?seed=N) fija el mapa también en
+ * reinicios; sin ella, cada run sortea una semilla nueva.
+ */
+export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | null = null): GameSession {
+  const seed = forcedSeed ?? randomSeed();
+  const dungeon = generateDungeon(seed, pool, ROOMS_PER_RUN);
+  const world = createDungeonWorld(dungeon, seed);
+  return {
+    world,
+    events: createEventQueue(64),
+    aim: { active: false, dirX: 0, dirY: 0, force: 0 },
+    accumulator: 0,
+    renderAlpha: 1,
+    heroPrevX: world.hero.position.x,
+    heroPrevY: world.hero.position.y,
+    offeredUpgrades: new Set(),
+    upgradeChoices: [],
+    room: world.room,
+    dungeonPool: pool,
+    seed,
+    forcedSeed,
   };
 }
 
@@ -77,9 +123,21 @@ export function chooseUpgrade(session: GameSession, def: UpgradeDef): void {
   session.world.phase = 'playing';
 }
 
-/** Reinicia la run completa: recrea el mundo desde la sala original de la sesión. */
+/**
+ * Reinicia la run completa. En modo mazmorra (dungeonPool no nulo) genera un
+ * mapa NUEVO con una semilla nueva (GDD §10.3: reinicio de run = nueva run,
+ * no repetir el mismo mapa); en modo sala única recrea la misma sala.
+ */
 export function restartSession(session: GameSession): void {
-  const world = createWorld(session.room);
+  let world: World;
+  if (session.dungeonPool) {
+    session.seed = session.forcedSeed ?? randomSeed();
+    const dungeon = generateDungeon(session.seed, session.dungeonPool, ROOMS_PER_RUN);
+    world = createDungeonWorld(dungeon, session.seed);
+    session.room = world.room;
+  } else {
+    world = createWorld(session.room);
+  }
   session.world = world;
   session.accumulator = 0;
   session.renderAlpha = 1;

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "combat-crossroads",
+  "name": "Encrucijada",
+  "width": 11,
+  "height": 11,
+  "playerStart": { "x": 0, "y": 4 },
+  "tags": ["combate"],
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [
+    { "id": "dummy-1", "kind": "dummy", "position": { "x": -3, "y": 0 }, "patrolTarget": { "x": -3, "y": 3 } },
+    { "id": "chaser-1", "kind": "chaser", "position": { "x": 3, "y": -3 } }
+  ],
+  "hazards": [
+    { "id": "rock-1", "kind": "rock", "position": { "x": 0, "y": 0 }, "width": 1.4, "height": 1.4 },
+    { "id": "mud-1", "kind": "slow", "position": { "x": 3, "y": 3 }, "width": 2, "height": 2 }
+  ],
+  "items": [
+    { "id": "coin-1", "kind": "coin", "position": { "x": -4, "y": 4 } },
+    { "id": "coin-2", "kind": "coin", "position": { "x": 4, "y": 4 } }
+  ]
+}

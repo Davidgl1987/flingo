@@ -20,6 +20,9 @@ export function HUD({ session }: { session: GameSession }) {
   const notice = useUiStore((s) => s.notice);
   const noticeSeq = useUiStore((s) => s.noticeSeq);
   const clearNotice = useUiStore((s) => s.clearNotice);
+  const roomIndex = useUiStore((s) => s.roomIndex);
+  const totalRooms = useUiStore((s) => s.totalRooms);
+  const currentRoomName = useUiStore((s) => s.currentRoomName);
 
   useEffect(() => {
     if (notice === null) return;
@@ -49,6 +52,14 @@ export function HUD({ session }: { session: GameSession }) {
           </div>
         </div>
       </div>
+      {roomIndex !== null && totalRooms !== null && (
+        <div className="hud-room-banner" aria-label={`Sala ${roomIndex} de ${totalRooms}: ${currentRoomName}`}>
+          <span className="hud-room-progress">
+            Sala {roomIndex}/{totalRooms}
+          </span>
+          <span className="hud-room-name">{currentRoomName}</span>
+        </div>
+      )}
       {notice !== null && <div className="hud-notice">{notice}</div>}
       <WeaponBar session={session} />
     </div>

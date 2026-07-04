@@ -1,16 +1,157 @@
 /**
- * Sala estática: suelo, 4 paredes y rocas. Se construye una vez a partir de
- * los datos del mundo; no se actualiza por frame.
+ * Estructura estática del escenario.
+ *
+ * Modo sala única (world.dungeon === null, playtest del editor): suelo, 4
+ * paredes y rocas como en fases 1-2.
+ *
+ * Modo mazmorra (GDD §10): renderiza TODAS las salas colocadas en el plano —
+ * un suelo por sala + parches de suelo bajo los huecos de puerta, muros y
+ * rocas con InstancedMesh (presupuesto: nada de una mesh por tile), y los
+ * portones de puerta cerrados como mallas visibles (azul = normal, dorado =
+ * requiere llave). Los muros son estáticos; los portones se reconstruyen
+ * solo cuando `world.wallVersion` cambia (abrir una puerta, evento raro).
  */
 
-import { WALL_THICKNESS } from '../content/constants';
-import type { World } from '../sim/world';
-import { floorMaterial, rockMaterial, unitBox, unitPlane, wallMaterial } from './assets';
+import { useFrame } from '@react-three/fiber';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { DOOR_WIDTH, WALL_THICKNESS } from '../content/constants';
+import { DOOR_GATE_ID_PREFIX } from '../sim/dungeon-world';
+import type { Obstacle, World } from '../sim/world';
+import {
+  doorKeyMaterial,
+  doorMaterial,
+  floorMaterial,
+  rockMaterial,
+  unitBox,
+  unitPlane,
+  wallMaterial,
+} from './assets';
 
 const WALL_HEIGHT = 0.9;
 const ROCK_HEIGHT = 0.8;
+const GATE_HEIGHT = 0.8;
 
-export function RoomView({ world }: { world: World }) {
+function isWallObstacle(o: Obstacle): boolean {
+  return o.id.includes('-wall-');
+}
+
+function isGateObstacle(o: Obstacle): boolean {
+  return o.id.startsWith(DOOR_GATE_ID_PREFIX);
+}
+
+/** Malla instanciada de cajas estáticas a partir de una lista de AABBs (muros/rocas). */
+function InstancedBoxes({
+  obstacles,
+  material,
+  height,
+}: {
+  obstacles: Obstacle[];
+  material: THREE.Material;
+  height: number;
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const scratch = new THREE.Object3D();
+    for (let i = 0; i < obstacles.length; i++) {
+      const { minX, minY, maxX, maxY } = obstacles[i].aabb;
+      scratch.position.set((minX + maxX) / 2, height / 2, (minY + maxY) / 2);
+      scratch.scale.set(maxX - minX, height, maxY - minY);
+      scratch.updateMatrix();
+      mesh.setMatrixAt(i, scratch.matrix);
+    }
+    mesh.count = obstacles.length;
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [obstacles, height]);
+
+  if (obstacles.length === 0) return null;
+  return <instancedMesh ref={meshRef} args={[unitBox, material, obstacles.length]} />;
+}
+
+/** Portones de puerta cerrados: pocos (≤ nº de conexiones), mallas normales reconstruidas al abrir puertas. */
+function DoorGates({ world }: { world: World }) {
+  const [version, setVersion] = useState(world.wallVersion);
+
+  // Sondeo barato por frame (una comparación de enteros); setState SOLO
+  // cuando una puerta cambió de estado — evento raro, no por frame.
+  useFrame(() => {
+    if (world.wallVersion !== version) setVersion(world.wallVersion);
+  });
+
+  const gates = world.obstacles.filter(isGateObstacle);
+  return (
+    <>
+      {gates.map((gate) => {
+        const { minX, minY, maxX, maxY } = gate.aabb;
+        return (
+          <mesh
+            key={gate.id}
+            geometry={unitBox}
+            material={gate.id.endsWith('-key') ? doorKeyMaterial : doorMaterial}
+            position={[(minX + maxX) / 2, GATE_HEIGHT / 2, (minY + maxY) / 2]}
+            scale={[maxX - minX, GATE_HEIGHT, maxY - minY]}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/** Mazmorra completa: suelos, parches de puerta, muros/rocas instanciados y portones. */
+function DungeonStructureView({ world }: { world: World }) {
+  const dungeon = world.dungeon;
+  // Muros y rocas son estáticos durante la run: se calculan una vez por mundo.
+  const staticBoxes = useMemo(() => {
+    return {
+      walls: world.obstacles.filter(isWallObstacle),
+      rocks: world.obstacles.filter((o) => !isWallObstacle(o) && !isGateObstacle(o)),
+    };
+  }, [world]);
+
+  if (!dungeon) return null;
+  const t = WALL_THICKNESS;
+
+  return (
+    <group>
+      {dungeon.rooms.map((placed) => (
+        <mesh
+          key={placed.room.id}
+          geometry={unitPlane}
+          material={floorMaterial}
+          rotation-x={-Math.PI / 2}
+          position={[placed.origin.x, 0, placed.origin.y]}
+          scale={[placed.room.width, placed.room.height, 1]}
+        />
+      ))}
+      {/* Parche de suelo bajo cada hueco de puerta (el paso entre interiores). */}
+      {dungeon.connections.map((conn, i) => {
+        const horizontal = conn.sideOnA === 'east' || conn.sideOnA === 'west';
+        const dirSign = conn.sideOnA === 'east' || conn.sideOnA === 'south' ? 1 : -1;
+        const cx = conn.center.x + (horizontal ? (dirSign * t) / 2 : 0);
+        const cy = conn.center.y + (horizontal ? 0 : (dirSign * t) / 2);
+        return (
+          <mesh
+            key={`door-floor-${i}`}
+            geometry={unitPlane}
+            material={floorMaterial}
+            rotation-x={-Math.PI / 2}
+            position={[cx, 0, cy]}
+            scale={horizontal ? [t, DOOR_WIDTH, 1] : [DOOR_WIDTH, t, 1]}
+          />
+        );
+      })}
+      <InstancedBoxes obstacles={staticBoxes.walls} material={wallMaterial} height={WALL_HEIGHT} />
+      <InstancedBoxes obstacles={staticBoxes.rocks} material={rockMaterial} height={ROCK_HEIGHT} />
+      <DoorGates world={world} />
+    </group>
+  );
+}
+
+/** Sala única (modo histórico / playtest del editor). */
+function SingleRoomView({ world }: { world: World }) {
   const { width, height } = world.room;
   const halfW = width / 2;
   const halfH = height / 2;
@@ -65,4 +206,11 @@ export function RoomView({ world }: { world: World }) {
       })}
     </group>
   );
+}
+
+export function RoomView({ world }: { world: World }) {
+  if (world.dungeon) {
+    return <DungeonStructureView world={world} />;
+  }
+  return <SingleRoomView world={world} />;
 }

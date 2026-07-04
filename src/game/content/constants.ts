@@ -163,6 +163,8 @@ export const WALL_THICKNESS = 0.42;
 export const UPGRADE_CHOICES = 3;
 export const ROOM_MIN_SIZE = 5;
 export const ROOM_CLEAR_SCORE = 50;
+/** Distancia al centro de una puerta (a lo largo de su eje) para considerar que el héroe la está tocando. */
+export const DOOR_TOUCH_MARGIN = 1.1;
 
 // ── Input / puntería ──────────────────────────────────────────────────────
 

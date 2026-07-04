@@ -21,6 +21,10 @@ interface UiState {
   phase: GamePhase;
   roomsCleared: number;
   score: number;
+  /** Sala actual (1-indexada) / total de la run (GDD §12), null en modo sala única. */
+  roomIndex: number | null;
+  totalRooms: number | null;
+  currentRoomName: string;
   /** Mejoras aplicadas hasta ahora en la run (para el resumen de pausa/fin). */
   acquiredUpgrades: UpgradeId[];
   /** Aviso transitorio (ej. "tiro demasiado flojo"). */
@@ -37,6 +41,9 @@ interface UiState {
     phase: GamePhase;
     roomsCleared: number;
     score: number;
+    roomIndex: number | null;
+    totalRooms: number | null;
+    currentRoomName: string;
   }) => void;
   addUpgrade: (id: UpgradeId) => void;
   resetRun: () => void;
@@ -50,6 +57,9 @@ const initialState = {
   phase: 'playing' as GamePhase,
   roomsCleared: 0,
   score: 0,
+  roomIndex: null as number | null,
+  totalRooms: null as number | null,
+  currentRoomName: '',
   acquiredUpgrades: [] as UpgradeId[],
   notice: null as string | null,
   noticeSeq: 0,
