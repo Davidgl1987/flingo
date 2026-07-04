@@ -9,16 +9,38 @@
  * - Encuadre móvil retrato (GDD §14): en viewports estrechos (aspect < 1.2)
  *   la cámara se aleja proporcionalmente para compensar el FOV horizontal
  *   reducido y que la sala siga siendo jugable con los botones sin tapar.
+ *
+ * Fase 5 (fix playtest, punto 6): el placement inicial se hacía en un
+ * `useEffect` que leía `camera.aspect` en el commit de montaje — en viewports
+ * con `100dvh` (móvil: la UI del navegador puede reflow el alto tras el
+ * primer paint) ese aspect podía no coincidir con el que R3F resuelve para el
+ * primer `useFrame`, así que la cámara "saltaba" de una posición a otra en el
+ * primer par de frames: un salto de posición idéntico a un shake de trauma,
+ * pero sin que trauma valiera nada (trauma arranca en 0, confirmado por
+ * `createJuiceState`/`createGameSession`/`createDungeonGameSession`: no hay
+ * evento inicial que le sume nada). Fix: el snap inicial ahora ocurre dentro
+ * del primer `useFrame` (donde `camera.aspect` ya está resuelto contra el
+ * tamaño real del canvas), nunca en un efecto aparte.
+ *
+ * Zoom de puntería (punto 7, GDD "juice"): mientras `session.aim.active`, el
+ * factor de distancia se acerca un ~10% (lerp propio, independiente del
+ * seguimiento) y vuelve suavemente al soltar. Puramente aditivo sobre el
+ * mismo `distanceScaleForAspect`, así que no interfiere con el encuadre móvil.
  */
 
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { GameSession } from '../session';
 
 const CAMERA_OFFSET = new THREE.Vector3(0, 9.5, 6.2);
 /** Rigidez del seguimiento (mayor = más pegado al héroe). */
 const FOLLOW_STIFFNESS = 5;
+
+/** Acercamiento de cámara mientras se apunta (fracción de distancia que se recorta). */
+const AIM_ZOOM_FACTOR = 0.1;
+/** Rigidez del lerp de zoom (mismo orden que el seguimiento: suave, nunca brusco). */
+const AIM_ZOOM_STIFFNESS = 6;
 
 /** Amplitud máxima del shake posicional (u de mundo) con trauma = 1. */
 const SHAKE_MAX_OFFSET = 0.4;
@@ -44,15 +66,15 @@ export function CameraRig({ session }: { session: GameSession }) {
     () => ({ target: new THREE.Vector3(), look: new THREE.Vector3(), offset: new THREE.Vector3() }),
     [],
   );
-
-  // Colocación inicial sin lerp (evita el "vuelo" de cámara al arrancar).
-  useEffect(() => {
-    const hero = session.world.hero.position;
-    const aspect = camera instanceof THREE.PerspectiveCamera ? camera.aspect : 1.6;
-    const s = distanceScaleForAspect(aspect);
-    camera.position.set(hero.x + CAMERA_OFFSET.x * s, CAMERA_OFFSET.y * s, hero.y + CAMERA_OFFSET.z * s);
-    camera.lookAt(hero.x, 0, hero.y);
-  }, [camera, session]);
+  // Fracción de zoom de puntería actual [0,1]; lerpea hacia 1 (apuntando) o 0
+  // (soltado). Empieza en 0 (sin zoom) y sobrevive entre frames en un ref
+  // porque no debe disparar re-render de React.
+  const aimZoom = useRef(0);
+  // true tras el primer useFrame: el placement inicial (snap sin lerp) solo
+  // ocurre una vez, y DENTRO de useFrame (nunca en un useEffect aparte) para
+  // que `camera.aspect` ya esté resuelto contra el tamaño real del canvas
+  // (punto 6: fix del shake al arrancar, ver comentario de arriba del fichero).
+  const initialized = useRef(false);
 
   useFrame((state, delta) => {
     const hero = session.world.hero;
@@ -64,12 +86,27 @@ export function CameraRig({ session }: { session: GameSession }) {
     // resize/rotación de pantalla queda cubierto gratis; R3F ya mantiene
     // `camera.aspect` al día).
     const aspect = camera instanceof THREE.PerspectiveCamera ? camera.aspect : 1.6;
-    const s = distanceScaleForAspect(aspect);
+    let s = distanceScaleForAspect(aspect);
+
+    // Zoom de puntería: lerp suave de la fracción hacia el objetivo (1 mientras
+    // se apunta, 0 al soltar), aplicado como recorte multiplicativo de `s`.
+    const aimTarget = session.aim.active ? 1 : 0;
+    const zoomK = 1 - Math.exp(-AIM_ZOOM_STIFFNESS * delta);
+    aimZoom.current += (aimTarget - aimZoom.current) * zoomK;
+    s *= 1 - AIM_ZOOM_FACTOR * aimZoom.current;
+
     scratch.offset.copy(CAMERA_OFFSET).multiplyScalar(s);
 
     scratch.target.set(x + scratch.offset.x, scratch.offset.y, z + scratch.offset.z);
-    const k = 1 - Math.exp(-FOLLOW_STIFFNESS * delta);
-    camera.position.lerp(scratch.target, k);
+    if (!initialized.current) {
+      // Snap sin lerp en el primer frame (evita el "vuelo" de cámara al
+      // arrancar), ya con el aspect real del canvas.
+      initialized.current = true;
+      camera.position.copy(scratch.target);
+    } else {
+      const k = 1 - Math.exp(-FOLLOW_STIFFNESS * delta);
+      camera.position.lerp(scratch.target, k);
+    }
     // Mirar a "posición de cámara − offset": pitch constante, sin bamboleo.
     scratch.look.copy(camera.position).sub(scratch.offset);
     camera.lookAt(scratch.look);

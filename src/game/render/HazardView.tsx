@@ -10,10 +10,17 @@
  *   contra el suelo desde cualquier ángulo.
  * - El barril es un CILINDRO con aros claros (silueta de barril); al explotar
  *   desaparece y deja una mancha chamuscada en el suelo.
+ * - Los pinchos (punto 1 de playtest: "los pinchos no lo parecen") son una
+ *   base + un InstancedMesh de agujas cónicas afiladas apuntando hacia arriba
+ *   sobre una rejilla determinista (sin Math.random: jitter por índice, mismo
+ *   layout siempre para la misma sala), color hueso claro que contrasta con
+ *   el suelo. Estático, se construye una vez por hazard (useMemo), igual que
+ *   el resto de hazards no vivos.
  */
 
 import { useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
+import * as THREE from 'three';
 import type { Group, Mesh } from 'three';
 import type { GameSession } from '../session';
 import type { HazardSpawn } from '../sim/world';
@@ -26,15 +33,92 @@ import {
   pitRimMaterial,
   scorchMaterial,
   spikesMaterial,
+  spikesNeedleMaterial,
   unitCircle,
   unitCylinder,
   unitPlane,
+  unitSpikeNeedle,
 } from './assets';
 
 const HAZARD_QUAD_Y = 0.03;
 const BARREL_HEIGHT = 0.7;
 /** Anchura del reborde visible alrededor del foso (u de mundo). */
 const PIT_RIM_WIDTH = 0.14;
+/** Separación aproximada entre agujas del campo de pinchos (u de mundo). */
+const SPIKE_NEEDLE_SPACING = 0.32;
+/** Altura de la aguja instanciada (debe coincidir con la geometría unitSpikeNeedle). */
+const SPIKE_NEEDLE_HEIGHT = 0.32;
+
+/** Hash determinista barato [0,1) por índice entero (sin Math.random: mismo layout siempre para la misma sala). */
+function hash01(i: number): number {
+  const s = Math.sin(i * 12.9898) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+/** Rejilla de posiciones locales (centradas en 0,0) con jitter determinista, para un campo denso de agujas. */
+function buildNeedleLayout(width: number, height: number): { x: number; z: number; scale: number; rot: number }[] {
+  const cols = Math.max(1, Math.round(width / SPIKE_NEEDLE_SPACING));
+  const rows = Math.max(1, Math.round(height / SPIKE_NEEDLE_SPACING));
+  const cellW = width / cols;
+  const cellH = height / rows;
+  const layout: { x: number; z: number; scale: number; rot: number }[] = [];
+  let i = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const jitterX = (hash01(i * 2) - 0.5) * cellW * 0.4;
+      const jitterZ = (hash01(i * 2 + 1) - 0.5) * cellH * 0.4;
+      const x = -width / 2 + cellW * (c + 0.5) + jitterX;
+      const z = -height / 2 + cellH * (r + 0.5) + jitterZ;
+      const scale = 0.75 + hash01(i * 3 + 5) * 0.5;
+      const rot = hash01(i * 5 + 7) * Math.PI * 2;
+      layout.push({ x, z, scale, rot });
+      i++;
+    }
+  }
+  return layout;
+}
+
+/** Instancias de agujas del campo de pinchos: matrices escritas UNA vez al montar (hazard estático, mismo patrón que InstancedBoxes de RoomView). */
+function NeedleInstances({ layout }: { layout: { x: number; z: number; scale: number; rot: number }[] }) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const scratch = new THREE.Object3D();
+    for (let i = 0; i < layout.length; i++) {
+      const n = layout[i];
+      scratch.position.set(n.x, (SPIKE_NEEDLE_HEIGHT * n.scale) / 2, n.z);
+      scratch.rotation.set(0, n.rot, 0);
+      scratch.scale.setScalar(n.scale);
+      scratch.updateMatrix();
+      mesh.setMatrixAt(i, scratch.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [layout]);
+
+  if (layout.length === 0) return null;
+  return (
+    <instancedMesh ref={meshRef} args={[unitSpikeNeedle, spikesNeedleMaterial, layout.length]} frustumCulled={false} />
+  );
+}
+
+/** Campo de pinchos: base plana + InstancedMesh de agujas afiladas apuntando hacia arriba. */
+function SpikesField({ hazard }: { hazard: HazardSpawn }) {
+  const layout = useMemo(() => buildNeedleLayout(hazard.width, hazard.height), [hazard.width, hazard.height]);
+
+  return (
+    <group position={[hazard.position.x, HAZARD_QUAD_Y, hazard.position.y]}>
+      <mesh
+        geometry={unitPlane}
+        material={spikesMaterial}
+        rotation-x={-Math.PI / 2}
+        scale={[hazard.width, hazard.height, 1]}
+      />
+      <NeedleInstances layout={layout} />
+    </group>
+  );
+}
 
 function PitQuad({ hazard }: { hazard: HazardSpawn }) {
   const x = hazard.position.x;
@@ -65,8 +149,10 @@ function StaticHazardQuad({ hazard }: { hazard: HazardSpawn }) {
   if (hazard.kind === 'pit') {
     return <PitQuad hazard={hazard} />;
   }
-  const material =
-    hazard.kind === 'spikes' ? spikesMaterial : hazard.kind === 'slow' ? mudMaterial : boostMaterial;
+  if (hazard.kind === 'spikes') {
+    return <SpikesField hazard={hazard} />;
+  }
+  const material = hazard.kind === 'slow' ? mudMaterial : boostMaterial;
   return (
     <mesh
       geometry={unitPlane}

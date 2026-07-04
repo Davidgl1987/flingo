@@ -26,6 +26,8 @@ import { createDungeonGameSession, createGameSession, restartSession } from '../
 import type { GameSession } from '../session';
 import type { RoomData } from '../sim/world';
 import { useUiStore } from '../store';
+import { DamageVignette } from '../ui/DamageVignette';
+import { FpsCounter } from '../ui/FpsCounter';
 import { GameOverModal } from '../ui/GameOverModal';
 import { HUD } from '../ui/HUD';
 import { PauseModal } from '../ui/PauseModal';
@@ -100,6 +102,8 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
         <CameraRig session={session} />
         <AimInput session={session} />
       </Canvas>
+      <DamageVignette />
+      <FpsCounter />
       <HUD session={session} />
       <a className="editor-link" href="#/editor">
         {playtestRoom ? '← Volver al editor' : '✎ Editor'}

@@ -34,6 +34,79 @@ canvas {
   height: 100dvh;
 }
 
+/* ── Vignette de daño (punto 5 de playtest) ── */
+
+.damage-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 59, 59, 0) 55%,
+    rgba(255, 59, 59, 0.16) 78%,
+    rgba(255, 59, 59, 0.42) 100%
+  );
+  opacity: 0;
+}
+
+.damage-vignette-hit {
+  animation: damage-vignette-flash 0.45s ease-out;
+}
+
+@keyframes damage-vignette-flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Con 1 corazón: mismo vignette en bucle palpitante suave, hasta curarse o morir. */
+.damage-vignette-critical {
+  animation: damage-vignette-pulse 1.4s ease-in-out infinite;
+}
+
+/* Golpe recibido mientras ya está en 1 corazón: combina el flash breve con el
+   pulso continuo (si solo se usara la última clase de la cascada, el flash
+   del impacto quedaría tapado por el pulso). */
+.damage-vignette-hit.damage-vignette-critical {
+  animation:
+    damage-vignette-flash 0.45s ease-out,
+    damage-vignette-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes damage-vignette-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ── Contador de FPS (punto 12 de playtest) ── */
+
+.fps-counter {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 4px);
+  left: 6px;
+  z-index: 6;
+  font-size: 10px;
+  font-family: monospace;
+  color: rgba(170, 178, 212, 0.7);
+  background: rgba(11, 13, 20, 0.5);
+  border-radius: 6px;
+  padding: 2px 6px;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ── HUD ── */
 
 .hud {

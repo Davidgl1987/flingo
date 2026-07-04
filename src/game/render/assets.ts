@@ -18,6 +18,28 @@ export const unitCylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
 export const unitCone = new THREE.ConeGeometry(0.5, 1, 12);
 /** Púa del Spike: pirámide alargada apuntando en +Z local. */
 export const unitSpike = new THREE.ConeGeometry(0.35, 0.9, 6);
+/**
+ * Aguja fina del hazard de pinchos del suelo (punto 1 de playtest: "los
+ * pinchos no lo parecen"): mucho más estrecha/afilada que `unitSpike` (que es
+ * la púa gruesa del enemigo Spike) para poder instanciar un campo denso de
+ * conos apuntando hacia arriba sin que se toquen entre sí.
+ */
+export const unitSpikeNeedle = new THREE.ConeGeometry(0.09, 0.32, 6);
+
+// ── Geometrías de proyectiles con forma (puntos 2 y 3 de playtest) ────────
+
+/** Cuerpo cilíndrico fino de la flecha (eje +Y local; se rota para alinear con +Z al orientarla). */
+export const arrowShaftGeometry = new THREE.CylinderGeometry(0.035, 0.035, 1, 8);
+/** Punta cónica de la flecha, en el extremo +Y del asta. */
+export const arrowTipGeometry = new THREE.ConeGeometry(0.075, 0.22, 8);
+/** Pluma/emplumado: cuña plana simple (dos por flecha, a ambos lados de la cola). */
+export const arrowFletchingGeometry = new THREE.ConeGeometry(0.09, 0.16, 4);
+/** Núcleo brillante del hechizo: esfera pequeña (más chica que el radio de colisión). */
+export const spellCoreGeometry = new THREE.SphereGeometry(1, 12, 10);
+/** Segmento fino del zigzag eléctrico del hechizo: caja alargada instanciada. */
+export const spellBoltSegmentGeometry = new THREE.BoxGeometry(0.045, 0.045, 1);
+/** Chispa de la estela del hechizo: tetraedro minúsculo (barato, distinto de las partículas esféricas normales). */
+export const spellSparkGeometry = new THREE.TetrahedronGeometry(1, 0);
 
 // ── Textura radial para blob shadows (generada una vez, sin ficheros) ─────
 
@@ -46,8 +68,10 @@ export const heroMaterial = new THREE.MeshLambertMaterial({ color: '#54c7ff' });
 /**
  * Suelo de sala: ligeramente más claro que el fondo/foso para que los fosos
  * (casi negros) sean inconfundibles a primera vista (GDD §14: legibilidad).
+ * Aclarado un punto más (feedback de playtest, punto 4: "prefiero contraste
+ * entre el color del suelo y de los fosos") respecto al `#2d3352` original.
  */
-export const floorMaterial = new THREE.MeshLambertMaterial({ color: '#2d3352' });
+export const floorMaterial = new THREE.MeshLambertMaterial({ color: '#464b67' });
 export const wallMaterial = new THREE.MeshLambertMaterial({ color: '#3b4266' });
 export const rockMaterial = new THREE.MeshLambertMaterial({ color: '#767d99' });
 /** Portón de puerta cerrada (se abre al limpiar la sala). */
@@ -86,21 +110,72 @@ export const shooterTelegraphMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 
+// ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
+// compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
+// silueta/color de contrato del GDD. ──────────────────────────────────────
+
+/** Ojo simple (esclerótica): esfera pequeña blanca, compartida por Dummy/Chaser. */
+export const eyeWhiteMaterial = new THREE.MeshBasicMaterial({ color: '#f5f7ff' });
+/** Pupila/iris oscuro sobre el ojo. */
+export const eyePupilMaterial = new THREE.MeshBasicMaterial({ color: '#12131c' });
+/** Ceja agresiva del Chaser: cuña oscura sobre el ojo. */
+export const chaserBrowMaterial = new THREE.MeshBasicMaterial({ color: '#7a3a12' });
+/** Cañón/ojo del Shooter en reposo: gris metálico apagado. */
+export const shooterEyeMaterial = new THREE.MeshBasicMaterial({ color: '#4a5170' });
+/** Cañón/ojo del Shooter mientras carga: rojo brillante (coherente con su telegraph). */
+export const shooterEyeChargeMaterial = new THREE.MeshBasicMaterial({ color: '#ff5a5a' });
+/** Gota de baba del Trail: mismo verde que su cuerpo, algo más oscuro. */
+export const trailDripMaterial = new THREE.MeshBasicMaterial({
+  color: '#2f9464',
+  transparent: true,
+  opacity: 0.85,
+  depthWrite: false,
+});
+
+/** Esfera pequeña para ojos/pupilas/gotas (radio unitario, se escala en el componente). */
+export const smallDotGeometry = new THREE.SphereGeometry(1, 10, 8);
+/** Cuña de ceja/cañón: caja fina reutilizable. */
+export const smallWedgeGeometry = new THREE.BoxGeometry(1, 1, 1);
+
 // ── Proyectiles ────────────────────────────────────────────────────────────
 
 // Colores alineados con los botones de arma del HUD (mapeo instantáneo
 // botón↔proyectil, feedback de playtest): flecha amarilla, hechizo violeta.
 export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#fef08a' });
+/** Punta/emplumado de la flecha: tono más oscuro que el asta, silueta de flecha reconocible. */
+export const arrowTipMaterial = new THREE.MeshLambertMaterial({ color: '#d4a017' });
 export const spellMaterial = new THREE.MeshLambertMaterial({ color: '#d8b4fe' });
+/** Núcleo del hechizo (punto 2 de playtest: "efecto como rayo"): blanco-violeta brillante, sin sombreado. */
+export const spellCoreMaterial = new THREE.MeshBasicMaterial({ color: '#f3e8ff' });
+/** Zigzag eléctrico del hechizo: violeta más saturado/luminoso que el cuerpo. */
+export const spellBoltMaterial = new THREE.MeshBasicMaterial({
+  color: '#c084fc',
+  transparent: true,
+  opacity: 0.9,
+  depthWrite: false,
+});
+/** Chispas violetas de la estela del hechizo. */
+export const spellSparkMaterial = new THREE.MeshBasicMaterial({
+  color: '#e9d5ff',
+  transparent: true,
+  opacity: 0.85,
+  depthWrite: false,
+});
 export const enemyProjectileMaterial = new THREE.MeshLambertMaterial({ color: '#ff3b3b' });
 
 // ── Hazards ────────────────────────────────────────────────────────────────
 
 /** Foso: negro casi absoluto (agujero), inconfundible contra el suelo. */
 export const pitMaterial = new THREE.MeshBasicMaterial({ color: '#010102' });
-/** Reborde del foso: piedra clara que contrasta con suelo Y agujero (legibilidad GDD §8/§14). */
-export const pitRimMaterial = new THREE.MeshBasicMaterial({ color: '#7c86ad' });
+/**
+ * Reborde del foso: piedra clara que contrasta con suelo Y agujero
+ * (legibilidad GDD §8/§14). Aclarado de nuevo (punto 4 de playtest): el foso
+ * debe "cantar" a distancia de cámara de juego.
+ */
+export const pitRimMaterial = new THREE.MeshBasicMaterial({ color: '#8992b5' });
 export const spikesMaterial = new THREE.MeshLambertMaterial({ color: '#8d94ad' });
+/** Agujas del campo de pinchos: metálico/hueso claro, contraste fuerte con el suelo (punto 1 de playtest). */
+export const spikesNeedleMaterial = new THREE.MeshLambertMaterial({ color: '#e7e4d8' });
 export const barrelMaterial = new THREE.MeshLambertMaterial({ color: '#c0442b' });
 /** Aros metálicos del barril (silueta de barril reconocible). */
 export const barrelHoopMaterial = new THREE.MeshLambertMaterial({ color: '#e8d9a0' });
@@ -128,8 +203,21 @@ export const puddleMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 
-// ── Objetos ────────────────────────────────────────────────────────────────
+// ── Objetos (puntos 9 y 10 de playtest: moneda-moneda, poción-frasco) ─────
 
 export const coinMaterial = new THREE.MeshLambertMaterial({ color: '#ffd166' });
+/** Canto de la moneda: tono algo más oscuro, para que se note el volumen al girar. */
+export const coinRimMaterial = new THREE.MeshLambertMaterial({ color: '#c98f1b' });
 export const potionMaterial = new THREE.MeshLambertMaterial({ color: '#ff6bcb' });
+/** Cuello/tapón del frasco de poción: vidrio/corcho más oscuro que el cuerpo. */
+export const potionCapMaterial = new THREE.MeshLambertMaterial({ color: '#7a1f4d' });
 export const keyMaterial = new THREE.MeshLambertMaterial({ color: '#ffe082' });
+
+/** Moneda: cilindro plano (diámetro 1, canto 0.16) — se escala por el radio deseado en el componente. */
+export const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.16, 20);
+/** Cuerpo bulboso del frasco de poción: esfera achatada verticalmente. */
+export const potionBodyGeometry = new THREE.SphereGeometry(1, 16, 12);
+/** Cuello fino del frasco. */
+export const potionNeckGeometry = new THREE.CylinderGeometry(0.3, 0.38, 1, 12);
+/** Tapón/corcho en la boca del frasco. */
+export const potionCapGeometry = new THREE.CylinderGeometry(0.4, 0.36, 1, 12);

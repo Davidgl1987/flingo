@@ -13,6 +13,8 @@
 import {
   FIXED_DT,
   FRICTION_FACTOR,
+  LOW_SPEED_EXTRA_FRICTION,
+  LOW_SPEED_FRICTION_THRESHOLD,
   MAX_SPEED,
   RESTITUTION,
   STOP_THRESHOLD,
@@ -25,6 +27,21 @@ import type { AABB, Vec2, World } from './world';
  * Fricción exponencial del GDD: v(t) = v0 · e^(−1.42·t)  ⇒  v *= e^(−1.42·dt).
  */
 const FRICTION_DECAY_PER_TICK = Math.exp(-FRICTION_FACTOR * FIXED_DT);
+
+/**
+ * Decaimiento extra del héroe a baja velocidad (feedback de playtest, punto
+ * 8): un único `Math.exp` escalar por tick (no una asignación), que crece
+ * linealmente de 0 (en el umbral) a `LOW_SPEED_EXTRA_FRICTION` (a v=0). Los
+ * tiros fuertes casi nunca lo notan (pasan la mayoría de su recorrido por
+ * encima del umbral); los flojos frenan bastante antes de lo que haría la
+ * fricción exponencial pura, que en términos relativos no distingue tiros
+ * flojos de fuertes.
+ */
+function lowSpeedExtraDecay(speed: number): number {
+  if (speed >= LOW_SPEED_FRICTION_THRESHOLD) return 1;
+  const t = 1 - speed / LOW_SPEED_FRICTION_THRESHOLD;
+  return Math.exp(-LOW_SPEED_EXTRA_FRICTION * t * FIXED_DT);
+}
 
 /**
  * Colisión círculo-vs-AABB con resolución por reflexión.
@@ -200,8 +217,13 @@ export function stepHeroPhysics(world: World, events: EventQueue): void {
   }
 
   const frictionMultiplier = hero.modifiers.frictionMultiplier;
-  const decay =
+  const baseDecay =
     frictionMultiplier === 1 ? FRICTION_DECAY_PER_TICK : Math.pow(FRICTION_DECAY_PER_TICK, frictionMultiplier);
+  // Fricción extra a baja velocidad (punto 8 de playtest): calculada sobre la
+  // velocidad ANTES de aplicar el decaimiento de este tick, un único
+  // Math.hypot + Math.exp escalares, sin asignaciones.
+  const speedBefore = Math.hypot(velocity.x, velocity.y);
+  const decay = baseDecay * lowSpeedExtraDecay(speedBefore);
   velocity.x *= decay;
   velocity.y *= decay;
   if (velocity.x * velocity.x + velocity.y * velocity.y < STOP_THRESHOLD * STOP_THRESHOLD) {

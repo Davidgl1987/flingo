@@ -19,9 +19,21 @@ export const MAX_SPEED = 13.5;
  */
 export const FRICTION_FACTOR = 1.42;
 /** Umbral de parada total: por debajo, la velocidad pasa a 0 exacto (u/s). */
-export const STOP_THRESHOLD = 0.17;
+export const STOP_THRESHOLD = 0.35;
 /** Restitución de rebote héroe/paredes/rocas (fracción de velocidad conservada). */
 export const RESTITUTION = 0.86;
+
+/**
+ * Fricción extra a baja velocidad (feedback de playtest, punto 8: "con poco
+ * recorrido la pelota se queda resbalando demasiado"). Por debajo de este
+ * umbral (u/s) se añade un decaimiento adicional que crece progresivamente
+ * hasta el umbral de parada, para que los tiros flojos frenen antes SIN tocar
+ * el feel de los tiros fuertes (que pasan la mayor parte de su deslizamiento
+ * muy por encima de este umbral, y solo lo cruzan en su último tramo).
+ */
+export const LOW_SPEED_FRICTION_THRESHOLD = 1.5;
+/** Fuerza del decaimiento extra a baja velocidad (mayor = frena más brusco cerca de 0). */
+export const LOW_SPEED_EXTRA_FRICTION = 3.6;
 
 // ── Héroe ─────────────────────────────────────────────────────────────────
 

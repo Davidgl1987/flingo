@@ -27,7 +27,7 @@
   "hazards": [
     { "id": "rock-1", "kind": "rock", "position": { "x": -3, "y": 2 }, "width": 1.4, "height": 1.4 },
     { "id": "rock-2", "kind": "rock", "position": { "x": 3, "y": 2 }, "width": 1.4, "height": 1.4 },
-    { "id": "barrel-1", "kind": "barrel", "position": { "x": 0, "y": -5.5 }, "width": 0.8, "height": 0.8 }
+    { "id": "barrel-1", "kind": "barrel", "position": { "x": -2.5, "y": -5.5 }, "width": 0.8, "height": 0.8 }
   ],
   "items": [{ "id": "potion-1", "kind": "potion", "position": { "x": 0, "y": 5.5 } }]
 }

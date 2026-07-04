@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import {
   FIXED_DT,
   HERO_RADIUS,
+  LAUNCH_SPEED_MAX,
+  LAUNCH_SPEED_MIN,
   MAX_SPEED,
   RESTITUTION,
   WALL_THICKNESS,
@@ -194,5 +196,47 @@ describe('anti-tunneling', () => {
       // Tras cada tick resuelto, el círculo nunca queda penetrando la roca.
       expect(dist).toBeGreaterThanOrEqual(HERO_RADIUS - 1e-6);
     }
+  });
+});
+
+describe('fricción extra a baja velocidad (feedback de playtest, punto 8)', () => {
+  /** Simula desde una velocidad inicial en línea recta (sala vacía) hasta parar del todo; devuelve tiempo (s) y distancia recorrida (u). */
+  function simulateSlide(world: World, events: ReturnType<typeof createEventQueue>, v0: number) {
+    world.hero.velocity.x = v0;
+    world.hero.velocity.y = 0;
+    let t = 0;
+    let dist = 0;
+    const maxTicks = 1200; // 20 s: límite duro para no colgar el test
+    for (let i = 0; i < maxTicks; i++) {
+      const before = { x: world.hero.position.x, y: world.hero.position.y };
+      stepWorld(world, events);
+      drainEvents(events, () => {});
+      dist += Math.hypot(world.hero.position.x - before.x, world.hero.position.y - before.y);
+      t += FIXED_DT;
+      if (world.hero.velocity.x === 0 && world.hero.velocity.y === 0) break;
+    }
+    return { t, dist };
+  }
+
+  it('un tiro flojo (fuerza mínima) se detiene rápido y recorre poco', () => {
+    const world = makeWorld();
+    const events = createEventQueue(8);
+    const { t, dist } = simulateSlide(world, events, LAUNCH_SPEED_MIN);
+    expect(t).toBeLessThan(1.5); // se para en menos de 1.5 s
+    expect(dist).toBeLessThan(2.2); // recorrido corto: "poco impulso, poco recorrido"
+  });
+
+  it('un tiro fuerte (fuerza máxima) sigue deslizando un buen tramo (feel de cañonazo intacto)', () => {
+    const world = makeWorld();
+    const events = createEventQueue(8);
+    const { dist } = simulateSlide(world, events, LAUNCH_SPEED_MAX);
+    expect(dist).toBeGreaterThanOrEqual(4.5); // el tiro fuerte sigue recorriendo mucho más que el flojo
+  });
+
+  it('a velocidad máxima (cañonazo) el recorrido total apenas cambia frente a la fricción pura', () => {
+    const world = makeWorld();
+    const events = createEventQueue(8);
+    const { dist } = simulateSlide(world, events, MAX_SPEED);
+    expect(dist).toBeGreaterThanOrEqual(8.5); // el cañonazo conserva su alcance largo
   });
 });

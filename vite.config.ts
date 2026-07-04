@@ -78,6 +78,10 @@ function editorRoomsEndpoint(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [react(), editorRoomsEndpoint()],
+  server: {
+    host: true,
+    allowedHosts: ['.ngrok-free.dev'],
+  },
   build: {
     rollupOptions: {
       output: {
