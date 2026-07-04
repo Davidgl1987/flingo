@@ -12,6 +12,11 @@ import { ARROW_COOLDOWN, BODY_LAUNCH_COOLDOWN, SPELL_COOLDOWN } from '../content
 import type { GameSession } from '../session';
 import type { WeaponMode } from '../sim/world';
 
+/**
+ * Cada modo lleva el COLOR de su ataque (mismo color que su proyectil/estela,
+ * feedback de playtest): cuerpo azul, flecha amarilla, hechizo violeta. Se
+ * aplica vía clase CSS `weapon-btn-<mode>` (colores en styles.css).
+ */
 const MODES: { mode: WeaponMode; label: string; icon: string }[] = [
   { mode: 'body', label: 'Cuerpo', icon: '●' },
   { mode: 'arrow', label: 'Flecha', icon: '➤' },
@@ -72,7 +77,7 @@ export function WeaponBar({ session }: { session: GameSession }) {
         <button
           key={mode}
           type="button"
-          className={`weapon-btn${active === mode ? ' weapon-btn-active' : ''}`}
+          className={`weapon-btn weapon-btn-${mode}${active === mode ? ' weapon-btn-active' : ''}`}
           onPointerDown={(e) => {
             // Evita que el gesto de puntería del canvas capture este toque.
             e.stopPropagation();

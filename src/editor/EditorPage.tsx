@@ -35,6 +35,8 @@ type Selection =
   | { type: 'enemy'; id: string }
   | { type: 'hazard'; id: string }
   | { type: 'item'; id: string }
+  /** Handle del destino de patrulla de un enemigo (segundo punto arrastrable en el lienzo). */
+  | { type: 'patrol'; id: string }
   | { type: 'start' }
   | null;
 
@@ -226,6 +228,11 @@ export function EditorPage() {
           return { ...r, playerStart: p };
         case 'enemy':
           return { ...r, enemies: r.enemies.map((e) => (e.id === sel.id ? { ...e, position: p } : e)) };
+        case 'patrol':
+          return {
+            ...r,
+            enemies: r.enemies.map((e) => (e.id === sel.id ? { ...e, patrolTarget: p } : e)),
+          };
         case 'hazard':
           return { ...r, hazards: r.hazards.map((h) => (h.id === sel.id ? { ...h, position: p } : h)) };
         case 'item':
@@ -240,6 +247,17 @@ export function EditorPage() {
       switch (selection.type) {
         case 'enemy':
           return { ...r, enemies: r.enemies.filter((e) => e.id !== selection.id) };
+        case 'patrol':
+          // Borrar el handle de patrulla = quitar el destino (el enemigo queda).
+          return {
+            ...r,
+            enemies: r.enemies.map((e) => {
+              if (e.id !== selection.id) return e;
+              const next = { ...e };
+              delete next.patrolTarget;
+              return next;
+            }),
+          };
         case 'hazard':
           return { ...r, hazards: r.hazards.filter((h) => h.id !== selection.id) };
         case 'item':
@@ -252,7 +270,7 @@ export function EditorPage() {
   }, [selection]);
 
   const duplicateSelected = useCallback(() => {
-    if (!selection || selection.type === 'start') return;
+    if (!selection || selection.type === 'start' || selection.type === 'patrol') return;
     setRoom((r) => {
       const shift = (p: Vec2): Vec2 => ({ x: snap(p.x + 1), y: snap(p.y + 1) });
       switch (selection.type) {
@@ -306,7 +324,12 @@ export function EditorPage() {
       e.stopPropagation();
       setSelection(sel);
       dragRef.current = { selection: sel, moved: false };
-      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      try {
+        (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      } catch {
+        // Puntero sin captura disponible (sintético/perdido): el drag sigue
+        // funcionando vía los listeners del propio SVG.
+      }
     },
     [],
   );
@@ -406,7 +429,10 @@ export function EditorPage() {
   const halfH = room.height / 2;
   const margin = 1.5;
   const t = WALL_THICKNESS;
-  const selectedEnemy = selection?.type === 'enemy' ? room.enemies.find((e) => e.id === selection.id) : undefined;
+  const selectedEnemy =
+    selection?.type === 'enemy' || selection?.type === 'patrol'
+      ? room.enemies.find((e) => e.id === selection.id)
+      : undefined;
   const selectedHazard = selection?.type === 'hazard' ? room.hazards.find((h) => h.id === selection.id) : undefined;
   const selectedItem = selection?.type === 'item' ? room.items.find((i) => i.id === selection.id) : undefined;
 
@@ -547,6 +573,29 @@ export function EditorPage() {
                     stroke="#e2e6f2"
                     strokeWidth={0.12}
                   />
+                )}
+                {/* Handle arrastrable del destino de patrulla (segundo punto en el
+                    lienzo, unido por la línea discontinua de arriba). Su propio
+                    beginDrag hace stopPropagation, así que no arrastra al enemigo. */}
+                {en.patrolTarget && (
+                  <g onPointerDown={(e) => beginDrag(e, { type: 'patrol', id: en.id })}>
+                    {/* Zona táctil generosa e invisible alrededor del handle. */}
+                    <circle cx={en.patrolTarget.x} cy={en.patrolTarget.y} r={0.5} fill="transparent" />
+                    <circle
+                      cx={en.patrolTarget.x}
+                      cy={en.patrolTarget.y}
+                      r={0.22}
+                      fill="#20243a"
+                      stroke={
+                        selection?.type === 'patrol' && selection.id === en.id
+                          ? '#54c7ff'
+                          : ENEMY_COLOR[en.kind]
+                      }
+                      strokeWidth={0.08}
+                      strokeDasharray="0.12 0.08"
+                    />
+                    <circle cx={en.patrolTarget.x} cy={en.patrolTarget.y} r={0.07} fill={ENEMY_COLOR[en.kind]} />
+                  </g>
                 )}
               </g>
             ))}
@@ -730,7 +779,7 @@ export function EditorPage() {
           {selection && (
             <section className="editor-section">
               <h2>Selección</h2>
-              {selection.type !== 'start' && (
+              {selection.type !== 'start' && selection.type !== 'patrol' && (
                 <div className="editor-field-row">
                   <button type="button" className="editor-btn" onClick={duplicateSelected}>
                     Duplicar
@@ -741,6 +790,14 @@ export function EditorPage() {
                 </div>
               )}
               {selection.type === 'start' && <p className="editor-hint">Inicio del jugador (arrástralo en el lienzo).</p>}
+              {selection.type === 'patrol' && (
+                <>
+                  <p className="editor-hint">Destino de patrulla (arrástralo en el lienzo).</p>
+                  <button type="button" className="editor-btn editor-btn-danger editor-btn-wide" onClick={deleteSelected}>
+                    Quitar destino de patrulla
+                  </button>
+                </>
+              )}
 
               {selectedEnemy && (
                 <EnemyProperties

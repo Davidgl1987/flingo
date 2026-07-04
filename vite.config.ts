@@ -78,6 +78,26 @@ function editorRoomsEndpoint(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [react(), editorRoomsEndpoint()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Troceo del bundle (arranque rápido, GDD §14): three es con diferencia
+        // la dependencia más pesada y cambia poco → chunk propio cacheable;
+        // react/react-dom y fiber igual. El código del juego queda en un chunk
+        // pequeño, el único que cambia entre despliegues.
+        manualChunks: {
+          three: ['three'],
+          react: ['react', 'react-dom'],
+          r3f: ['@react-three/fiber'],
+        },
+      },
+    },
+    // three.js es un vendor monolítico: su chunk minificado ronda los 700 kB
+    // (~180 kB gzip) y no se puede trocear más. Con el troceo de arriba el
+    // código propio queda muy por debajo; subimos el umbral solo para no
+    // convertir ese chunk conocido y cacheable en un warning permanente.
+    chunkSizeWarningLimit: 750,
+  },
   test: {
     // Solo tests headless de la simulación (sin DOM ni three.js).
     include: ['src/**/*.test.ts'],

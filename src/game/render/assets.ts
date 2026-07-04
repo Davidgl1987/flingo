@@ -12,6 +12,8 @@ export const unitSphere = new THREE.SphereGeometry(1, 24, 16);
 export const unitBox = new THREE.BoxGeometry(1, 1, 1);
 export const unitCircle = new THREE.CircleGeometry(1, 24);
 export const unitPlane = new THREE.PlaneGeometry(1, 1);
+/** Cilindro unitario (diámetro 1, alto 1): barriles y otros cuerpos redondos. */
+export const unitCylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
 /** Cono direccional para el hocico/telegrafiado de enemigos (Dummy/Chaser/Shooter). */
 export const unitCone = new THREE.ConeGeometry(0.5, 1, 12);
 /** Púa del Spike: pirámide alargada apuntando en +Z local. */
@@ -41,7 +43,11 @@ function createRadialTexture(): THREE.Texture {
 // ── Materiales ────────────────────────────────────────────────────────────
 
 export const heroMaterial = new THREE.MeshLambertMaterial({ color: '#54c7ff' });
-export const floorMaterial = new THREE.MeshLambertMaterial({ color: '#20243a' });
+/**
+ * Suelo de sala: ligeramente más claro que el fondo/foso para que los fosos
+ * (casi negros) sean inconfundibles a primera vista (GDD §14: legibilidad).
+ */
+export const floorMaterial = new THREE.MeshLambertMaterial({ color: '#2d3352' });
 export const wallMaterial = new THREE.MeshLambertMaterial({ color: '#3b4266' });
 export const rockMaterial = new THREE.MeshLambertMaterial({ color: '#767d99' });
 /** Portón de puerta cerrada (se abre al limpiar la sala). */
@@ -82,15 +88,29 @@ export const shooterTelegraphMaterial = new THREE.MeshBasicMaterial({
 
 // ── Proyectiles ────────────────────────────────────────────────────────────
 
-export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#ffe082' });
-export const spellMaterial = new THREE.MeshLambertMaterial({ color: '#8a6bff' });
+// Colores alineados con los botones de arma del HUD (mapeo instantáneo
+// botón↔proyectil, feedback de playtest): flecha amarilla, hechizo violeta.
+export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#fef08a' });
+export const spellMaterial = new THREE.MeshLambertMaterial({ color: '#d8b4fe' });
 export const enemyProjectileMaterial = new THREE.MeshLambertMaterial({ color: '#ff3b3b' });
 
 // ── Hazards ────────────────────────────────────────────────────────────────
 
-export const pitMaterial = new THREE.MeshBasicMaterial({ color: '#05060a' });
+/** Foso: negro casi absoluto (agujero), inconfundible contra el suelo. */
+export const pitMaterial = new THREE.MeshBasicMaterial({ color: '#010102' });
+/** Reborde del foso: piedra clara que contrasta con suelo Y agujero (legibilidad GDD §8/§14). */
+export const pitRimMaterial = new THREE.MeshBasicMaterial({ color: '#7c86ad' });
 export const spikesMaterial = new THREE.MeshLambertMaterial({ color: '#8d94ad' });
 export const barrelMaterial = new THREE.MeshLambertMaterial({ color: '#c0442b' });
+/** Aros metálicos del barril (silueta de barril reconocible). */
+export const barrelHoopMaterial = new THREE.MeshLambertMaterial({ color: '#e8d9a0' });
+/** Mancha chamuscada que queda tras explotar un barril. */
+export const scorchMaterial = new THREE.MeshBasicMaterial({
+  color: '#0a0a0f',
+  transparent: true,
+  opacity: 0.55,
+  depthWrite: false,
+});
 export const mudMaterial = new THREE.MeshBasicMaterial({
   color: '#6b4a2f',
   transparent: true,

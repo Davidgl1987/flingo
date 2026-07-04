@@ -19,12 +19,16 @@ import { Canvas } from '@react-three/fiber';
 import { useCallback, useState } from 'react';
 import { getRoomPool } from '../content/rooms';
 import { AimInput } from '../input/AimInput';
+import { ParticleView } from '../juice/ParticleView';
+import { ShockwaveView } from '../juice/ShockwaveView';
+import { TrailView } from '../juice/TrailView';
 import { createDungeonGameSession, createGameSession, restartSession } from '../session';
 import type { GameSession } from '../session';
 import type { RoomData } from '../sim/world';
 import { useUiStore } from '../store';
 import { GameOverModal } from '../ui/GameOverModal';
 import { HUD } from '../ui/HUD';
+import { PauseModal } from '../ui/PauseModal';
 import { UpgradeModal } from '../ui/UpgradeModal';
 import { VictoryModal } from '../ui/VictoryModal';
 import { AimIndicatorView } from './AimIndicatorView';
@@ -88,6 +92,10 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
         <EnemyViews session={session} />
         <ProjectileViews session={session} />
         <HeroView session={session} />
+        {/* Juice (GDD §12): partículas, estela y ondas expansivas, todos pools preasignados. */}
+        <ParticleView pool={session.juice.particles} />
+        <TrailView pool={session.juice.trail} />
+        <ShockwaveView pool={session.juice.shockwaves} />
         <AimIndicatorView session={session} />
         <CameraRig session={session} />
         <AimInput session={session} />
@@ -97,6 +105,7 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
         {playtestRoom ? '← Volver al editor' : '✎ Editor'}
       </a>
       <UpgradeModal session={session} />
+      <PauseModal session={session} onRestart={handleRestart} />
       <GameOverModal onRestart={handleRestart} />
       <VictoryModal onRestart={handleRestart} />
     </div>

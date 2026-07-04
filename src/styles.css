@@ -63,6 +63,19 @@ canvas {
   font-size: 22px;
   line-height: 1;
   filter: drop-shadow(0 0 6px rgba(255, 224, 130, 0.8));
+  animation: key-pop 0.45s ease-out;
+}
+
+@keyframes key-pop {
+  0% {
+    transform: scale(0.2);
+  }
+  55% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .hud-hearts {
@@ -70,6 +83,64 @@ canvas {
   gap: 2px;
   font-size: 24px;
   line-height: 1;
+}
+
+/* Feedback de HP (GDD §12): parpadeo rojo al dañar, rosa al curar. Se
+   retrigea remontando el nodo con key={hp} — CSS puro, sin re-render por frame. */
+.hud-hearts-damage {
+  animation: hearts-damage 0.5s ease-out;
+}
+
+.hud-hearts-heal {
+  animation: hearts-heal 0.5s ease-out;
+}
+
+@keyframes hearts-damage {
+  0%,
+  40% {
+    filter: drop-shadow(0 0 8px rgba(255, 59, 59, 1)) brightness(1.8);
+    transform: scale(1.15);
+  }
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
+}
+
+@keyframes hearts-heal {
+  0%,
+  40% {
+    filter: drop-shadow(0 0 8px rgba(255, 107, 203, 1)) brightness(1.5);
+    transform: scale(1.12);
+  }
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
+}
+
+/* Botón de pausa (GDD §12: arriba a la derecha, ≥48px táctil). */
+.hud-pause-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 2px solid #39405c;
+  background: rgba(18, 21, 34, 0.88);
+  color: #aab2d4;
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: -1px;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.hud-pause-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .heart-full {
@@ -169,10 +240,31 @@ canvas {
   cursor: pointer;
 }
 
+/* Color por arma (feedback de playtest): cada botón usa el color de su
+   ataque — mismo color que el proyectil/estela para mapeo instantáneo. */
+.weapon-btn-body {
+  --weapon-color: #38bdf8;
+  --weapon-glow: rgba(56, 189, 248, 0.4);
+}
+
+.weapon-btn-arrow {
+  --weapon-color: #fef08a;
+  --weapon-glow: rgba(254, 240, 138, 0.4);
+}
+
+.weapon-btn-spell {
+  --weapon-color: #d8b4fe;
+  --weapon-glow: rgba(216, 180, 254, 0.4);
+}
+
+.weapon-btn .weapon-btn-icon {
+  color: var(--weapon-color);
+}
+
 .weapon-btn-active {
-  border-color: #54c7ff;
+  border-color: var(--weapon-color);
   color: #e8f6ff;
-  box-shadow: 0 0 12px rgba(84, 199, 255, 0.35);
+  box-shadow: 0 0 12px var(--weapon-glow);
 }
 
 .weapon-btn-icon {
@@ -306,6 +398,98 @@ canvas {
 
 .victory-modal .modal-title {
   color: #ffd166;
+}
+
+/* ── Modal de pausa (GDD §12: mejoras acumuladas + leyenda) ── */
+
+.pause-modal {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.pause-modal .modal-title {
+  text-align: center;
+}
+
+.pause-section {
+  margin: 14px 0;
+}
+
+.pause-section-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #aab2d4;
+}
+
+.pause-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #aab2d4;
+}
+
+.pause-upgrade-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pause-upgrade-desc {
+  color: #aab2d4;
+}
+
+.pause-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pause-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pause-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid #39405c;
+  flex: 0 0 auto;
+}
+
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.modal-secondary-btn {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 2px solid #39405c;
+  background: transparent;
+  color: #aab2d4;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-secondary-btn:active {
+  border-color: #54c7ff;
+  color: #e8f6ff;
 }
 
 /* ── Enlace discreto al editor / volver ── */

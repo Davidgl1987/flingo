@@ -5,11 +5,32 @@
  */
 
 import { ROOMS_PER_RUN, UPGRADE_CHOICES } from './content/constants';
+import { createJuiceState, type JuiceState } from './juice/juiceState';
+import { ParticlePool } from './juice/particles';
+import { ShockwavePool } from './juice/shockwave';
+import { TrailPool } from './juice/trail';
 import { generateDungeon } from './sim/dungeon';
 import { createDungeonWorld } from './sim/dungeon-world';
 import { createEventQueue, type EventQueue } from './sim/events';
 import { applyUpgrade, rollUpgradeChoices, type UpgradeDef, type UpgradeId } from './sim/upgrades';
 import { createWorld, type RoomData, type World } from './sim/world';
+
+/** Estado de juice de la sesión: sobrevive a los reinicios de run (no se recrea en restartSession). */
+export interface JuiceSession {
+  particles: ParticlePool;
+  trail: TrailPool;
+  shockwaves: ShockwavePool;
+  state: JuiceState;
+}
+
+function createJuiceSession(): JuiceSession {
+  return {
+    particles: new ParticlePool(),
+    trail: new TrailPool(),
+    shockwaves: new ShockwavePool(),
+    state: createJuiceState(),
+  };
+}
 
 /** Estado de puntería escrito por input/ y leído por render/ (sin re-renders). */
 export interface AimState {
@@ -47,6 +68,8 @@ export interface GameSession {
    * una semilla nueva.
    */
   forcedSeed: number | null;
+  /** Partículas/estela/trauma/hit-stop (fase 4, GDD §12): independiente del mundo, sobrevive a reinicios de run. */
+  juice: JuiceSession;
 }
 
 /** Sesión de sala única (playtest del editor, fases 1-2): sin mazmorra multi-sala. */
@@ -66,6 +89,7 @@ export function createGameSession(room: RoomData): GameSession {
     dungeonPool: null,
     seed: 1,
     forcedSeed: null,
+    juice: createJuiceSession(),
   };
 }
 
@@ -97,6 +121,7 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
     dungeonPool: pool,
     seed,
     forcedSeed,
+    juice: createJuiceSession(),
   };
 }
 
@@ -124,6 +149,25 @@ export function chooseUpgrade(session: GameSession, def: UpgradeDef): void {
 }
 
 /**
+ * Pausa la sim (GDD §12: botón de pausa + modal). Solo tiene efecto durante
+ * 'playing' (no se puede pausar sobre un modal de mejora/fin de run). La sim
+ * se detiene por fase, sin desmontar nada: `stepWorld` ya trata cualquier
+ * fase != 'playing' como "solo avanzar el reloj".
+ */
+export function pauseGame(session: GameSession): void {
+  if (session.world.phase === 'playing') {
+    session.world.phase = 'paused';
+  }
+}
+
+/** Reanuda desde pausa; no-op si la fase no es 'paused' (ej. si mientras tanto hubo game-over). */
+export function resumeGame(session: GameSession): void {
+  if (session.world.phase === 'paused') {
+    session.world.phase = 'playing';
+  }
+}
+
+/**
  * Reinicia la run completa. En modo mazmorra (dungeonPool no nulo) genera un
  * mapa NUEVO con una semilla nueva (GDD §10.3: reinicio de run = nueva run,
  * no repetir el mismo mapa); en modo sala única recrea la misma sala.
@@ -147,4 +191,9 @@ export function restartSession(session: GameSession): void {
   session.aim.force = 0;
   session.offeredUpgrades = new Set();
   session.upgradeChoices = [];
+  // Trauma/hit-stop no deben sobrevivir a un reinicio de run (evita un shake
+  // heredado de la muerte al aparecer en la nueva run); los pools de
+  // partículas/estela sí se conservan (son geometría pura, sin estado de sala).
+  session.juice.state.trauma = 0;
+  session.juice.state.hitStopRemaining = 0;
 }

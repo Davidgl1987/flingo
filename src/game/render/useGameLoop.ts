@@ -10,6 +10,8 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import { FIXED_DT } from '../content/constants';
+import { consumeHitStop, decayTrauma } from '../juice/juiceState';
+import { reactToEvent } from '../juice/reactToEvent';
 import { ensureUpgradeChoices, type GameSession } from '../session';
 import { drainEvents, type GameEvent } from '../sim/events';
 import { stepWorld } from '../sim/step';
@@ -22,6 +24,7 @@ const MAX_FRAME_TIME = 0.25;
 const NOTICE_BY_EVENT: Partial<Record<GameEvent['type'], string>> = {
   'room-cleared': 'Sala limpiada',
   'pit-fall': 'Has caído al foso',
+  'shield-block': 'El escudo bloquea el golpe',
 };
 
 /** Índice 1-based de la sala actual dentro del orden de la mazmorra (orden de generación/BFS desde el inicio). */
@@ -59,8 +62,16 @@ export function useGameLoop(session: GameSession): void {
 
   const runFrame = (delta: number): void => {
     const world = session.world;
+    const juice = session.juice.state;
     world.heroAiming = session.aim.active;
-    let accumulator = session.accumulator + (delta > MAX_FRAME_TIME ? MAX_FRAME_TIME : delta);
+    const cappedDelta = delta > MAX_FRAME_TIME ? MAX_FRAME_TIME : delta;
+
+    // Hit-stop (ARCHITECTURE.md "Juice (implementación)"): escala el dt que
+    // alimenta el acumulador de la sim en golpes fuertes (~60-100ms), sin
+    // congelar el render (rAF sigue a tasa normal, la cámara/partículas
+    // siguen actualizándose con cappedDelta real).
+    const timeScale = consumeHitStop(juice, cappedDelta);
+    let accumulator = session.accumulator + cappedDelta * timeScale;
     while (accumulator >= FIXED_DT) {
       session.heroPrevX = world.hero.position.x;
       session.heroPrevY = world.hero.position.y;
@@ -70,7 +81,14 @@ export function useGameLoop(session: GameSession): void {
     session.accumulator = accumulator;
     session.renderAlpha = accumulator / FIXED_DT;
 
+    decayTrauma(juice, cappedDelta);
+    session.juice.particles.update(cappedDelta);
+    session.juice.trail.update(cappedDelta);
+    session.juice.shockwaves.update(cappedDelta);
+
     drainEvents(session.events, (event) => {
+      reactToEvent(event, session.juice.particles, juice, session.juice.shockwaves);
+
       if (event.type === 'room-entered') {
         useUiStore.getState().showNotice(event.label);
         return;

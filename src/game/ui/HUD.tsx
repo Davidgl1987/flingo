@@ -1,12 +1,17 @@
 /**
- * HUD (GDD §12): corazones y monedas arriba, icono de llave, avisos
- * contextuales y selector de armas abajo. React DOM superpuesto al canvas
- * (nunca drei <Html>). Solo lee estado de baja frecuencia del store; las
- * barras de recarga viven en WeaponBar (rAF sobre la sim, sin setState).
+ * HUD (GDD §12): corazones y monedas arriba, icono de llave, botón de pausa
+ * arriba a la derecha, avisos contextuales y selector de armas abajo. React
+ * DOM superpuesto al canvas (nunca drei <Html>). Solo lee estado de baja
+ * frecuencia del store; las barras de recarga viven en WeaponBar (rAF sobre
+ * la sim, sin setState).
+ *
+ * Feedback visual por CSS (sin re-render por frame): los corazones parpadean
+ * en rojo al recibir daño y en rosa al curar (animación retrigger por key);
+ * la llave hace "pop" al aparecer (animación de montaje).
  */
 
-import { useEffect } from 'react';
-import type { GameSession } from '../session';
+import { useEffect, useRef } from 'react';
+import { pauseGame, type GameSession } from '../session';
 import { useUiStore } from '../store';
 import { WeaponBar } from './WeaponBar';
 
@@ -17,12 +22,21 @@ export function HUD({ session }: { session: GameSession }) {
   const maxHp = useUiStore((s) => s.maxHp);
   const coins = useUiStore((s) => s.coins);
   const hasKey = useUiStore((s) => s.hasKey);
+  const phase = useUiStore((s) => s.phase);
   const notice = useUiStore((s) => s.notice);
   const noticeSeq = useUiStore((s) => s.noticeSeq);
   const clearNotice = useUiStore((s) => s.clearNotice);
   const roomIndex = useUiStore((s) => s.roomIndex);
   const totalRooms = useUiStore((s) => s.totalRooms);
   const currentRoomName = useUiStore((s) => s.currentRoomName);
+
+  // Dirección del último cambio de HP, para la animación de daño/curación.
+  const prevHp = useRef(hp);
+  const hpDelta = hp - prevHp.current;
+  useEffect(() => {
+    prevHp.current = hp;
+  }, [hp]);
+  const heartsFlashClass = hpDelta < 0 ? ' hud-hearts-damage' : hpDelta > 0 ? ' hud-hearts-heal' : '';
 
   useEffect(() => {
     if (notice === null) return;
@@ -33,7 +47,11 @@ export function HUD({ session }: { session: GameSession }) {
   return (
     <div className="hud">
       <div className="hud-top">
-        <div className="hud-hearts" aria-label={`Vida: ${hp} de ${maxHp}`}>
+        <div
+          key={`hp-${hp}-${maxHp}`}
+          className={`hud-hearts${heartsFlashClass}`}
+          aria-label={`Vida: ${hp} de ${maxHp}`}
+        >
           {Array.from({ length: maxHp }, (_, i) => (
             <span key={i} className={i < hp ? 'heart-full' : 'heart-empty'}>
               ♥
@@ -50,6 +68,19 @@ export function HUD({ session }: { session: GameSession }) {
             <span className="hud-coin-icon" />
             {coins}
           </div>
+          <button
+            type="button"
+            className="hud-pause-btn"
+            aria-label="Pausa"
+            disabled={phase !== 'playing'}
+            onPointerDown={(e) => {
+              // Evita que el gesto de puntería del canvas capture este toque.
+              e.stopPropagation();
+              pauseGame(session);
+            }}
+          >
+            ❚❚
+          </button>
         </div>
       </div>
       {roomIndex !== null && totalRooms !== null && (

@@ -48,7 +48,9 @@ function tryPickup(world: World, item: Item, events: EventQueue): void {
       hero.hasKey = true;
       break;
   }
-  pushEvent(events, 'item-pickup', item.position.x, item.position.y, 1);
+  // label = tipo de objeto ('coin'/'potion'/'key'): permite a juice/HUD dar
+  // feedback de color propio (dorado/rosa/azul) sin tener que re-derivarlo.
+  pushEvent(events, 'item-pickup', item.position.x, item.position.y, 1, item.kind);
 }
 
 /** Recorre los items activos de la sala y resuelve recogida por contacto con el héroe. */

@@ -25,7 +25,7 @@ import { openConnection } from './dungeon-world';
 import { pushEvent, type EventQueue } from './events';
 import { stepBarrels, stepEnemyHazards, stepHeroHazards, stepPuddles } from './hazards';
 import { dropCoinAt, stepItems } from './items';
-import { stepEnemyCollisions, stepHeroPhysics } from './physics';
+import { stepBodySeparation, stepEnemyCollisions, stepHeroPhysics } from './physics';
 import type { GamePhase, World } from './world';
 
 /**
@@ -196,6 +196,11 @@ export function stepWorld(world: World, events: EventQueue): void {
   if (currentPhase(world) !== 'game-over') {
     stepHeroEnemyContacts(world, world.contactDamageCooldowns, events);
   }
+
+  // Separación de cuerpos DESPUÉS del gameplay de contacto: la embestida y el
+  // daño de contacto ya se han resuelto sobre el solape de este tick; aquí
+  // solo se garantiza que héroe/enemigos no se atraviesen ni se apilen.
+  stepBodySeparation(world);
 
   stepItems(world, events);
 

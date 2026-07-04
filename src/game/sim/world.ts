@@ -249,7 +249,7 @@ export interface HazardRuntime extends HazardSpawn {
   roomId?: string;
 }
 
-export type GamePhase = 'playing' | 'room-cleared' | 'game-over' | 'victory';
+export type GamePhase = 'playing' | 'paused' | 'room-cleared' | 'game-over' | 'victory';
 
 export interface RunStats {
   roomsCleared: number;

@@ -1,94 +1,55 @@
 # Flingo
 
-Prototipo web/mobile-first para validar una idea de roguelite por habitaciones: lanzas al héroe como una bola de billar, rebotas, matas enemigos por impacto, evitas fosos/trampas, alternas entre lanzar el cuerpo o disparar proyectiles y eliges mejoras entre salas.
+Roguelite de tirachinas por salas, **móvil primero** (navegador). Lanzas al héroe como una bola de billar: apuntas arrastrando, sueltas, rebotas por la sala y embistes enemigos con la propia velocidad. Limpia cada sala, elige una mejora, encuentra la llave, abre la puerta del jefe y termina la run.
 
-## Stack
+- **Diseño del juego:** [docs/GDD.md](docs/GDD.md)
+- **Arquitectura técnica:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-- Vite + React + TypeScript
-- React Three Fiber para render 3D simple
-- Zustand para estado global
-- Motor cinemático 2D propio sobre plano X/Z para prototipar rápido
+## Cómo se juega
 
-> Nota: para este MVP he usado física propia en vez de Rapier. Así es más fácil testear reglas de juego y ajustar la sensación de movimiento. Si el núcleo engancha, el siguiente paso puede ser migrar colisiones complejas a `@react-three/rapier` o mantener el motor propio si basta.
+1. **Apunta** tocando (o clicando) en cualquier parte del tablero y arrastra hacia atrás, como un tirachinas: la línea de puntos muestra dirección y fuerza.
+2. **Suelta** para disparar el modo de arma activo:
+   - **Cuerpo (azul):** te lanzas tú; a partir de ~2.5 u/s de impacto la embestida daña (más velocidad, más daño).
+   - **Flecha (amarilla):** proyectil rápido que atraviesa 1 enemigo.
+   - **Hechizo (violeta):** más daño, rebota 1 vez en las paredes.
+3. Cambia de arma con los **3 botones inferiores** (cada uno con su barra de recarga).
+4. Limpia la sala (todos los enemigos muertos) → elige **1 de 3 mejoras** → sigue por las puertas.
+5. La **llave** (sala custodiada) abre la puerta dorada del **jefe**. Derrótalo y ganas la run.
 
-## Instalar y ejecutar
+Cuidado con los hazards: fosos (casi negros, con reborde de piedra), pinchos, **barriles explosivos** (la herramienta táctica estrella: embiste uno rodeado de enemigos), barro que frena y aceleradores. Cada enemigo tiene color y silueta propios; el botón de **pausa** (arriba a la derecha) muestra la leyenda completa y tus mejoras acumuladas.
+
+Funciona igual con ratón en escritorio (Pointer Events unificados).
+
+## Ejecutar
 
 ```bash
 npm install
-npm run dev
+npm run dev        # dev server (Vite), se abre en la red local con --host
 ```
 
-Abre la URL que indique Vite, normalmente `http://localhost:5173`.
+| Script | Qué hace |
+|---|---|
+| `npm run dev` | Servidor de desarrollo con HMR |
+| `npm run build` | Typecheck (`tsc -b`) + build de producción en `dist/` |
+| `npm run preview` | Sirve la build de producción en local |
+| `npm test` | Tests headless de la simulación (vitest) |
+| `npm run typecheck` | Solo comprobación de tipos |
 
-## Publicar en GitHub Pages
+## Editor de niveles
 
-El proyecto está preparado para publicarse desde GitHub Actions en:
+En **`#/editor`** (enlace "✎ Editor" dentro del juego) vive el editor visual de salas:
 
-https://davidgl1987.github.io/flingo/
+- Rejilla 1×1 con snap; coloca/arrastra/duplica el inicio, los 5 enemigos, los 6 hazards y los 3 objetos.
+- Propiedades por entidad (HP, radio, tamaño, dirección de púa/acelerador) y **destino de patrulla arrastrable** en el lienzo.
+- Huecos de puerta por lado (máx. 2), validaciones en vivo y autoguardado del borrador.
+- **▶ Probar**: playtest inmediato de la sala y vuelta al editor.
+- **Exportar/Importar** la sala como JSON; las salas exportadas entran al pool del generador procedural. En dev, "Guardar en src/levels" escribe el fichero directamente en el repo.
 
-La configuración importante está en `vite.config.mts`: producción usa `base: '/flingo/'` para que los assets carguen correctamente desde GitHub Pages. Para comprobarlo en local:
+## Depuración
 
-```bash
-npm run build
-npm run preview
-```
+- **`?seed=N`** en la URL fuerza la semilla de la mazmorra (misma run reproducible, también tras reiniciar). Ej.: `http://localhost:5173/?seed=42`.
+- En dev, `window.__flingo` expone la sesión y helpers (`tick(segundos)`, `frame(dt)`) para avanzar la sim desde la consola.
 
-Abre `http://localhost:4173/flingo/`.
+## Arquitectura en una línea
 
-## Tests
-
-```bash
-npm test
-```
-
-Los tests cubren lógica pura: impacto, pinchos, fosos, barriles, upgrades y progresión de salas.
-
-## Controles
-
-### Desktop
-
-- Pulsa en cualquier zona del canvas, tira hacia atrás y suelta.
-- `1`: modo lanzar héroe.
-- `2`: modo flecha.
-- `3`: modo hechizo.
-- `R`: reiniciar run.
-
-### Móvil
-
-- Toca en cualquier zona del canvas, tira hacia atrás y suelta.
-- Botones inferiores para cambiar de arma.
-
-## Qué valida este MVP
-
-- Si el lanzamiento/rebote es divertido.
-- Si las salas generan decisiones tácticas.
-- Si alternar entre cuerpo/proyectil aporta riesgo-recompensa.
-- Si fosos, barriles, pinchos, rastro dañino y enemigos que te presionan al apuntar aumentan la diversión.
-
-
-## Continuar en otra sesión con IA
-
-Este ZIP incluye documentación específica para que otra sesión con IA pueda retomar el trabajo con contexto:
-
-- `AGENTS.md`: resumen principal del proyecto y estado actual.
-- `PROJECT_MAP.json`: mapa rápido de comandos y carpetas importantes.
-- `docs/`: diseño, arquitectura, roadmap, tuning, mobile y changelog.
-- `docs/definitions/`: contrato de gameplay, entidades, formato de salas, upgrades y estado.
-- `docs/instructions/`: prompt para siguiente sesión, estándares, debugging y QA.
-- `docs/agents/`: roles para implementación, supervisión, QA y diseño.
-- `docs/skills/`: guías prácticas de prototipado, física, móvil y testing.
-- `tests/manual/`: checklist de playtesting manual.
-
-Comando útil para imprimir el contexto principal:
-
-```bash
-npm run context
-```
-
-## Próximos pasos sugeridos
-
-1. Ajustar fuerza, fricción, rebote y tamaño de sala.
-2. Probar salas más pequeñas y más densas.
-3. Añadir 1 jefe simple.
-4. Añadir generación procedural por plantillas.
-5. Añadir Capacitor cuando el prototipo ya sea divertido en navegador móvil.
+Simulación 2D propia, pura y determinista a 60 Hz (`src/game/sim/`, sin React ni three.js, testeada con vitest) + render "tonto" con React Three Fiber que la lee e interpola (`src/game/render/`), juice por cola de eventos (`src/game/juice/`) y HUD en DOM (`src/game/ui/`). Detalles y presupuesto de rendimiento en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

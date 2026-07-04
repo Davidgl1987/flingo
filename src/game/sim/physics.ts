@@ -210,6 +210,114 @@ export function stepHeroPhysics(world: World, events: EventQueue): void {
   }
 }
 
+// ── Colisión círculo-círculo (cuerpos: héroe↔enemigo, enemigo↔enemigo) ─────
+
+/** Restitución de los choques cuerpo-a-cuerpo (moderada: empujón, no pinball). */
+const BODY_RESTITUTION = 0.4;
+/**
+ * Masa inversa relativa del héroe frente a un enemigo en la separación de
+ * cuerpos: el héroe "pesa" el doble (arrolla más de lo que es arrollado).
+ */
+const HERO_INV_MASS = 0.5;
+const ENEMY_INV_MASS = 1;
+
+/**
+ * Colisión círculo-vs-círculo con separación posicional proporcional a la
+ * masa inversa + impulso a lo largo de la normal (solo si se acercan), con
+ * restitución moderada. Cero asignaciones: todo escalar, muta in-place.
+ *
+ * Devuelve true si había solape. No emite eventos: el daño/knockback de
+ * gameplay lo decide combat.ts ANTES (mismo tick), esto solo garantiza que
+ * los cuerpos no se atraviesen ni se queden pegados.
+ */
+export function collideCircleCircle(
+  posA: Vec2,
+  velA: Vec2,
+  radiusA: number,
+  invMassA: number,
+  posB: Vec2,
+  velB: Vec2,
+  radiusB: number,
+  invMassB: number,
+): boolean {
+  const dx = posB.x - posA.x;
+  const dy = posB.y - posA.y;
+  const rr = radiusA + radiusB;
+  const distSq = dx * dx + dy * dy;
+  if (distSq >= rr * rr) return false;
+
+  const dist = Math.sqrt(distSq);
+  // Centros coincidentes (degenerado): separa por un eje fijo determinista.
+  const nx = dist > 1e-6 ? dx / dist : 1;
+  const ny = dist > 1e-6 ? dy / dist : 0;
+
+  const totalInvMass = invMassA + invMassB;
+  if (totalInvMass <= 0) return true;
+
+  // Separación posicional: reparte el solape según masa inversa.
+  const overlap = rr - dist;
+  posA.x -= nx * overlap * (invMassA / totalInvMass);
+  posA.y -= ny * overlap * (invMassA / totalInvMass);
+  posB.x += nx * overlap * (invMassB / totalInvMass);
+  posB.y += ny * overlap * (invMassB / totalInvMass);
+
+  // Impulso normal solo si se acercan (velocidad relativa contra la normal).
+  const relVelNormal = (velB.x - velA.x) * nx + (velB.y - velA.y) * ny;
+  if (relVelNormal < 0) {
+    const impulse = (-(1 + BODY_RESTITUTION) * relVelNormal) / totalInvMass;
+    velA.x -= impulse * invMassA * nx;
+    velA.y -= impulse * invMassA * ny;
+    velB.x += impulse * invMassB * nx;
+    velB.y += impulse * invMassB * ny;
+  }
+  return true;
+}
+
+/**
+ * Separación de cuerpos tras resolver el gameplay del tick (embestida/daño en
+ * combat.ts): héroe↔enemigos y enemigo↔enemigo de la misma sala. Se ejecuta
+ * DESPUÉS de stepHeroEnemyContacts para que el solape del tick de impacto
+ * siga registrando daño de embestida/contacto; esto solo evita atravesar y
+ * apilarse. O(n²) sobre los enemigos vivos: presupuesto trivial (≤ ~30).
+ */
+export function stepBodySeparation(world: World): void {
+  const hero = world.hero;
+  const enemies = world.enemies;
+  // Durante la animación de caída al foso el héroe no es un cuerpo sólido
+  // (está "hundiéndose"): los enemigos no deben empujarlo ni ser empujados.
+  const heroSolid = world.fallingUntil <= 0;
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    if (enemy.hp <= 0) continue;
+    if (heroSolid) {
+      collideCircleCircle(
+        hero.position,
+        hero.velocity,
+        hero.radius,
+        HERO_INV_MASS,
+        enemy.position,
+        enemy.velocity,
+        enemy.radius,
+        ENEMY_INV_MASS,
+      );
+    }
+    for (let j = i + 1; j < enemies.length; j++) {
+      const other = enemies[j];
+      if (other.hp <= 0 || other.roomId !== enemy.roomId) continue;
+      collideCircleCircle(
+        enemy.position,
+        enemy.velocity,
+        enemy.radius,
+        ENEMY_INV_MASS,
+        other.position,
+        other.velocity,
+        other.radius,
+        ENEMY_INV_MASS,
+      );
+    }
+  }
+}
+
 /**
  * Resuelve la posición de los enemigos contra las paredes interiores y las
  * rocas: el steering de la IA ya evita la mayoría de acercamientos, esto es
