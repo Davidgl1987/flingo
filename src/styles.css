@@ -497,6 +497,55 @@ canvas {
   color: #aab2d4;
 }
 
+/* Leyenda como acordeón (ronda 3, punto 4): <details>/<summary> nativos,
+   plegados por defecto (accesibles: foco de teclado + semántica de
+   disclosure sin JS propio). El <summary> reutiliza el estilo de
+   pause-section-title y añade una flecha que rota al desplegar. */
+details.pause-accordion > summary.pause-section-title {
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+details.pause-accordion > summary.pause-section-title::-webkit-details-marker {
+  display: none;
+}
+
+details.pause-accordion > summary.pause-section-title::before {
+  content: '▸';
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+details.pause-accordion[open] > summary.pause-section-title::before {
+  transform: rotate(90deg);
+}
+
+details.pause-accordion .pause-legend {
+  margin-top: 8px;
+}
+
+/* Slider de distancia de cámara (ronda 3, punto 5). */
+.pause-camera-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #aab2d4;
+}
+
+.pause-camera-slider input[type='range'] {
+  width: 100%;
+  height: 36px;
+  accent-color: #54c7ff;
+}
+
 .pause-empty {
   margin: 0;
   font-size: 13px;

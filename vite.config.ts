@@ -80,7 +80,11 @@ export default defineConfig({
   plugins: [react(), editorRoomsEndpoint()],
   server: {
     host: true,
-    allowedHosts: ['.ngrok-free.dev'],
+    // Dominios de túnel ngrok permitidos (Vite bloquea por defecto cualquier
+    // Host header no listado, para prevenir DNS-rebinding). El sufijo previo
+    // (.ngrok-free.dev) estaba mal escrito: el dominio real de los túneles
+    // gratuitos de ngrok es .ngrok-free.app; .ngrok.io es el legado de pago.
+    allowedHosts: ['.ngrok-free.app', '.ngrok-free.dev', '.ngrok.io'],
   },
   build: {
     rollupOptions: {

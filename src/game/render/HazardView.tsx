@@ -5,9 +5,10 @@
  * gestionan aparte con BarrelViews, que sí lee la sim cada frame.
  *
  * Legibilidad (feedback de playtest):
- * - El foso es un agujero casi negro con REBORDE de piedra clara: tres quads
- *   apilados (reborde > sombra interior > agujero) que lo hacen inconfundible
- *   contra el suelo desde cualquier ángulo.
+ * - El foso (ronda 3, punto 6: "quita el borde al foso") es un único quad
+ *   negro casi absoluto sobre el suelo claro, SIN reborde: el contraste
+ *   suelo/agujero ya es inconfundible por sí solo, el marco de piedra clara
+ *   de rondas anteriores sobraba.
  * - El barril es un CILINDRO con aros claros (silueta de barril); al explotar
  *   desaparece y deja una mancha chamuscada en el suelo.
  * - Los pinchos (punto 1 de playtest: "los pinchos no lo parecen") son una
@@ -30,7 +31,6 @@ import {
   boostMaterial,
   mudMaterial,
   pitMaterial,
-  pitRimMaterial,
   scorchMaterial,
   spikesMaterial,
   spikesNeedleMaterial,
@@ -42,8 +42,6 @@ import {
 
 const HAZARD_QUAD_Y = 0.03;
 const BARREL_HEIGHT = 0.7;
-/** Anchura del reborde visible alrededor del foso (u de mundo). */
-const PIT_RIM_WIDTH = 0.14;
 /** Separación aproximada entre agujas del campo de pinchos (u de mundo). */
 const SPIKE_NEEDLE_SPACING = 0.32;
 /** Altura de la aguja instanciada (debe coincidir con la geometría unitSpikeNeedle). */
@@ -120,28 +118,24 @@ function SpikesField({ hazard }: { hazard: HazardSpawn }) {
   );
 }
 
+/**
+ * Foso (punto 6 de playtest ronda 3: "quita el borde al foso"): un único quad
+ * negro casi absoluto sobre el suelo claro, sin reborde. El contraste
+ * suelo-claro/agujero-negro ya es inconfundible por sí solo; el reborde de
+ * piedra clara de rondas anteriores quedaba redundante y añadía un marco que
+ * el usuario percibía como ruido visual.
+ */
 function PitQuad({ hazard }: { hazard: HazardSpawn }) {
   const x = hazard.position.x;
   const z = hazard.position.y;
   return (
-    <group>
-      {/* Reborde de piedra clara: contrasta contra suelo y agujero. */}
-      <mesh
-        geometry={unitPlane}
-        material={pitRimMaterial}
-        rotation-x={-Math.PI / 2}
-        position={[x, HAZARD_QUAD_Y - 0.012, z]}
-        scale={[hazard.width + PIT_RIM_WIDTH * 2, hazard.height + PIT_RIM_WIDTH * 2, 1]}
-      />
-      {/* Agujero: negro casi absoluto. */}
-      <mesh
-        geometry={unitPlane}
-        material={pitMaterial}
-        rotation-x={-Math.PI / 2}
-        position={[x, HAZARD_QUAD_Y, z]}
-        scale={[hazard.width, hazard.height, 1]}
-      />
-    </group>
+    <mesh
+      geometry={unitPlane}
+      material={pitMaterial}
+      rotation-x={-Math.PI / 2}
+      position={[x, HAZARD_QUAD_Y, z]}
+      scale={[hazard.width, hazard.height, 1]}
+    />
   );
 }
 

@@ -26,12 +26,19 @@
  * factor de distancia se acerca un ~10% (lerp propio, independiente del
  * seguimiento) y vuelve suavemente al soltar. Puramente aditivo sobre el
  * mismo `distanceScaleForAspect`, así que no interfiere con el encuadre móvil.
+ *
+ * Ajuste manual de distancia (ronda 3, punto 5): slider en el modal de pausa
+ * (0.75×-1.5×), leído de `cameraSettings.distanceScale` (módulo mutable
+ * persistido en localStorage, ver cameraSettings.ts) y aplicado con su propio
+ * lerp — multiplicativo sobre el mismo `s` que ya combina aspecto + zoom de
+ * puntería, así que compone con ambos sin pisarlos.
  */
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { GameSession } from '../session';
+import { cameraSettings } from './cameraSettings';
 
 const CAMERA_OFFSET = new THREE.Vector3(0, 9.5, 6.2);
 /** Rigidez del seguimiento (mayor = más pegado al héroe). */
@@ -41,6 +48,9 @@ const FOLLOW_STIFFNESS = 5;
 const AIM_ZOOM_FACTOR = 0.1;
 /** Rigidez del lerp de zoom (mismo orden que el seguimiento: suave, nunca brusco). */
 const AIM_ZOOM_STIFFNESS = 6;
+
+/** Rigidez del lerp del ajuste manual de distancia (punto 5): suave, nunca un salto al mover el slider. */
+const USER_DISTANCE_LERP_STIFFNESS = 4;
 
 /** Amplitud máxima del shake posicional (u de mundo) con trauma = 1. */
 const SHAKE_MAX_OFFSET = 0.4;
@@ -70,6 +80,11 @@ export function CameraRig({ session }: { session: GameSession }) {
   // (soltado). Empieza en 0 (sin zoom) y sobrevive entre frames en un ref
   // porque no debe disparar re-render de React.
   const aimZoom = useRef(0);
+  // Factor de distancia manual (punto 5 de playtest ronda 3): lerpea hacia
+  // `cameraSettings.distanceScale` (mutado por el slider del modal de
+  // pausa) para que mover el slider nunca "salte" de golpe. Arranca ya en el
+  // valor persistido (no en 1) para no animar un salto falso al entrar.
+  const userDistance = useRef(cameraSettings.distanceScale);
   // true tras el primer useFrame: el placement inicial (snap sin lerp) solo
   // ocurre una vez, y DENTRO de useFrame (nunca en un useEffect aparte) para
   // que `camera.aspect` ya esté resuelto contra el tamaño real del canvas
@@ -94,6 +109,14 @@ export function CameraRig({ session }: { session: GameSession }) {
     const zoomK = 1 - Math.exp(-AIM_ZOOM_STIFFNESS * delta);
     aimZoom.current += (aimTarget - aimZoom.current) * zoomK;
     s *= 1 - AIM_ZOOM_FACTOR * aimZoom.current;
+
+    // Ajuste manual de distancia (punto 5): multiplicativo, aplicado DESPUÉS
+    // del encuadre por aspecto y del zoom de puntería, así que compone con
+    // ambos sin interferir (el usuario aleja/acerca la base, el zoom de
+    // puntería sigue recortando un 10% adicional sobre esa base).
+    const userK = 1 - Math.exp(-USER_DISTANCE_LERP_STIFFNESS * delta);
+    userDistance.current += (cameraSettings.distanceScale - userDistance.current) * userK;
+    s *= userDistance.current;
 
     scratch.offset.copy(CAMERA_OFFSET).multiplyScalar(s);
 

@@ -236,12 +236,27 @@ function heroDistance(world: World, enemy: Enemy): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/**
+ * Contención de aggro por sala (GDD §10.2, punto 7 de playtest ronda 3): un
+ * enemigo solo puede perseguir/disparar/cargar contra el héroe cuando el
+ * héroe está FÍSICAMENTE en su misma sala. Fuera de eso (sala del enemigo no
+ * visitada, o visitada pero el héroe ya se ha ido a otra) el enemigo sigue
+ * vivo y patrulla con normalidad — solo se le niega la agresión. En modo sala
+ * única (roomId undefined, tests de fase 1-2) no hay restricción: siempre
+ * puede agredir.
+ */
+function canAggro(world: World, enemy: Enemy): boolean {
+  if (enemy.roomId === undefined) return true;
+  return world.currentRoomId === enemy.roomId;
+}
+
 // ── Dummy (GDD §7.1) ───────────────────────────────────────────────────────
 
 function stepDummy(world: World, enemy: Enemy, dt: number): void {
+  const aggro = canAggro(world, enemy);
   const distToHero = heroDistance(world, enemy);
 
-  if (!enemy.chasing && distToHero <= DUMMY_DETECT_RANGE) {
+  if (!enemy.chasing && aggro && distToHero <= DUMMY_DETECT_RANGE) {
     enemy.chasing = true;
   }
   if (enemy.chasing) {
@@ -249,7 +264,9 @@ function stepDummy(world: World, enemy: Enemy, dt: number): void {
       enemy.position.x - enemy.patrolFrom.x,
       enemy.position.y - enemy.patrolFrom.y,
     );
-    if (distFromHome > DUMMY_LEASH_RANGE) {
+    // Deja de perseguir si se aleja demasiado de su zona de patrulla O si el
+    // héroe ha salido de su sala (aggro revocado): vuelve a patrullar.
+    if (distFromHome > DUMMY_LEASH_RANGE || !aggro) {
       enemy.chasing = false;
     }
   }
@@ -278,6 +295,15 @@ function stepPatrol(world: World, enemy: Enemy, speed: number, dt: number): void
 // ── Chaser (GDD §7.2) ──────────────────────────────────────────────────────
 
 function stepChaser(world: World, enemy: Enemy, dt: number): void {
+  // Fuera de su sala (o sala no visitada): patrulla como cualquier otro
+  // arquetipo en vez de perseguir la posición absoluta del héroe (punto 7 de
+  // playtest ronda 3) — evita que se quede "pegado" contra su propio muro
+  // agrediendo a través de él, que además dejaba su blob shadow visible
+  // moviéndose en la sala vecina sin cuerpo encima (punto 2, misma causa).
+  if (!canAggro(world, enemy)) {
+    stepPatrol(world, enemy, CHASER_SPEED, dt);
+    return;
+  }
   const speed = world.heroAiming ? CHASER_SPEED_WHILE_AIMING : CHASER_SPEED;
   moveToward(world, enemy, world.hero.position.x, world.hero.position.y, speed, dt);
 }
@@ -318,6 +344,14 @@ function stepTrail(world: World, enemy: Enemy, dt: number): void {
 // ── Shooter (GDD §7.5) ─────────────────────────────────────────────────────
 
 function stepShooter(world: World, enemy: Enemy, dt: number): void {
+  // Sin aggro (punto 7): patrulla como cualquier otro arquetipo, con el
+  // ciclo persigue/carga/dispara congelado (nunca telegrafía ni dispara a
+  // través de su propio muro) hasta que el héroe vuelva a su sala.
+  if (!canAggro(world, enemy)) {
+    stepPatrol(world, enemy, SHOOTER_CHASE_SPEED, dt);
+    return;
+  }
+
   enemy.shooterPhaseTimer -= dt;
 
   if (enemy.shooterPhase === 'chase') {
@@ -360,13 +394,15 @@ export function stepEnemyAi(world: World, dt: number): void {
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
     if (enemy.hp <= 0) continue;
-    // Mazmorra multi-sala: los enemigos de salas que el héroe no ha visitado
-    // todavía no patrullan ni persiguen (GDD §10.2). En modo sala única
-    // (roomId undefined, tests de fase 1-2) no hay restricción.
-    if (enemy.roomId !== undefined) {
-      const runtime = world.roomRuntimes.get(enemy.roomId);
-      if (runtime !== undefined && !runtime.visited) continue;
-    }
+    // Mazmorra multi-sala (punto 7 de playtest ronda 3): los enemigos de
+    // TODAS las salas patrullan con normalidad en cuanto existen, se hayan
+    // visitado o no (se les ve vivos a través de los huecos de puerta); lo
+    // que sigue restringido por `canAggro` (dentro de cada stepXxx) es la
+    // AGRESIÓN — perseguir, cargar o disparar al héroe — que solo se activa
+    // cuando el héroe está físicamente en la misma sala que el enemigo. GDD
+    // §10.2: la contención dura (nunca salir de su sala) ya la impone
+    // stepEnemyCollisions/isBlocked vía roomRuntimes.get(enemy.roomId).bounds,
+    // sin relación con `visited`.
     // Mientras dura el knockback, la física (stepEnemyCollisions) gobierna la
     // velocidad; la IA no la sobreescribe para que el empuje se note.
     if (world.time < enemy.knockbackUntil) continue;

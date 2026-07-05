@@ -8,14 +8,17 @@
  * mejora "Hechizo Arcano").
  *
  * Formas (feedback de playtest):
- * - Flecha (punto 3, "las flechas son bolas"): asta cilíndrica + punta cónica
- *   + emplumado, orientada según su velocidad (rotación en el plano XZ). Las
- *   proporciones se definen a radio unitario; el GRUPO se escala por
- *   `p.radius` cada frame (nunca se recrea geometría).
- * - Hechizo (punto 2, "efecto como rayo"): núcleo esférico brillante + zigzag
- *   eléctrico (segmentos preasignados, jitter determinista por frame a partir
- *   de world.time + índice de slot, SIN asignaciones) + chispas violeta en la
- *   estela.
+ * - Flecha (ronda 3, punto 3: "las flechas apenas se ven, puedes usar un
+ *   cono"): CONO amarillo grande como cuerpo dominante (mucho más ancho que
+ *   el fino asta+punta de la ronda anterior, que seguía sin leerse bien en
+ *   móvil) + un asta corta detrás para dar sensación de proyectil alargado,
+ *   orientado según su velocidad (rotación en el plano XZ). Proporciones a
+ *   radio unitario; el GRUPO se escala por `p.radius` cada frame (nunca se
+ *   recrea geometría).
+ * - Hechizo (ronda 3, punto 11: "quita la bola, haz el rayo más grande"): SIN
+ *   núcleo esférico — solo el zigzag eléctrico (más ancho/largo que antes) +
+ *   chispas violeta en la estela, jitter determinista por frame a partir de
+ *   world.time + índice de slot, SIN asignaciones.
  *
  * Presupuesto: nada de `new` en useFrame; el zigzag/chispas usan un número
  * FIJO de sub-meshes por slot (creados una vez en el JSX), mutados con
@@ -28,41 +31,41 @@ import type { Group, Mesh } from 'three';
 import type { GameSession } from '../session';
 import type { Projectile } from '../sim/world';
 import {
-  arrowFletchingGeometry,
   arrowMaterial,
   arrowShaftGeometry,
-  arrowTipGeometry,
   arrowTipMaterial,
   enemyProjectileMaterial,
   spellBoltMaterial,
   spellBoltSegmentGeometry,
-  spellCoreGeometry,
-  spellCoreMaterial,
   spellSparkGeometry,
   spellSparkMaterial,
+  unitCone,
   unitSphere,
 } from './assets';
 
 type ProjectileKind = Projectile['kind'];
 
-// Proporciones de la flecha a radio unitario (el grupo se escala por p.radius).
-const ARROW_SHAFT_LENGTH = 2.6;
-const ARROW_SHAFT_THICKNESS = 0.85;
-const ARROW_TIP_LENGTH = 1.1;
-const ARROW_TIP_THICKNESS = 1.3;
-const ARROW_FLETCHING_SCALE = 1.6;
-const ARROW_FLETCHING_SPREAD = 0.5;
+// Proporciones de la flecha a radio unitario (el grupo se escala por
+// p.radius): CONO grande como cuerpo dominante (mucho más ancho que el fino
+// asta+punta anterior), con un asta corta detrás para dar sentido de
+// proyectil alargado en vuelo.
+const ARROW_CONE_LENGTH = 2.2;
+const ARROW_CONE_THICKNESS = 2.6;
+const ARROW_SHAFT_LENGTH = 1.6;
+const ARROW_SHAFT_THICKNESS = 0.9;
 
 /** Nº de segmentos del zigzag eléctrico por proyectil de hechizo. */
-const SPELL_BOLT_SEGMENTS = 4;
-/** Longitud total del zigzag a radio unitario (delante y detrás del núcleo). */
-const SPELL_BOLT_LENGTH = 2.2;
-/** Amplitud del jitter lateral del zigzag a radio unitario. */
-const SPELL_BOLT_JITTER = 0.5;
+const SPELL_BOLT_SEGMENTS = 5;
+/** Longitud total del zigzag a radio unitario (delante y detrás del centro): más grande (punto 11). */
+const SPELL_BOLT_LENGTH = 3.2;
+/** Amplitud del jitter lateral del zigzag a radio unitario: más ancho (punto 11). */
+const SPELL_BOLT_JITTER = 0.85;
+/** Grosor de cada segmento del zigzag (antes 0.045 a radio unitario del proyectil: casi invisible). */
+const SPELL_BOLT_THICKNESS = 0.16;
 /** Nº de chispas de estela por proyectil de hechizo. */
-const SPELL_SPARK_COUNT = 3;
-/** Cuánto se alargan las chispas por detrás del núcleo, a radio unitario. */
-const SPELL_SPARK_TRAIL = 2.6;
+const SPELL_SPARK_COUNT = 4;
+/** Cuánto se alargan las chispas por detrás del centro, a radio unitario. */
+const SPELL_SPARK_TRAIL = 3.4;
 
 /** Hash determinista barato, sin estado: dos enteros → [-1,1]. Sin Math.random. */
 function jitter11(a: number, b: number): number {
@@ -70,36 +73,29 @@ function jitter11(a: number, b: number): number {
   return (s - Math.floor(s)) * 2 - 1;
 }
 
-/** Flecha: asta + punta + emplumado, proporciones a radio unitario (el grupo padre se escala por p.radius). */
+/**
+ * Flecha: CONO amarillo grande (cuerpo dominante, claramente visible) +
+ * asta corta detrás, proporciones a radio unitario (el grupo padre se
+ * escala por p.radius). El cono apunta en +Z local (la punta hacia delante,
+ * en la dirección de movimiento — ProjectileSlot alinea +Z con la
+ * velocidad).
+ */
 function ArrowShape() {
   return (
     <>
       <mesh
-        geometry={arrowShaftGeometry}
+        geometry={unitCone}
         material={arrowMaterial}
+        position={[0, 0, ARROW_CONE_LENGTH / 2]}
+        rotation-x={Math.PI / 2}
+        scale={[ARROW_CONE_THICKNESS, ARROW_CONE_LENGTH, ARROW_CONE_THICKNESS]}
+      />
+      <mesh
+        geometry={arrowShaftGeometry}
+        material={arrowTipMaterial}
+        position={[0, 0, -ARROW_SHAFT_LENGTH / 2]}
         rotation-x={Math.PI / 2}
         scale={[ARROW_SHAFT_THICKNESS, ARROW_SHAFT_LENGTH, ARROW_SHAFT_THICKNESS]}
-      />
-      <mesh
-        geometry={arrowTipGeometry}
-        material={arrowTipMaterial}
-        position={[0, 0, ARROW_SHAFT_LENGTH / 2 + ARROW_TIP_LENGTH / 2]}
-        rotation-x={Math.PI / 2}
-        scale={[ARROW_TIP_THICKNESS, ARROW_TIP_LENGTH, ARROW_TIP_THICKNESS]}
-      />
-      <mesh
-        geometry={arrowFletchingGeometry}
-        material={arrowTipMaterial}
-        position={[ARROW_FLETCHING_SPREAD, 0, -ARROW_SHAFT_LENGTH / 2]}
-        rotation-x={-Math.PI / 2}
-        scale={ARROW_FLETCHING_SCALE}
-      />
-      <mesh
-        geometry={arrowFletchingGeometry}
-        material={arrowTipMaterial}
-        position={[-ARROW_FLETCHING_SPREAD, 0, -ARROW_SHAFT_LENGTH / 2]}
-        rotation-x={-Math.PI / 2}
-        scale={ARROW_FLETCHING_SCALE}
       />
     </>
   );
@@ -110,6 +106,8 @@ function SpellShape({ session, slotIndex }: { session: GameSession; slotIndex: n
   const boltRefs = useRef<(Mesh | null)[]>([]);
   const sparkRefs = useRef<(Mesh | null)[]>([]);
   const segDepth = spellBoltSegmentGeometry.parameters.depth as number;
+  const segBaseThickness = spellBoltSegmentGeometry.parameters.width as number;
+  const boltThicknessScale = SPELL_BOLT_THICKNESS / segBaseThickness;
 
   useFrame((state) => {
     const p = session.world.projectiles[slotIndex];
@@ -135,7 +133,7 @@ function SpellShape({ session, slotIndex }: { session: GameSession; slotIndex: n
       const len = Math.hypot(dx, dz);
       seg.position.set(midX, 0, midZ);
       seg.rotation.set(0, Math.atan2(dx, dz), 0);
-      seg.scale.set(1, 1, len / segDepth);
+      seg.scale.set(boltThicknessScale, boltThicknessScale, len / segDepth);
       prevX = x;
       prevZ = z;
     }
@@ -154,7 +152,7 @@ function SpellShape({ session, slotIndex }: { session: GameSession; slotIndex: n
 
   return (
     <>
-      <mesh geometry={spellCoreGeometry} material={spellCoreMaterial} scale={0.7} />
+      {/* Punto 11 de playtest ronda 3: sin núcleo esférico — solo energía/rayo. */}
       {Array.from({ length: SPELL_BOLT_SEGMENTS }, (_, i) => (
         <mesh
           key={i}

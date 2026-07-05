@@ -79,11 +79,13 @@ function ItemMesh({ session, itemId }: { session: GameSession; itemId: string })
       const bob = Math.sin(session.world.time * 3 + item.position.x) * 0.05;
       group.position.set(item.position.x, ITEM_HEIGHT[item.kind] + bob, item.position.y);
       if (item.kind === 'coin') {
-        // Moneda (punto 9): gira sobre un eje HORIZONTAL para que se vea el
-        // volteo real (canto visible); rotar sobre su propio eje vertical no
-        // mostraría ningún cambio visual en un disco plano.
+        // Moneda (ronda 3, punto 10: "que giren en el otro eje"): gira sobre
+        // el eje Z (perpendicular al que se usaba antes, X) para que se vea
+        // el volteo real (canto visible) con el otro "sentido" de vuelco en
+        // pantalla — rotar sobre el eje vertical Y no mostraría ningún cambio
+        // visual en un disco plano (ese es el único eje descartado).
         group.rotation.set(0, 0, 0);
-        group.rotation.x = session.world.time * 2.4;
+        group.rotation.z = session.world.time * 2.4;
       } else {
         group.rotation.set(0, session.world.time * 1.5, 0);
       }

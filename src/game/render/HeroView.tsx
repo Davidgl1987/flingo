@@ -17,10 +17,22 @@ import type { Mesh } from 'three';
 import { HERO_RADIUS, PIT_FALL_DURATION } from '../content/constants';
 import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '../juice/trail';
 import type { GameSession } from '../session';
-import { blobShadowMaterial, heroMaterial, unitCircle, unitSphere } from './assets';
+import type { WeaponMode } from '../sim/world';
+import { aimDotMaterial, blobShadowMaterial, heroMaterial, unitCircle, unitSphere, WEAPON_COLOR } from './assets';
 
 /** Frecuencia del parpadeo de invulnerabilidad (alternancias por segundo). */
 const IFRAME_BLINK_HZ = 12;
+
+/**
+ * Color del héroe por arma (punto 1 de playtest ronda 3): rigidez del lerp
+ * de color (mayor = transición más rápida, pero siempre suave, nunca un
+ * corte brusco) y tuning del burst de partículas al cambiar de arma.
+ */
+const WEAPON_COLOR_LERP_STIFFNESS = 10;
+const WEAPON_SWITCH_BURST_COUNT = 14;
+const WEAPON_SWITCH_BURST_SPEED = 2.4;
+const WEAPON_SWITCH_BURST_SIZE = 0.08;
+const WEAPON_SWITCH_BURST_LIFE = 0.32;
 
 /** Estiramiento por u/s de velocidad, con tope de +35% a velocidad alta. */
 const STRETCH_PER_SPEED = 0.028;
@@ -37,6 +49,9 @@ export function HeroView({ session }: { session: GameSession }) {
   const prevSpeed = useRef(0);
   const squashUntil = useRef(0);
   const trailAccumulator = useRef(0);
+  // Arma del frame anterior: detecta el CAMBIO para disparar el burst de
+  // partículas una sola vez (no cada frame mientras se mantiene el modo).
+  const prevWeaponMode = useRef<WeaponMode | null>(null);
 
   useFrame((_, delta) => {
     const world = session.world;
@@ -47,6 +62,35 @@ export function HeroView({ session }: { session: GameSession }) {
 
     const body = bodyRef.current;
     const shadow = shadowRef.current;
+
+    // Color del héroe según arma activa (punto 1 de playtest ronda 3): lerp
+    // continuo hacia el color objetivo (nunca un corte brusco), independiente
+    // del framerate. El indicador de puntería (aimDotMaterial) comparte el
+    // mismo objetivo para que apunten siempre al mismo lenguaje de color.
+    const targetColor = WEAPON_COLOR[hero.weaponMode];
+    const colorK = 1 - Math.exp(-WEAPON_COLOR_LERP_STIFFNESS * delta);
+    heroMaterial.color.lerp(targetColor, colorK);
+    aimDotMaterial.color.lerp(targetColor, colorK);
+
+    // Cambio de arma: burst de partículas del color NUEVO alrededor del
+    // héroe (feedback inmediato, independiente del lerp de color que sigue
+    // en curso). Se dispara una sola vez por transición, en el frame en que
+    // se detecta el cambio.
+    if (prevWeaponMode.current !== null && prevWeaponMode.current !== hero.weaponMode) {
+      session.juice.particles.burst(
+        x,
+        z,
+        WEAPON_SWITCH_BURST_COUNT,
+        WEAPON_SWITCH_BURST_SPEED,
+        WEAPON_SWITCH_BURST_SIZE,
+        WEAPON_SWITCH_BURST_LIFE,
+        targetColor.r,
+        targetColor.g,
+        targetColor.b,
+        world.rng,
+      );
+    }
+    prevWeaponMode.current = hero.weaponMode;
 
     // Caída al foso: encoge y se hunde durante la animación.
     if (world.fallingUntil > 0) {
@@ -77,7 +121,7 @@ export function HeroView({ session }: { session: GameSession }) {
       trailAccumulator.current += delta;
       while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
         trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
-        session.juice.trail.emit(x, z, HERO_RADIUS * 0.8);
+        session.juice.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
       }
     } else {
       trailAccumulator.current = 0;

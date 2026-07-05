@@ -13,8 +13,11 @@
  * - Dummy: ojos simples + balanceo torpe (oscilación de cabeceo) al patrullar.
  * - Chaser: cejas/mirada agresivas orientadas al héroe + pulso de escala al
  *   acelerar (heroAiming, misma señal que ya usa su IA para correr más).
- * - Spike: además de su púa frontal ya existente, várias púas secundarias
- *   (mismo unitSpike reescalado) + giro lento de amenaza sobre su eje.
+ * - Spike (ronda 3, punto 9: "por detrás no debe tener pinchos, ponle 3 en la
+ *   parte delantera"): exactamente 3 púas (mismo unitSpike reescalado), TODAS
+ *   ancladas a la dirección `facing` (la cara peligrosa, GDD §7.3/combat.ts
+ *   `isSpikeContactDangerous`) en abanico frontal fijo — nunca rotan libres
+ *   ni aparecen en la cara trasera.
  * - Trail: squash de babosa (aplastamiento rítmico) + gotas de baba goteando.
  * - Shooter: "ojo/cañón" orientado siempre al héroe, que se ilumina (cambia
  *   de material apagado a material de carga) mientras `shooterPhase==='charge'`.
@@ -61,8 +64,22 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
 
 const ENEMY_RADIUS_RENDER = 0.4;
 
-/** Nº de púas secundarias del Spike (además de la frontal ya existente). */
-const SPIKE_SECONDARY_COUNT = 3;
+/**
+ * Radio/altura del pivote de la cara del Chaser sobre la superficie de su
+ * esfera (punto 8 de playtest ronda 3): ligeramente menor que
+ * ENEMY_RADIUS_RENDER para que los ojos queden asentados EN la superficie
+ * visible, nunca flotando fuera de ella ni hundidos dentro.
+ */
+const CHASER_FACE_RADIUS = 0.34;
+const CHASER_FACE_HEIGHT = 0.1;
+
+/**
+ * Púas del Spike (punto 9 de playtest ronda 3): exactamente 3, todas en la
+ * cara peligrosa, repartidas en abanico frontal (radianes entre púas
+ * contiguas). Nada en la cara trasera.
+ */
+const SPIKE_FRONT_SPIKE_COUNT = 3;
+const SPIKE_FRONT_FAN_SPREAD = 0.55;
 /** Nº de gotas de baba del Trail. */
 const TRAIL_DRIP_COUNT = 2;
 
@@ -78,15 +95,17 @@ function EnemyMesh({
   const bodyRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
   const groupRef = useRef<Group>(null);
-  const spikeFaceRef = useRef<Mesh>(null);
   const spikeSecondaryGroupRef = useRef<Group>(null);
   const telegraphRef = useRef<Mesh>(null);
   const wasFlashing = useRef(false);
 
   // Dummy: ojos + balanceo torpe.
   const dummyEyesRef = useRef<Group>(null);
-  // Chaser: cejas/mirada agresiva.
+  // Chaser: cejas/mirada agresiva. `chaserFaceAngle` conserva el último
+  // ángulo válido hacia el héroe (mundo) para no degenerar cuando coincide
+  // con el centro del enemigo (distancia ~0).
   const chaserFaceRef = useRef<Group>(null);
+  const chaserFaceAngle = useRef(0);
   // Trail: cuerpo (para squash) + gotas.
   const trailDripRefs = useRef<(Mesh | null)[]>([]);
   // Shooter: ojo/cañón orientado al héroe.
@@ -112,8 +131,12 @@ function EnemyMesh({
       kind === 'dummy' && !enemy.chasing ? Math.sin(world.time * 5 + enemy.position.x * 3) * 0.035 : 0;
     group.position.set(enemy.position.x, ENEMY_RADIUS_RENDER + bob, enemy.position.y);
 
+    // La sombra es HIJA del grupo (que ya lleva la posición del enemigo):
+    // sus coordenadas son LOCALES. Escribirle coordenadas de mundo aquí la
+    // proyectaba a 2× la posición del enemigo flotando a y≈0.42 — las
+    // "sombras fantasma que se mueven" del playtest de David (2026-07-05).
     const shadow = shadowRef.current;
-    if (shadow) shadow.position.set(enemy.position.x, 0.02, enemy.position.y);
+    if (shadow) shadow.position.set(0, 0.02 - (ENEMY_RADIUS_RENDER + bob), 0);
 
     const flashing = world.time < enemy.hitFlashUntil;
     if (flashing !== wasFlashing.current) {
@@ -129,18 +152,15 @@ function EnemyMesh({
       group.rotation.y = Math.atan2(enemy.velocity.x, enemy.velocity.y);
     }
 
-    if (kind === 'spike') {
-      if (spikeFaceRef.current) {
-        // La púa apunta siempre en la dirección `facing` fija del mundo, no en
-        // la de movimiento (el Spike no rota al patrullar): compensa la
-        // rotación del grupo para que quede en coordenadas de mundo.
-        spikeFaceRef.current.rotation.y = Math.atan2(enemy.facing.x, enemy.facing.y) - group.rotation.y;
-      }
-      // Giro lento de amenaza: las púas secundarias rotan sobre el eje
-      // vertical del enemigo, independiente de su orientación de movimiento.
-      if (spikeSecondaryGroupRef.current) {
-        spikeSecondaryGroupRef.current.rotation.y = world.time * 0.6 - group.rotation.y;
-      }
+    if (kind === 'spike' && spikeSecondaryGroupRef.current) {
+      // Punto 9 de playtest ronda 3 ("Spike por detrás no debe tener
+      // pinchos, ponle 3 en la parte delantera"): las 3 púas viven en un
+      // único grupo anclado a la dirección `facing` fija del mundo (la cara
+      // PELIGROSA, misma normal que usa isSpikeContactDangerous en
+      // combat.ts) — nunca rotan libremente ni aparecen en la cara trasera.
+      // Compensa la rotación del grupo padre (que sigue la velocidad al
+      // patrullar) para que el abanico quede fijo en coordenadas de mundo.
+      spikeSecondaryGroupRef.current.rotation.y = Math.atan2(enemy.facing.x, enemy.facing.y) - group.rotation.y;
     }
 
     if (kind === 'shooter') {
@@ -178,13 +198,37 @@ function EnemyMesh({
     }
 
     if (kind === 'chaser' && chaserFaceRef.current) {
+      // Punto 8 de playtest ronda 3 ("los ojos se meten dentro de la
+      // esfera"): la causa era anclar la cara a una POSICIÓN LOCAL fija
+      // (delante del cuerpo) y solo rotarla — al compensar la rotación del
+      // grupo padre para mirar al héroe, el pivote de la cara nunca seguía la
+      // curvatura de la esfera, solo giraba sobre sí mismo en torno a un
+      // punto que seguía "al frente"; para ángulos grandes eso proyecta los
+      // ojos hacia dentro en vez de sobre la superficie visible. Fix: se
+      // RECALCULA la posición del pivote cada frame como una proyección real
+      // sobre el ecuador de la esfera (radio fijo CHASER_FACE_RADIUS) en la
+      // dirección absoluta hacia el héroe, así que siempre queda sobre la
+      // superficie mirando a cámara, sin hundirse ni cuando el héroe está muy
+      // cerca (dirección degenerada: mantiene el último ángulo válido).
       const dx = world.hero.position.x - enemy.position.x;
       const dy = world.hero.position.y - enemy.position.y;
-      chaserFaceRef.current.rotation.y = Math.atan2(dx, dy) - group.rotation.y;
+      const distToHero = Math.hypot(dx, dy);
+      if (distToHero > 1e-4) {
+        chaserFaceAngle.current = Math.atan2(dx, dy);
+      }
+      const worldAngle = chaserFaceAngle.current;
+      const localAngle = worldAngle - group.rotation.y;
+      const face = chaserFaceRef.current;
+      face.position.set(
+        Math.sin(localAngle) * CHASER_FACE_RADIUS,
+        CHASER_FACE_HEIGHT,
+        Math.cos(localAngle) * CHASER_FACE_RADIUS,
+      );
+      face.rotation.y = localAngle;
       // Pulso de velocidad: se agranda ligeramente mientras corre acelerado
       // (heroAiming es la misma señal que su IA usa para CHASER_SPEED_WHILE_AIMING).
       const pulse = world.heroAiming ? 1.12 + 0.05 * Math.sin(world.time * 16) : 1;
-      chaserFaceRef.current.scale.setScalar(pulse);
+      face.scale.setScalar(pulse);
     }
 
     if (kind === 'trail') {
@@ -239,7 +283,10 @@ function EnemyMesh({
       )}
 
       {kind === 'chaser' && (
-        <group ref={chaserFaceRef} position={[0, 0.1, 0.34]}>
+        // Posición/rotación reales del pivote se escriben cada frame en
+        // useFrame (proyección sobre la superficie esférica); el valor JSX
+        // es solo el estado inicial antes del primer frame.
+        <group ref={chaserFaceRef} position={[0, CHASER_FACE_HEIGHT, CHASER_FACE_RADIUS]}>
           <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[-0.13, -0.02, 0]} scale={0.09} />
           <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[0.13, -0.02, 0]} scale={0.09} />
           <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[-0.13, -0.02, 0.06]} scale={0.045} />
@@ -263,33 +310,27 @@ function EnemyMesh({
       )}
 
       {kind === 'spike' && (
-        <>
-          <mesh
-            ref={spikeFaceRef}
-            geometry={unitSpike}
-            material={spikeConeMaterial}
-            position={[0, 0, 0.42]}
-            rotation-x={Math.PI / 2}
-            scale={[0.45, 0.4, 0.45]}
-          />
-          {/* Púas secundarias: mismo cono de amenaza, repartidas y giratorias. */}
-          <group ref={spikeSecondaryGroupRef}>
-            {Array.from({ length: SPIKE_SECONDARY_COUNT }, (_, i) => {
-              const angle = ((i + 1) / (SPIKE_SECONDARY_COUNT + 1)) * Math.PI * 2;
-              return (
-                <mesh
-                  key={i}
-                  geometry={unitSpike}
-                  material={spikeConeMaterial}
-                  position={[Math.sin(angle) * 0.36, 0, Math.cos(angle) * 0.36]}
-                  rotation-x={Math.PI / 2}
-                  rotation-y={angle}
-                  scale={[0.28, 0.26, 0.28]}
-                />
-              );
-            })}
-          </group>
-        </>
+        // Punto 9 de playtest ronda 3: exactamente 3 púas, TODAS en la cara
+        // peligrosa (abanico centrado en +Z local, que useFrame orienta hacia
+        // `enemy.facing`); nada en la cara trasera — comunica "golpéame por
+        // aquí" sin ambigüedad. El grupo entero es lo que rota en useFrame.
+        <group ref={spikeSecondaryGroupRef}>
+          {Array.from({ length: SPIKE_FRONT_SPIKE_COUNT }, (_, i) => {
+            const mid = (SPIKE_FRONT_SPIKE_COUNT - 1) / 2;
+            const angle = (i - mid) * SPIKE_FRONT_FAN_SPREAD;
+            return (
+              <mesh
+                key={i}
+                geometry={unitSpike}
+                material={spikeConeMaterial}
+                position={[Math.sin(angle) * 0.4, 0, Math.cos(angle) * 0.4]}
+                rotation-x={Math.PI / 2}
+                rotation-y={angle}
+                scale={[0.4, 0.38, 0.4]}
+              />
+            );
+          })}
+        </group>
       )}
 
       {kind === 'trail' &&

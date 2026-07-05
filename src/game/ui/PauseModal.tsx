@@ -1,10 +1,27 @@
 /**
  * Modal de pausa (GDD §12): mejoras acumuladas + leyenda del juego (colores
- * de enemigos/hazards) + reanudar/reiniciar. La sim ya está detenida por
- * fase ('paused') antes de que este modal se muestre; aquí solo se reanuda
- * (vuelve a 'playing') o se reinicia la run entera.
+ * de enemigos/hazards) + ajuste de cámara + reanudar/reiniciar. La sim ya
+ * está detenida por fase ('paused') antes de que este modal se muestre; aquí
+ * solo se reanuda (vuelve a 'playing') o se reinicia la run entera.
+ *
+ * Leyenda como acordeón (ronda 3, punto 4): `<details>/<summary>` nativos
+ * (accesibles por defecto: foco de teclado, semántica de disclosure sin JS
+ * propio), plegados de entrada — la leyenda es consulta ocasional, no debe
+ * competir en altura con las mejoras acumuladas al abrir pausa.
+ *
+ * Slider de distancia de cámara (ronda 3, punto 5): controla
+ * `cameraSettings.distanceScale` (módulo mutable fuera de React, ver
+ * cameraSettings.ts), leído por CameraRig en useFrame; persiste solo en
+ * localStorage (no en zustand: no debe disparar re-render del canvas).
  */
 
+import { useState, type ChangeEvent } from 'react';
+import {
+  CAMERA_DISTANCE_SCALE_MAX,
+  CAMERA_DISTANCE_SCALE_MIN,
+  cameraSettings,
+  setCameraDistanceScale,
+} from '../render/cameraSettings';
 import { resumeGame, type GameSession } from '../session';
 import { UPGRADE_POOL } from '../sim/upgrades';
 import { useUiStore } from '../store';
@@ -28,11 +45,21 @@ const HAZARD_LEGEND: { label: string; color: string }[] = [
 export function PauseModal({ session, onRestart }: { session: GameSession; onRestart: () => void }) {
   const phase = useUiStore((s) => s.phase);
   const acquiredUpgrades = useUiStore((s) => s.acquiredUpgrades);
+  // Estado local SOLO para reflejar la posición del slider en el input (no es
+  // estado de juego, no pasa por zustand ni por la sim): el valor real que
+  // lee CameraRig vive en `cameraSettings.distanceScale` (fuera de React).
+  const [distanceScale, setDistanceScale] = useState(cameraSettings.distanceScale);
 
   if (phase !== 'paused') return null;
 
   const handleResume = () => {
     resumeGame(session);
+  };
+
+  const handleDistanceChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = Number.parseFloat(e.target.value);
+    setCameraDistanceScale(value);
+    setDistanceScale(cameraSettings.distanceScale);
   };
 
   return (
@@ -60,27 +87,47 @@ export function PauseModal({ session, onRestart }: { session: GameSession; onRes
         </section>
 
         <section className="pause-section">
-          <h3 className="pause-section-title">Enemigos</h3>
-          <ul className="pause-legend">
-            {ENEMY_LEGEND.map((e) => (
-              <li key={e.label}>
-                <span className="pause-legend-swatch" style={{ background: e.color }} />
-                {e.label}
-              </li>
-            ))}
-          </ul>
+          <h3 className="pause-section-title">Cámara</h3>
+          <label className="pause-camera-slider">
+            <span>Distancia (alejar / acercar)</span>
+            <input
+              type="range"
+              min={CAMERA_DISTANCE_SCALE_MIN}
+              max={CAMERA_DISTANCE_SCALE_MAX}
+              step={0.01}
+              value={distanceScale}
+              onChange={handleDistanceChange}
+              aria-label="Distancia de cámara"
+            />
+          </label>
         </section>
 
         <section className="pause-section">
-          <h3 className="pause-section-title">Hazards</h3>
-          <ul className="pause-legend">
-            {HAZARD_LEGEND.map((h) => (
-              <li key={h.label}>
-                <span className="pause-legend-swatch" style={{ background: h.color }} />
-                {h.label}
-              </li>
-            ))}
-          </ul>
+          <details className="pause-accordion">
+            <summary className="pause-section-title">Enemigos</summary>
+            <ul className="pause-legend">
+              {ENEMY_LEGEND.map((e) => (
+                <li key={e.label}>
+                  <span className="pause-legend-swatch" style={{ background: e.color }} />
+                  {e.label}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+
+        <section className="pause-section">
+          <details className="pause-accordion">
+            <summary className="pause-section-title">Hazards</summary>
+            <ul className="pause-legend">
+              {HAZARD_LEGEND.map((h) => (
+                <li key={h.label}>
+                  <span className="pause-legend-swatch" style={{ background: h.color }} />
+                  {h.label}
+                </li>
+              ))}
+            </ul>
+          </details>
         </section>
 
         <div className="pause-actions">

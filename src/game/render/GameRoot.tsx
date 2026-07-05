@@ -78,6 +78,13 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
     <div className="game-root">
       <Canvas
         key={runSeq}
+        onCreated={(state) => {
+          // Solo dev: expone la escena para el puente de verificación
+          // (inspección de objetos huérfanos; complementa a __flingo).
+          if (import.meta.env.DEV) {
+            (window as unknown as { __flingoScene?: unknown }).__flingoScene = state.scene;
+          }
+        }}
         dpr={[1, 2]}
         gl={{ powerPreference: 'high-performance', antialias: true }}
         camera={{ fov: 45, near: 0.5, far: 80, position: [0, 9.5, 11] }}

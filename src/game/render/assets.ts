@@ -26,17 +26,11 @@ export const unitSpike = new THREE.ConeGeometry(0.35, 0.9, 6);
  */
 export const unitSpikeNeedle = new THREE.ConeGeometry(0.09, 0.32, 6);
 
-// ── Geometrías de proyectiles con forma (puntos 2 y 3 de playtest) ────────
+// ── Geometrías de proyectiles con forma (puntos 2/3/11 de playtest) ───────
 
-/** Cuerpo cilíndrico fino de la flecha (eje +Y local; se rota para alinear con +Z al orientarla). */
+/** Asta corta de la flecha, detrás del cono dominante (eje +Y local; se rota para alinear con +Z al orientarla). */
 export const arrowShaftGeometry = new THREE.CylinderGeometry(0.035, 0.035, 1, 8);
-/** Punta cónica de la flecha, en el extremo +Y del asta. */
-export const arrowTipGeometry = new THREE.ConeGeometry(0.075, 0.22, 8);
-/** Pluma/emplumado: cuña plana simple (dos por flecha, a ambos lados de la cola). */
-export const arrowFletchingGeometry = new THREE.ConeGeometry(0.09, 0.16, 4);
-/** Núcleo brillante del hechizo: esfera pequeña (más chica que el radio de colisión). */
-export const spellCoreGeometry = new THREE.SphereGeometry(1, 12, 10);
-/** Segmento fino del zigzag eléctrico del hechizo: caja alargada instanciada. */
+/** Segmento del zigzag eléctrico del hechizo: caja alargada instanciada (grosor visible, punto 11). */
 export const spellBoltSegmentGeometry = new THREE.BoxGeometry(0.045, 0.045, 1);
 /** Chispa de la estela del hechizo: tetraedro minúsculo (barato, distinto de las partículas esféricas normales). */
 export const spellSparkGeometry = new THREE.TetrahedronGeometry(1, 0);
@@ -64,7 +58,27 @@ function createRadialTexture(): THREE.Texture {
 
 // ── Materiales ────────────────────────────────────────────────────────────
 
-export const heroMaterial = new THREE.MeshLambertMaterial({ color: '#54c7ff' });
+/**
+ * Color del héroe por modo de arma activo (punto 1 de playtest ronda 3): el
+ * cuerpo del héroe, su estela y el indicador de puntería cambian al mismo
+ * color que su arma seleccionada — mismo lenguaje visual ya usado por
+ * WeaponBar (`weapon-btn-<mode>`) y por los proyectiles (arrowMaterial /
+ * spellMaterial más abajo). Único punto de verdad para no divergir del CSS.
+ */
+export const WEAPON_COLOR: Record<'body' | 'arrow' | 'spell', THREE.Color> = {
+  body: new THREE.Color('#54c7ff'),
+  arrow: new THREE.Color('#fef08a'),
+  spell: new THREE.Color('#d8b4fe'),
+};
+
+/**
+ * Material del héroe: MUTABLE (color interpolado cada frame por HeroView
+ * según el arma activa, vía `heroMaterial.color.lerp(...)`), a diferencia del
+ * resto de materiales de este fichero que son inmutables una vez creados. Es
+ * un único objeto compartido (no se recrea nunca), así que sigue cumpliendo
+ * "materiales compartidos, creados una vez": solo cambia su propiedad color.
+ */
+export const heroMaterial = new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.body.clone() });
 /**
  * Suelo de sala: ligeramente más claro que el fondo/foso para que los fosos
  * (casi negros) sean inconfundibles a primera vista (GDD §14: legibilidad).
@@ -85,8 +99,13 @@ export const blobShadowMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 
+/**
+ * Indicador de puntería: MUTABLE igual que `heroMaterial` (punto 1 de
+ * playtest ronda 3) — AimIndicatorView interpola su color hacia
+ * `WEAPON_COLOR[weaponMode]` cada frame.
+ */
 export const aimDotMaterial = new THREE.MeshBasicMaterial({
-  color: '#ffe082',
+  color: WEAPON_COLOR.body.clone(),
   transparent: true,
   opacity: 0.95,
   depthWrite: false,
@@ -142,12 +161,10 @@ export const smallWedgeGeometry = new THREE.BoxGeometry(1, 1, 1);
 // Colores alineados con los botones de arma del HUD (mapeo instantáneo
 // botón↔proyectil, feedback de playtest): flecha amarilla, hechizo violeta.
 export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#fef08a' });
-/** Punta/emplumado de la flecha: tono más oscuro que el asta, silueta de flecha reconocible. */
+/** Asta de la flecha (detrás del cono dominante): tono más oscuro, silueta de flecha reconocible. */
 export const arrowTipMaterial = new THREE.MeshLambertMaterial({ color: '#d4a017' });
 export const spellMaterial = new THREE.MeshLambertMaterial({ color: '#d8b4fe' });
-/** Núcleo del hechizo (punto 2 de playtest: "efecto como rayo"): blanco-violeta brillante, sin sombreado. */
-export const spellCoreMaterial = new THREE.MeshBasicMaterial({ color: '#f3e8ff' });
-/** Zigzag eléctrico del hechizo: violeta más saturado/luminoso que el cuerpo. */
+/** Zigzag eléctrico del hechizo (ronda 3, punto 11: sin núcleo, solo rayo): violeta más saturado/luminoso que el cuerpo. */
 export const spellBoltMaterial = new THREE.MeshBasicMaterial({
   color: '#c084fc',
   transparent: true,
@@ -165,14 +182,11 @@ export const enemyProjectileMaterial = new THREE.MeshLambertMaterial({ color: '#
 
 // ── Hazards ────────────────────────────────────────────────────────────────
 
-/** Foso: negro casi absoluto (agujero), inconfundible contra el suelo. */
-export const pitMaterial = new THREE.MeshBasicMaterial({ color: '#010102' });
 /**
- * Reborde del foso: piedra clara que contrasta con suelo Y agujero
- * (legibilidad GDD §8/§14). Aclarado de nuevo (punto 4 de playtest): el foso
- * debe "cantar" a distancia de cámara de juego.
+ * Foso: negro casi absoluto (agujero), inconfundible contra el suelo claro
+ * por sí solo (ronda 3, punto 6: sin reborde — ver HazardView.tsx `PitQuad`).
  */
-export const pitRimMaterial = new THREE.MeshBasicMaterial({ color: '#8992b5' });
+export const pitMaterial = new THREE.MeshBasicMaterial({ color: '#010102' });
 export const spikesMaterial = new THREE.MeshLambertMaterial({ color: '#8d94ad' });
 /** Agujas del campo de pinchos: metálico/hueso claro, contraste fuerte con el suelo (punto 1 de playtest). */
 export const spikesNeedleMaterial = new THREE.MeshLambertMaterial({ color: '#e7e4d8' });
