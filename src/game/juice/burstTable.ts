@@ -39,7 +39,9 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   'pit-fall': NONE,
   'pit-respawn': NONE,
   'spikes-hit': { color: '#ff3b3b', size: 0.08, count: 10, life: 0.3, speed: 2.4, trauma: 0.2 },
-  'barrel-explosion': { color: '#ff9f45', size: 0.2, count: 48, life: 0.65, speed: 5.5, trauma: 1 },
+  // speed×life ≈ alcance visual de las partículas: mantenerlo ≈ BARREL_BLAST_RADIUS
+  // (2.4) para que la explosión visual no prometa daño donde no lo hay.
+  'barrel-explosion': { color: '#ff9f45', size: 0.2, count: 48, life: 0.65, speed: 3.7, trauma: 1 },
   'item-pickup': { color: '#ffd166', size: 0.07, count: 9, life: 0.28, speed: 1.8, trauma: 0 },
   'room-cleared': NONE,
   'upgrade-applied': { color: '#54c7ff', size: 0.09, count: 14, life: 0.4, speed: 2.0, trauma: 0 },

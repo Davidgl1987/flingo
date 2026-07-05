@@ -153,7 +153,10 @@ export const PIT_FALL_DURATION = 1.05;
 export const SPIKES_DAMAGE = 1;
 export const SPIKES_PUSH_SPEED = 5.2;
 export const BARREL_DAMAGE = 3;
-export const BARREL_BLAST_RADIUS = 2.0;
+// 2.0→2.4 (playtest 2026-07-05): la explosión visual hacía esperar daño a
+// enemigos "cerca" que quedaban fuera del radio; sube el área letal y las
+// partículas se acortan (burstTable) para que visual y mecánica coincidan.
+export const BARREL_BLAST_RADIUS = 2.4;
 /** Barro: factor multiplicativo de frenado aplicado por tick. */
 export const MUD_SLOW_FACTOR_PER_TICK = 0.92;
 /** Acelerador: impulso en la dirección de movimiento (u/s²). */
