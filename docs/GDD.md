@@ -269,6 +269,91 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 
 ---
 
+## 15. Jefes
+
+*Sección nueva (2026-07-05): hasta ahora la "sala del jefe" era una sala de combate normal con enemigos duros. Esta sección la sustituye por jefes de verdad: enemigos únicos, con nombre, patrones propios y una pelea que se lee y se aprende, no una esponja de vida.*
+
+### 15.1 Principios (no negociables para cualquier jefe futuro)
+
+1. **Un jefe es un puzzle de física a mayor escala, no una barra de vida más larga.** Se le vence leyendo su patrón y usando la sala (rebotes, hazards, embestida), igual que a un enemigo normal — solo que con más margen para el error y una coreografía más larga.
+2. **Todo ataque se telegrafía** con tiempo de sobra para leer y reaccionar (mínimo ~0.6 s entre el aviso visual y que el ataque haga daño). Nada de golpes que no se puedan ver venir.
+3. **Tres fases por umbral de vida** (100–66 %, 66–33 %, 33–0 %). Cada fase **intensifica o añade una arista** a los patrones que ya conoces; nunca sustituye el repertorio entero de golpe. El jugador siempre reconoce al jefe que empezó a pelear.
+4. **Ventana de vulnerabilidad explícita.** Tras resolver su ataque (al chocar, al disparar, al invocar…), el jefe queda expuesto un instante — ahí es donde se concentra el daño grande. Acercarse en el momento justo se premia; acercarse en cualquier otro momento, se castiga.
+5. **El jefe usa la sala como arma.** Las mismas piezas que el jugador usa contra los enemigos normales (rocas para rebotar, barriles, fosos, pinchos) el jefe las convierte en amenaza propia. El diseño de la arena es parte del combate, no decoración de fondo.
+6. **Ningún ataque de jefe mata de un golpe con vida llena.** Techo de daño de un único impacto: 60 % de la vida máxima del héroe en la fase 1 (escala un poco en fases posteriores, nunca hasta el 100 %). Perder debe sentirse "me confié", nunca "no pude hacer nada".
+7. **La puerta de la sala del jefe se sella al entrar** y solo se abre al vencerlo — no hay ir y volver a por mejoras a mitad combate. Si mueres, la run entera se reinicia como siempre (sin checkpoint intra-jefe): coherente con la permadeath del resto del juego.
+8. **La derrota del jefe es el clímax audiovisual de la run**: la mayor combinación de partículas, sacudida de cámara y pausa de impacto de todo el juego, una cosecha grande de monedas, y la puerta trasera que da la victoria. No se ofrece mejora tras un jefe (es el final de la run).
+9. **Un pool de cuatro jefes, uno por partida.** Los jefes de esta sección entran como salas de la etiqueta "jefe" en el pool de la mazmorra procedural: cada run sortea uno. No es una progresión secuencial dentro de una misma partida — son variantes con la misma dificultad aproximada, para que cada run se sienta distinta. Cada jefe enseña un pilar distinto: rebote/embestida (Guardián), gestión de espacio (Reina), dominio de las 3 armas (Prisma), esquive puro (Tormenta). (Encadenar varios jefes en progresión de dificultad queda como ampliación futura, no de este alcance.)
+
+### 15.2 Guardián de Canto — el jefe de embestida
+
+*Enseña el pilar más antiguo del juego llevado al extremo: rebotes y embestida como arma principal.*
+
+- **Arena:** sala grande y cuadrada, cuatro rocas grandes, una en cada esquina. Sin fosos: el choque debe sentirse limpio y legible, sin ruido añadido.
+- **Comportamiento base:** patrulla despacio por el perímetro. Cuando el héroe entra en su rango medio, se prepara (brilla y vibra ~0.8 s: el aviso) y luego **carga en línea recta** a gran velocidad hacia la última posición vista del héroe.
+  - Si la carga golpea una roca o una pared: el Guardián queda **aturdido ~1.4 s** — su ventana de vulnerabilidad.
+  - Si la carga golpea al héroe: empujón fuerte + daño (por debajo del techo de un golpe, nunca letal a vida llena).
+- **Fase 2 (66 %):** encadena **dos cargas seguidas** con una pausa corta entre ellas — obliga a leer el ritmo completo, no solo el primer golpe.
+- **Fase 3 (33 %):** las rocas de las esquinas, tras cada choque, sueltan una zona de esquirlas afiladas temporal (como un campo de pinchos breve) — el suelo se vuelve más hostil según se enfada.
+- **Debilidad:** casi inmune a cualquier daño mientras patrulla o carga; solo es vulnerable de verdad durante el aturdimiento tras el choque. Ahí, la embestida del héroe (o unas flechas rápidas) hacen el daño grueso.
+- **Lectura para el jugador:** "provócalo, hazlo chocar, castiga el aturdimiento" — el jefe más "de manual", pensado para ser el primero que un jugador se encuentra.
+
+### 15.3 Reina del Enjambre — el jefe de control de espacio
+
+*Enseña a gestionar la sala y los hazards en vez de solo esquivar golpes; contrapunto del Guardián, que es puro reflejo.*
+
+- **Arena:** sala alargada, dos pasillos laterales y un foco central donde vive la Reina. Se mueve poco: no es una persecución, es una gestión de terreno.
+- **Comportamiento base:** cada pocos segundos invoca una oleada de larvas — versiones débiles y de 1 solo golpe de un Dummy, sin peligro individual serio — que avanzan hacia el héroe. No son la amenaza real: son **ruido que ensucia la sala** si se dejan acumular, y sirven de escudo involuntario o de "moneda de cambio" para rebotes.
+- Mientras se desplaza, deja tras de sí un **rastro permanente** (como el Trail, pero más grande y duradero) que va cerrando el espacio limpio de la arena.
+- **Fase 2 (66 %):** el rastro se genera más rápido; las larvas dejan de avanzar en línea recta y empiezan a perseguir.
+- **Fase 3 (33 %):** modo pánico — se mueve más y traza su rastro en un patrón que busca rodear al jugador; las larvas persiguen con agresividad. Ganar significa limpiar hueco a tiros y arrinconarla.
+- **Debilidad:** no tiene fase de aturdimiento clásica — es golpeable en todo momento, pero tiene mucha vida y ningún ataque directo fuerte. El peligro es indirecto: quedarte sin sala limpia donde maniobrar. Premia jugar rápido y ordenado, castiga el tanteo lento.
+- **Lectura para el jugador:** "no dejes que la sala se ensucie" — el jefe que obliga a usar el espacio con cabeza, no los reflejos.
+
+### 15.4 El Prisma — el jefe de las 3 armas
+
+*Obliga a dominar y alternar los tres modos de tiro. Conecta con la identidad visual ya existente: el héroe cambia de color según el arma (azul cuerpo / amarillo flecha / violeta hechizo).*
+
+- **Arena:** sala mediana y simétrica, un par de rocas para rebotes. Sin hazards ruidosos: el foco es el propio jefe y su color.
+- **Núcleo con escudo elemental rotatorio:** en cada momento el Prisma tiene UN color activo — azul, amarillo o violeta — y **solo es vulnerable al arma de ese color**; las otras dos rebotan sin efecto (con feedback visual claro de "inmune"). Exactamente un arma correcta en cada instante: la señal es nítida y de verdad obliga a rotar las tres.
+- **Rotación telegrafiada:** cada modo dura unos segundos; ~1.5 s antes del cambio, el núcleo brilla y "tartamudea" hacia el color siguiente — da tiempo a anticipar y cambiar de arma antes de que llegue.
+- **Ataques temáticos por modo** (densidad moderada — el reto de este jefe es el cambio de arma, no el esquive masivo):
+  - **Piedra (azul):** se vuelve pesado y hace embestidas cortas hacia el héroe. Se responde con la embestida propia (cuerpo contra cuerpo).
+  - **Viento (amarillo):** se mueve rápido y dispara ráfagas cortas de dardos. Se responde a flechazos manteniendo la distancia.
+  - **Sombra (violeta):** lanza arcos lentos que rebotan en las paredes. Se responde con el hechizo, usando también sus rebotes.
+- **Fase 2 (66 %):** la rotación se acelera y los ataques se densifican ligeramente.
+- **Fase 3 (33 %):** breves solapes de dos colores a la vez — ventana de riesgo/recompensa: si aciertas el arma correcta durante el solape, golpe doble.
+- **Ventana de vulnerabilidad:** al final de cada ataque el núcleo queda expuesto un instante (igual que el resto de jefes); combinada con el color correcto es donde cae el daño grande.
+- **Lectura para el jugador:** "mira su color, cambia de arma, castiga el hueco" — el jefe que examina el arsenal completo.
+
+### 15.5 La Tormenta — el jefe de esquive puro (bullet hell)
+
+*El único jefe donde no hay puzzle de daño: cualquier arma le hace daño siempre. El examen es sobrevivir a sus patrones.*
+
+- **Arena:** sala circular/octogonal completamente despejada — los patrones son la arquitectura; cualquier obstáculo los volvería injustos.
+- **Comportamiento base:** flota lentamente cerca del centro encadenando patrones de proyectiles densos pero legibles, cada uno anunciado ~0.6 s antes con una pose/brillo distinto:
+  - **Espiral giratoria:** brazos de balas que rotan; se sobrevive encontrando el hueco y girando con él.
+  - **Anillos concéntricos:** ondas que se expanden desde su posición; se teje entre los huecos de cada anillo.
+  - **Ráfaga radial:** explosión lenta y densa en todas direcciones; se esquiva leyendo los pasillos entre balas.
+- **Recarga = ventana de vulnerabilidad:** tras cada patrón, se detiene a recargar ~1.2 s con un aviso visual claro — ahí se le castiga con cualquier arma (la embestida es lo que más daño hace, pero cruzar el campo de balas para llegar es el riesgo).
+- **Fase 2 (66 %):** los patrones se densifican y la recarga se acorta.
+- **Fase 3 (33 %):** combina dos patrones seguidos sin pausa (espiral → anillos) antes de recargar; la ventana es la misma pero llegar vivo a ella cuesta más.
+- **Regla de honestidad:** las balas son lentas comparadas con el héroe (esquivables en todo momento con movimiento normal), los huecos siempre existen (los patrones se generan con pasillo garantizado) y ninguna bala aparece a bocajarro sin aviso.
+- **Lectura para el jugador:** "sobrevive al patrón, castiga la recarga" — el jefe de reflejos y sangre fría, el examen de esquive del juego.
+
+### 15.6 Datos de referencia (borrador, pendiente de playtest — ninguno validado aún jugando)
+
+| Jefe | Vida | Daño de golpe (fase 1 → 3) | Ventana de vulnerabilidad | Ritmo de patrón |
+|---|---|---|---|---|
+| Guardián de Canto | 40 | 2 → 3 (empuje de carga) | ~1.4 s tras chocar | carga cada ~2.5 s, encadenada en fase 2 |
+| Reina del Enjambre | 55 | sin ataque directo fuerte; larvas 1 daño de contacto | permanente (sin aturdimiento) | oleada cada ~3 s, rastro continuo |
+| El Prisma | 45 | 1–2 según modo | fin de cada ataque + color correcto | modo cada ~6 s (→ ~4 s en fase 3), solapes en fase 3 |
+| La Tormenta | 40 | 1 por bala | recarga ~1.2 s tras cada patrón | patrón cada ~4 s; balas ≤ 4.5 u/s |
+
+*Vida alta comparada con los enemigos normales (Dummy 2, Chaser 3) a propósito: un jefe debe aguantar varias coreografías completas, no morir en el primer aturdimiento. Estos números son el punto de partida para implementar y ajustar jugando — igual que el resto de la tabla de tuning del apéndice.*
+
+---
+
 ## Apéndice: tabla maestra de tuning
 
 *Valores de referencia validados por playtesting de la versión original. Cualquier reimplementación debe partir de aquí y ajustar solo tras probar.*
