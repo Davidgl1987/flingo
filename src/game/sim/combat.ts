@@ -266,7 +266,17 @@ function stepEnemyProjectileCollision(world: World, p: Projectile, events: Event
 
 // ── Daño y knockback ───────────────────────────────────────────────────────
 
-/** Aplica daño a un enemigo, knockback en la dirección del impacto y flash. Marca muerte con hp<=0. */
+/**
+ * Aplica daño a un enemigo, knockback en la dirección del impacto y flash.
+ * Marca muerte con hp<=0.
+ *
+ * Regla de ventana de jefe (GDD §15.1 punto 4, Fase B0): si `enemy.kind ===
+ * 'boss'` y no está en su ventana de vulnerabilidad (`bossVulnerable`), el
+ * daño recibido se escala por `bossDamageOutsideWindowFactor` (0 = inmune),
+ * leído como escalar plano del propio Enemy — mantiene esta función y todo
+ * `sim/combat.ts` ajenos a `content/bosses.ts` (evita un ciclo de imports;
+ * ver nota de diseño en `sim/boss.ts`).
+ */
 export function applyDamageToEnemy(
   world: World,
   enemy: Enemy,
@@ -276,6 +286,10 @@ export function applyDamageToEnemy(
   events: EventQueue,
 ): void {
   if (enemy.hp <= 0) return;
+  if (enemy.kind === 'boss' && !enemy.bossVulnerable) {
+    damage = Math.floor(damage * enemy.bossDamageOutsideWindowFactor);
+    if (damage <= 0) return;
+  }
   enemy.hp -= damage;
   world.stats.damageDealt += damage;
   world.stats.score += damage;

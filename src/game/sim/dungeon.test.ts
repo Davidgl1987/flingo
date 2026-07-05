@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { generateDungeon, validateDungeon } from './dungeon';
 import type { RoomData, RoomTag } from './world';
 
-function makeTestRoom(id: string, tags: RoomTag[], size = 9): RoomData {
+function makeTestRoom(id: string, tags: RoomTag[], size = 9, boss?: RoomData['boss']): RoomData {
   return {
     version: 1,
     id,
@@ -25,6 +25,7 @@ function makeTestRoom(id: string, tags: RoomTag[], size = 9): RoomData {
     enemies: [],
     hazards: [],
     items: [],
+    ...(boss !== undefined ? { boss } : {}),
   };
 }
 
@@ -128,5 +129,25 @@ describe('generateDungeon', () => {
     const map = generateDungeon(1, pool);
     const validation = validateDungeon(map);
     expect(validation.valid).toBe(true);
+  });
+
+  describe('selección de sala de jefe (GDD §15, Fase B0)', () => {
+    it('con una sola sala de jefe con `boss`, la elige siempre (aunque haya otras "jefe" sin boss)', () => {
+      const pool = [
+        ...makeVariedPool().filter((r) => !r.tags.includes('jefe')),
+        makeTestRoom('boss-plain', ['jefe'], 13),
+        makeTestRoom('boss-real', ['jefe'], 13, 'test-boss'),
+      ];
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const map = generateDungeon(seed, pool);
+        expect(map.bossRoomId).toBe('boss-real');
+      }
+    });
+
+    it('sin ninguna sala "jefe" con `boss`, cae a cualquier sala "jefe" (compatibilidad con boss-den.json)', () => {
+      const pool = makeVariedPool(); // 'boss-1' no tiene `boss`
+      const map = generateDungeon(42, pool);
+      expect(map.bossRoomId).toBe('boss-1');
+    });
   });
 });

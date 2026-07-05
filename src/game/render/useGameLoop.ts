@@ -25,6 +25,8 @@ const NOTICE_BY_EVENT: Partial<Record<GameEvent['type'], string>> = {
   'room-cleared': 'Sala limpiada',
   'pit-fall': 'Has caído al foso',
   'shield-block': 'El escudo bloquea el golpe',
+  'boss-door-sealed': 'La puerta se sella',
+  'boss-defeated': '¡Jefe derrotado!',
 };
 
 /** Índice 1-based de la sala actual dentro del orden de la mazmorra (orden de generación/BFS desde el inicio). */

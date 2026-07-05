@@ -13,6 +13,7 @@
 import { useEffect, useRef } from 'react';
 import { pauseGame, type GameSession } from '../session';
 import { useUiStore } from '../store';
+import { BossHealthBar } from './BossHealthBar';
 import { WeaponBar } from './WeaponBar';
 
 const NOTICE_DURATION_MS = 1200;
@@ -92,6 +93,7 @@ export function HUD({ session }: { session: GameSession }) {
         </div>
       )}
       {notice !== null && <div className="hud-notice">{notice}</div>}
+      <BossHealthBar session={session} />
       <WeaponBar session={session} />
     </div>
   );

@@ -21,6 +21,12 @@
  * - Trail: squash de babosa (aplastamiento rítmico) + gotas de baba goteando.
  * - Shooter: "ojo/cañón" orientado siempre al héroe, que se ilumina (cambia
  *   de material apagado a material de carga) mientras `shooterPhase==='charge'`.
+ * - Boss (GDD §15, Fase B0): composición GENÉRICA reutilizable por cualquier
+ *   jefe futuro (B1-B4 pueden sustituir el cuerpo por la suya propia
+ *   filtrando por `enemy.bossId`, ver `BossMesh`) — anillo ámbar mientras
+ *   `bossTelegraphUntil` está activo (aviso de ataque), anillo verde mientras
+ *   `bossVulnerable` (ventana de castigo) y flash blanco-cálido de cuerpo
+ *   entero al cambiar de fase (retrigger por `bossPhase`).
  *
  * Todo con geometrías/materiales compartidos de assets.ts; cero asignaciones
  * en useFrame (solo escalares y mutación de refs ya existentes).
@@ -33,6 +39,10 @@ import type { GameSession } from '../session';
 import type { Enemy, EnemyKind } from '../sim/world';
 import {
   blobShadowMaterial,
+  bossBodyMaterial,
+  bossPhaseFlashMaterial,
+  bossTelegraphMaterial,
+  bossVulnerableMaterial,
   chaserBrowMaterial,
   chaserMaterial,
   dummyMaterial,
@@ -60,9 +70,12 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
   spike: spikeMaterial,
   trail: trailMaterial,
   shooter: shooterMaterial,
+  boss: bossBodyMaterial,
 };
 
 const ENEMY_RADIUS_RENDER = 0.4;
+/** Duración del flash de cuerpo entero al cambiar de fase (GDD §15.1 punto 3). Puramente cosmético. */
+const BOSS_PHASE_FLASH_DURATION = 0.3;
 
 /**
  * Radio/altura del pivote de la cara del Chaser sobre la superficie de su
@@ -112,6 +125,13 @@ function EnemyMesh({
   const shooterEyeGroupRef = useRef<Group>(null);
   const shooterEyeMeshRef = useRef<Mesh>(null);
   const wasCharging = useRef(false);
+  // Boss (GDD §15): anillo de telegraph (ámbar), anillo de ventana de
+  // vulnerabilidad (verde) y flash de cuerpo entero al cambiar de fase.
+  const bossTelegraphRingRef = useRef<Mesh>(null);
+  const bossVulnerableRingRef = useRef<Mesh>(null);
+  const bossPhaseFlashUntil = useRef(0);
+  const lastBossPhase = useRef(1);
+  const wasPhaseFlashing = useRef(false);
 
   useFrame(() => {
     const world = session.world;
@@ -129,14 +149,23 @@ function EnemyMesh({
     // suave, puramente cosmético, no afecta a la física.
     const bob =
       kind === 'dummy' && !enemy.chasing ? Math.sin(world.time * 5 + enemy.position.x * 3) * 0.035 : 0;
-    group.position.set(enemy.position.x, ENEMY_RADIUS_RENDER + bob, enemy.position.y);
+    // Jefe (GDD §15): a diferencia del resto de arquetipos (radio visual fijo
+    // ENEMY_RADIUS_RENDER pase lo que pase en la sim), el cuerpo del jefe
+    // escala con su radio REAL de colisión (enemy.radius, configurable por
+    // sala vía EnemySpawn.radius) — un jefe se diseña visiblemente más
+    // grande, y su radio de golpeo debe leerse igual de grande.
+    const bodyRadius = kind === 'boss' ? enemy.radius : ENEMY_RADIUS_RENDER;
+    group.position.set(enemy.position.x, bodyRadius + bob, enemy.position.y);
 
     // La sombra es HIJA del grupo (que ya lleva la posición del enemigo):
     // sus coordenadas son LOCALES. Escribirle coordenadas de mundo aquí la
     // proyectaba a 2× la posición del enemigo flotando a y≈0.42 — las
     // "sombras fantasma que se mueven" del playtest de David (2026-07-05).
     const shadow = shadowRef.current;
-    if (shadow) shadow.position.set(0, 0.02 - (ENEMY_RADIUS_RENDER + bob), 0);
+    if (shadow) shadow.position.set(0, 0.02 - (bodyRadius + bob), 0);
+    if (kind === 'boss' && bodyRef.current) {
+      bodyRef.current.scale.setScalar(bodyRadius);
+    }
 
     const flashing = world.time < enemy.hitFlashUntil;
     if (flashing !== wasFlashing.current) {
@@ -229,6 +258,43 @@ function EnemyMesh({
       // (heroAiming es la misma señal que su IA usa para CHASER_SPEED_WHILE_AIMING).
       const pulse = world.heroAiming ? 1.12 + 0.05 * Math.sin(world.time * 16) : 1;
       face.scale.setScalar(pulse);
+    }
+
+    if (kind === 'boss') {
+      // Telegraph genérico (GDD §15.1 punto 2): anillo ámbar visible mientras
+      // `bossTelegraphUntil` no ha vencido, con el mismo pulso de escala que
+      // ya usa el Shooter (lenguaje visual consistente entre "aviso de
+      // ataque" en toda la sim).
+      const telegraphing = world.time < enemy.bossTelegraphUntil;
+      if (bossTelegraphRingRef.current) {
+        bossTelegraphRingRef.current.visible = telegraphing;
+        if (telegraphing) {
+          bossTelegraphRingRef.current.scale.setScalar(bodyRadius * (1.5 + 0.2 * Math.sin(world.time * 14)));
+        }
+      }
+      // Ventana de vulnerabilidad (GDD §15.1 punto 4): anillo verde mientras
+      // `bossVulnerable`, radio fijo (no pulsa: se distingue del telegraph
+      // por color Y por comportamiento, para que nunca se confundan).
+      if (bossVulnerableRingRef.current) {
+        bossVulnerableRingRef.current.visible = enemy.bossVulnerable;
+        bossVulnerableRingRef.current.scale.setScalar(bodyRadius * 1.5);
+      }
+      // Flash de cambio de fase (GDD §15.1 punto 3): retrigger al detectar
+      // que bossPhase cambió desde el último frame leído.
+      if (enemy.bossPhase !== lastBossPhase.current) {
+        lastBossPhase.current = enemy.bossPhase;
+        bossPhaseFlashUntil.current = world.time + BOSS_PHASE_FLASH_DURATION;
+      }
+      const phaseFlashing = world.time < bossPhaseFlashUntil.current;
+      if (phaseFlashing !== wasPhaseFlashing.current && !flashing) {
+        // Solo aplica el flash de fase si el flash de golpe (hitFlash, ya
+        // gestionado arriba) no está ya mostrando su propio material: el
+        // golpe que causa el cambio de fase ya parpadea en blanco ese mismo
+        // instante, así que el flash de fase continúa el gesto sin pisarlo.
+        wasPhaseFlashing.current = phaseFlashing;
+        const body = bodyRef.current;
+        if (body) body.material = phaseFlashing ? bossPhaseFlashMaterial : ENEMY_MATERIAL[kind];
+      }
     }
 
     if (kind === 'trail') {
@@ -358,6 +424,32 @@ function EnemyMesh({
             rotation-x={-Math.PI / 2}
             position={[0, -0.35, 0]}
             scale={0.75}
+            visible={false}
+          />
+        </>
+      )}
+
+      {kind === 'boss' && (
+        <>
+          {/* Anillo de telegraph (ámbar, GDD §15.1 punto 2) y de ventana de
+              vulnerabilidad (verde, punto 4): discos bajo los pies, igual
+              lenguaje visual que el telegraph del Shooter pero con radio e
+              intensidad de jefe. Genéricos: cualquier jefe B1-B4 los hereda
+              sin más composición. */}
+          <mesh
+            ref={bossTelegraphRingRef}
+            geometry={unitCircle}
+            material={bossTelegraphMaterial}
+            rotation-x={-Math.PI / 2}
+            position={[0, -0.42, 0]}
+            visible={false}
+          />
+          <mesh
+            ref={bossVulnerableRingRef}
+            geometry={unitCircle}
+            material={bossVulnerableMaterial}
+            rotation-x={-Math.PI / 2}
+            position={[0, -0.4, 0]}
             visible={false}
           />
         </>

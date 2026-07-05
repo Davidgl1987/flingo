@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "boss-test",
+  "name": "Sala del Jefe de Pruebas",
+  "width": 11,
+  "height": 11,
+  "playerStart": { "x": 0, "y": 4 },
+  "tags": ["jefe"],
+  "boss": "test-boss",
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [{ "id": "boss-1", "kind": "boss", "bossId": "test-boss", "position": { "x": 0, "y": -1 } }],
+  "hazards": [],
+  "items": []
+}

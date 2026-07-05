@@ -8,6 +8,7 @@
  */
 
 import boossDenJson from '../../levels/boss-den.json';
+import bossTestJson from '../../levels/boss-test.json';
 import combatArenaJson from '../../levels/combat-arena.json';
 import combatCrossroadsJson from '../../levels/combat-crossroads.json';
 import combatSpikefieldJson from '../../levels/combat-spikefield.json';
@@ -91,9 +92,22 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
   boossDenJson,
 ];
 
+/**
+ * `boss-test.json` (jefe de pruebas trivial, Fase B0 de docs/plans/BOSSES_PLAN.md
+ * y GDD §15): valida el framework de jefes end-to-end, pero NO es un jefe de
+ * diseño (B1-B4 lo son). Solo entra al pool en dev/tests (`import.meta.env.DEV`,
+ * true también bajo vitest); en una build de producción con al menos un jefe
+ * de diseño ya en el pool, este nunca se sortea porque `pickRoomForRole`
+ * (sim/dungeon.ts) prefiere salas 'jefe' con `boss` — y de haber varias,
+ * elige entre TODAS con la misma probabilidad, así que hay que excluirlo
+ * explícitamente aquí en vez de confiar en esa preferencia.
+ */
+const DEV_ONLY_LEVEL_JSON: readonly unknown[] = [bossTestJson];
+
 function loadSeriesRooms(): RoomData[] {
+  const jsons = import.meta.env.DEV ? [...SERIES_LEVEL_JSON, ...DEV_ONLY_LEVEL_JSON] : SERIES_LEVEL_JSON;
   const rooms: RoomData[] = [];
-  for (const json of SERIES_LEVEL_JSON) {
+  for (const json of jsons) {
     const result = parseRoomData(json);
     if (!result.valid || !result.room) {
       throw new Error(`Sala de serie inválida en src/levels: ${result.errors.join('; ')}`);

@@ -30,7 +30,16 @@ export type GameEventType =
   | 'room-entered'
   | 'doors-open'
   | 'door-locked'
-  | 'victory';
+  | 'victory'
+  // ── Jefes (GDD §15) ──────────────────────────────────────────────────────
+  /** Se sella la puerta de la sala de jefe al entrar (GDD §15.1 punto 7). */
+  | 'boss-door-sealed'
+  /** Cambio de fase por umbral de vida (66%/33%, GDD §15.1 punto 3). label = fase alcanzada ('2'|'3'). */
+  | 'boss-phase-changed'
+  /** Aviso de ataque telegrafiado (GDD §15.1 punto 2). label = `bossTelegraphKind`. */
+  | 'boss-telegraph'
+  /** El jefe muere: dispara el clímax audiovisual (GDD §15.1 punto 8). */
+  | 'boss-defeated';
 
 export interface GameEvent {
   type: GameEventType;

@@ -17,6 +17,12 @@ import type { ShockwavePool } from './shockwave';
 
 /** Duración de hit-stop (s) en golpes fuertes: embestida con daño ≥2, explosión, muerte de enemigo. */
 const HIT_STOP_DURATION = 0.08;
+/**
+ * Duración de hit-stop del clímax de derrota de jefe (GDD §15.1 punto 8: "la
+ * mayor... pausa de impacto de todo el juego"): más larga que cualquier otro
+ * hit-stop del juego a propósito.
+ */
+const BOSS_DEFEATED_HIT_STOP_DURATION = 0.22;
 /** Umbral de daño de embestida/impacto para considerar "golpe fuerte" (GDD/consigna de la tarea). */
 const STRONG_HIT_DAMAGE_THRESHOLD = 2;
 
@@ -77,13 +83,18 @@ export function reactToEvent(
   if (isStrongHit || event.type === 'barrel-explosion' || event.type === 'enemy-died') {
     triggerHitStop(juice, HIT_STOP_DURATION);
   }
+  // Clímax de derrota de jefe (GDD §15.1 punto 8): hit-stop propio, más largo
+  // que el resto del juego a propósito (ver BOSS_DEFEATED_HIT_STOP_DURATION).
+  if (event.type === 'boss-defeated') {
+    triggerHitStop(juice, BOSS_DEFEATED_HIT_STOP_DURATION);
+  }
 
   // Háptica (GDD §12/ARCHITECTURE "Móvil"): daño recibido, explosión, victoria.
   if (event.type === 'player-damaged') {
     vibrate(HAPTIC_PATTERN.damage);
   } else if (event.type === 'barrel-explosion') {
     vibrate([...HAPTIC_PATTERN.explosion]);
-  } else if (event.type === 'victory') {
+  } else if (event.type === 'victory' || event.type === 'boss-defeated') {
     vibrate([...HAPTIC_PATTERN.victory]);
   }
 }

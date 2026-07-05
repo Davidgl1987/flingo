@@ -129,6 +129,29 @@ export const shooterTelegraphMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 
+// ── Jefes (GDD §15): cuerpo genérico + anillo de telegraph/vulnerabilidad ──
+// compartidos por CUALQUIER jefe (B1-B4 los reutilizan); el jefe de pruebas
+// de la Fase B0 los usa directamente sin composición propia.
+
+/** Cuerpo por defecto de un jefe (B1-B4 pueden sustituirlo por su propia composición, ver EnemyView). */
+export const bossBodyMaterial = new THREE.MeshLambertMaterial({ color: '#7a3fd6' });
+/** Anillo de telegraph genérico (GDD §15.1 punto 2: aviso visible antes de cualquier ataque). */
+export const bossTelegraphMaterial = new THREE.MeshBasicMaterial({
+  color: '#ffe083',
+  transparent: true,
+  opacity: 0.6,
+  depthWrite: false,
+});
+/** Anillo de ventana de vulnerabilidad (GDD §15.1 punto 4): verde, inconfundible frente al ámbar del telegraph. */
+export const bossVulnerableMaterial = new THREE.MeshBasicMaterial({
+  color: '#4dd68a',
+  transparent: true,
+  opacity: 0.7,
+  depthWrite: false,
+});
+/** Flash de cambio de fase (GDD §15.1 punto 3): breve destello blanco-cálido en todo el cuerpo. */
+export const bossPhaseFlashMaterial = new THREE.MeshBasicMaterial({ color: '#fff2c9' });
+
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
 // silueta/color de contrato del GDD. ──────────────────────────────────────

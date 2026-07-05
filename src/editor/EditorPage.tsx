@@ -59,6 +59,10 @@ const ENEMY_COLOR: Record<EnemyKind, string> = {
   spike: '#9aa1bd',
   trail: '#4dd68a',
   shooter: '#2b2f42',
+  // 'boss' no es colocable desde el editor por ahora (GDD §15: los jefes se
+  // definen por sala en content/bosses.ts + src/levels/boss-*.json, no
+  // pieza a pieza); el color solo satisface la exhaustividad del Record.
+  boss: '#7a3fd6',
 };
 const HAZARD_COLOR: Record<HazardKind, string> = {
   pit: '#05060a',

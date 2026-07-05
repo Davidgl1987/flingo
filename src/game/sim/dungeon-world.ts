@@ -99,6 +99,28 @@ export function openConnection(world: World, connectionIndex: number): void {
 }
 
 /**
+ * Cierra una conexión (ambos lados). Usado por el sellado de la sala de jefe
+ * (GDD §15.1 punto 7): la puerta por la que se entró con llave vuelve a
+ * cerrarse en cuanto el héroe está dentro, para que no se pueda salir e
+ * interrumpir el combate. Idempotente; reconstruye los portones igual que
+ * `openConnection`.
+ */
+export function closeConnection(world: World, connectionIndex: number): void {
+  let changed = false;
+  for (const runtime of world.roomRuntimes.values()) {
+    for (const door of runtime.doors) {
+      if (door.connectionIndex === connectionIndex && door.open) {
+        door.open = false;
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    syncDoorGates(world);
+  }
+}
+
+/**
  * Reconstruye los obstáculos-portón a partir del estado de puertas: un AABB
  * sólido por conexión CERRADA; nada por conexión abierta. Incrementa
  * `wallVersion` para que el render reconstruya sus mallas.
@@ -236,6 +258,7 @@ export function createDungeonWorld(dungeon: DungeonMap, seed: number = dungeon.s
     contactDamageCooldowns: new Map(),
     spikeDamageCooldowns: new Map(),
     deadEnemiesDropped: new Set(),
+    bossDefeatedEmitted: new Set(),
     time: 0,
     dungeon,
     roomRuntimes,

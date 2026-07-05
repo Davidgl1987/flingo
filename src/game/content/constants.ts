@@ -89,6 +89,19 @@ export const STEADY_PULSE_RELOAD_MULTIPLIER = 0.72;
 export const SHOOTER_PROJECTILE_DAMAGE = 1;
 export const SHOOTER_PROJECTILE_RADIUS = 0.16;
 
+// ── Pools preasignados ─────────────────────────────────────────────────────
+
+/**
+ * Capacidad del pool de proyectiles (héroe + enemigos). Ampliado de 32 a 96
+ * (Fase B0, GDD §15) para dar margen a La Tormenta (B4, GDD §15.5: hasta
+ * ~64-96 balas vivas en pantalla en fase 3). Instanciado una vez en
+ * `createProjectilePool`; el resto del pipeline (acquireProjectile,
+ * stepProjectiles, ProjectileView) ya recorre `world.projectiles` por
+ * longitud, sin límites duros propios, así que escala sin más cambios.
+ */
+export const PROJECTILE_POOL_SIZE = 96;
+export const PUDDLE_POOL_SIZE = 32;
+
 // ── Enemigos (fase 2; definidos ya por contrato) ──────────────────────────
 
 export const DUMMY_HP = 2;

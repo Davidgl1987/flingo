@@ -280,6 +280,61 @@ canvas {
   white-space: nowrap;
 }
 
+/* ── Barra de vida del jefe (GDD §15, Fase B0) ── */
+
+.boss-health-bar {
+  position: absolute;
+  /* Debajo del banner de progreso de sala (hud-room-banner, mismo offset
+     superior): ambos pueden coexistir un instante al entrar a la sala de
+     jefe antes de que el aviso de "Sala N/M" se retire. */
+  top: calc(env(safe-area-inset-top) + 62px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(70vw, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.boss-health-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #e8e8f0;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.boss-health-phase {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffe083;
+}
+
+.boss-health-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(18, 21, 34, 0.88);
+  border: 1px solid #39405c;
+  overflow: hidden;
+}
+
+/* Relleno: se escala en X desde la izquierda vía rAF (sin setState), mismo
+   patrón que la cortina de recarga de WeaponBar. */
+.boss-health-fill {
+  height: 100%;
+  width: 100%;
+  background: #7a3fd6;
+  transform-origin: left;
+  transform: scaleX(1);
+}
+
 /* ── Selector de armas (GDD §3/§12) ── */
 
 .weapon-bar {

@@ -8,6 +8,7 @@
  * Orden de sistemas por tick (importa para la consistencia de colisiones):
  * 1) física del héroe (movimiento, rebotes)
  * 2) IA de enemigos (steering + movimiento deseado)
+ * 2b) patrones de jefe (fases/telegraph/ataques) + sellado de su puerta
  * 3) física de enemigos (colisión contra sólidos, fricción de knockback)
  * 4) proyectiles (movimiento + colisiones + daño)
  * 5) hazards (héroe, enemigos, charcos del Trail, barriles)
@@ -20,6 +21,7 @@
 
 import { DOOR_TOUCH_MARGIN, FIXED_DT, ROOM_CLEAR_SCORE } from '../content/constants';
 import { stepEnemyAi } from './ai';
+import { stepBossDoorSeal, stepBosses } from './boss';
 import { stepHeroEnemyContacts, stepProjectiles } from './combat';
 import { openConnection } from './dungeon-world';
 import { pushEvent, type EventQueue } from './events';
@@ -91,6 +93,12 @@ function stepDungeonRoomClear(world: World, events: EventQueue): void {
   }
 
   if (runtime.id === dungeon.bossRoomId) {
+    // GDD §15.1 punto 8: el jefe derrotado abre también su propia puerta
+    // (sellada mientras vivía, ver stepBossDoorSeal) — la victoria no deja al
+    // héroe encerrado.
+    for (const door of runtime.doors) {
+      if (door.requiresKey) openConnection(world, door.connectionIndex);
+    }
     world.phase = 'victory';
     pushEvent(events, 'victory', world.hero.position.x, world.hero.position.y, 1);
     return;
@@ -184,6 +192,8 @@ export function stepWorld(world: World, events: EventQueue): void {
   if (world.dungeon) stepBossDoorKeyCheck(world, events);
 
   stepEnemyAi(world, FIXED_DT);
+  stepBosses(world, FIXED_DT, events);
+  if (world.dungeon) stepBossDoorSeal(world, events);
   stepEnemyCollisions(world);
 
   stepProjectiles(world, FIXED_DT, events);

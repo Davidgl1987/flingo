@@ -6,7 +6,13 @@
  * El origen (0,0) es el centro de la sala; +y apunta "hacia la cámara" (sur).
  */
 
-import { HERO_RADIUS, HERO_START_HP, SHOOTER_CHASE_DURATION } from '../content/constants';
+import {
+  HERO_RADIUS,
+  HERO_START_HP,
+  PROJECTILE_POOL_SIZE,
+  PUDDLE_POOL_SIZE,
+  SHOOTER_CHASE_DURATION,
+} from '../content/constants';
 import { createRng, type Rng } from './rng';
 
 export interface Vec2 {
@@ -34,7 +40,15 @@ export interface DoorSlot {
   offset: number;
 }
 
-export type EnemyKind = 'dummy' | 'chaser' | 'spike' | 'trail' | 'shooter';
+/**
+ * `'boss'` es un arquetipo más (GDD §15): reutiliza TODO el plumbing de
+ * Enemy (colisión, lookup por id, contención por sala, muerte/drop) en vez
+ * de un tipo de entidad propio — la elección que menos toca el código
+ * existente manteniendo la sim pura (decisión de la Fase B0, ver informe).
+ * Su comportamiento concreto (fases/telegraph/patrones) vive en los campos
+ * `boss*` de `Enemy` + `content/bosses.ts` (tabla de definición por jefe).
+ */
+export type EnemyKind = 'dummy' | 'chaser' | 'spike' | 'trail' | 'shooter' | 'boss';
 
 /** Colocación de enemigo en la sala: posición inicial + destino de patrulla (recorrido ida/vuelta). */
 export interface EnemySpawn {
@@ -49,6 +63,8 @@ export interface EnemySpawn {
   hp?: number;
   /** Radio de colisión personalizado (editor, GDD §13); por defecto ENEMY_RADIUS. */
   radius?: number;
+  /** Solo kind==='boss': qué entrada de `content/bosses.ts` gobierna su vida/patrones. */
+  bossId?: BossId;
 }
 
 export type HazardKind = 'pit' | 'spikes' | 'barrel' | 'rock' | 'slow' | 'boost';
@@ -71,6 +87,13 @@ export interface ItemSpawn {
   kind: ItemKind;
   position: Vec2;
 }
+
+/**
+ * Id de jefe (GDD §15): identifica la entrada en `content/bosses.ts` que
+ * define vida, umbrales de fase y función de patrón. `test-boss` es el jefe
+ * trivial de la Fase B0 (framework), disponible solo en dev/tests.
+ */
+export type BossId = 'test-boss';
 
 /** Estado en vivo de una puerta de una sala en la mazmorra multi-sala. */
 export interface RoomDoorRuntime {
@@ -113,6 +136,12 @@ export interface RoomData {
   enemies: EnemySpawn[];
   hazards: HazardSpawn[];
   items: ItemSpawn[];
+  /**
+   * GDD §15: si está presente, esta sala es la sala de jefe de la run y
+   * `boss` referencia su entrada en `content/bosses.ts`. El generador exige
+   * exactamente una sala con `boss` por run (ver dungeon.ts).
+   */
+  boss?: BossId;
 }
 
 // ── Estado vivo del mundo ─────────────────────────────────────────────────
@@ -216,6 +245,40 @@ export interface Enemy {
    * resetea a 0 al despejarse.
    */
   steerBias: number;
+
+  // ── Jefe (GDD §15, solo kind==='boss') ───────────────────────────────────
+  /** Qué entrada de `content/bosses.ts` gobierna este jefe. */
+  bossId?: BossId;
+  /** Fase actual por umbral de vida (1 = 100-66%, 2 = 66-33%, 3 = 33-0%). */
+  bossPhase: 1 | 2 | 3;
+  /**
+   * true mientras el jefe está en su ventana de vulnerabilidad explícita
+   * (GDD §15.1 punto 4): fuera de ventana, applyDamageToEnemy (combat.ts)
+   * escala el daño recibido por `bossDamageOutsideWindowFactor`.
+   */
+  bossVulnerable: boolean;
+  /**
+   * Multiplicador de daño recibido fuera de ventana de vulnerabilidad (0 =
+   * inmune, 1 = daño normal). `combat.ts` lo lee como un escalar plano —
+   * mantiene la sim de combate totalmente ajena a `content/bosses.ts` (sin
+   * ciclo de imports); `sim/boss.ts::initBossEnemies` lo copia una vez desde
+   * `BossDef.damageOutsideWindow` al construir el mundo.
+   */
+  bossDamageOutsideWindowFactor: number;
+  /** world.time hasta el que dura el telegraph en curso (0 = no telegrafiando). */
+  bossTelegraphUntil: number;
+  /** Etiqueta libre del telegraph/ataque en curso (para render + patrón), '' si no aplica. */
+  bossTelegraphKind: string;
+  /**
+   * Bolsa de estado propia del patrón del jefe concreto (contador de ciclo,
+   * temporizador de ataque, índice de sub-fase...): campos escalares
+   * genéricos y reutilizables — cada `stepPattern` de `content/bosses.ts`
+   * decide cómo usarlos, sin necesitar un tipo por jefe ni asignar objetos
+   * nuevos por tick.
+   */
+  bossTimer: number;
+  bossStage: number;
+  bossCounter: number;
 }
 
 /** Charco dejado por el Trail: pool preasignado, activar/desactivar. */
@@ -308,12 +371,11 @@ export interface World {
   spikeDamageCooldowns: Map<string, number>;
   /** IDs de enemigos cuya muerte ya soltó su moneda (evita doble drop del mismo cadáver). */
   deadEnemiesDropped: Set<string>;
+  /** IDs de jefes cuya muerte ya emitió el evento 'boss-defeated' (GDD §15.1 punto 8: clímax una sola vez). */
+  bossDefeatedEmitted: Set<string>;
   /** Tiempo de simulación acumulado (s). */
   time: number;
 }
-
-const PROJECTILE_POOL_SIZE = 32;
-const PUDDLE_POOL_SIZE = 32;
 
 export function createProjectilePool(): Projectile[] {
   const pool: Projectile[] = [];
@@ -381,6 +443,12 @@ function enemyHpFor(kind: EnemyKind, rng: Rng): number {
       return 3 + Math.floor(rng() * 2); // 3–4
     case 'shooter':
       return 3 + Math.floor(rng() * 2); // 3–4
+    case 'boss':
+      // Placeholder: la vida real de un jefe la fija su `BossDef` (GDD §15.6,
+      // `content/bosses.ts`); `sim/boss.ts::initBossEnemies` la sobreescribe
+      // justo después de construir el mundo (world.ts no puede importar
+      // content/ sin crear un ciclo, ver nota de diseño en boss.ts).
+      return 1;
   }
 }
 
@@ -412,6 +480,15 @@ function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng, origin: Vec2, ro
     spikeDamageCooldownUntil: 0,
     knockbackUntil: 0,
     steerBias: 0,
+    bossId: spawn.bossId,
+    bossPhase: 1,
+    bossVulnerable: false,
+    bossDamageOutsideWindowFactor: 0,
+    bossTelegraphUntil: 0,
+    bossTelegraphKind: '',
+    bossTimer: 0,
+    bossStage: 0,
+    bossCounter: 0,
   };
 }
 
@@ -533,6 +610,7 @@ export function createWorld(room: RoomData, seed = 1): World {
     contactDamageCooldowns: new Map(),
     spikeDamageCooldowns: new Map(),
     deadEnemiesDropped: new Set(),
+    bossDefeatedEmitted: new Set(),
     time: 0,
     dungeon: null,
     roomRuntimes: new Map(),

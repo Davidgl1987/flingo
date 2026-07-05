@@ -9,6 +9,7 @@ import { createJuiceState, type JuiceState } from './juice/juiceState';
 import { ParticlePool } from './juice/particles';
 import { ShockwavePool } from './juice/shockwave';
 import { TrailPool } from './juice/trail';
+import { initBossEnemies } from './sim/boss';
 import { generateDungeon } from './sim/dungeon';
 import { createDungeonWorld } from './sim/dungeon-world';
 import { createEventQueue, type EventQueue } from './sim/events';
@@ -75,6 +76,7 @@ export interface GameSession {
 /** Sesión de sala única (playtest del editor, fases 1-2): sin mazmorra multi-sala. */
 export function createGameSession(room: RoomData): GameSession {
   const world = createWorld(room);
+  initBossEnemies(world);
   return {
     world,
     events: createEventQueue(64),
@@ -107,6 +109,7 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
   const seed = forcedSeed ?? randomSeed();
   const dungeon = generateDungeon(seed, pool, ROOMS_PER_RUN);
   const world = createDungeonWorld(dungeon, seed);
+  initBossEnemies(world);
   return {
     world,
     events: createEventQueue(64),
@@ -182,6 +185,7 @@ export function restartSession(session: GameSession): void {
   } else {
     world = createWorld(session.room);
   }
+  initBossEnemies(world);
   session.world = world;
   session.accumulator = 0;
   session.renderAlpha = 1;

@@ -156,7 +156,16 @@ function pickRoomForRole(
   used: Set<string>,
   rng: Rng,
 ): RoomData | null {
-  const candidates = pool.filter((r) => r.tags.includes(role) && !used.has(r.id));
+  let candidates = pool.filter((r) => r.tags.includes(role) && !used.has(r.id));
+  if (role === 'jefe') {
+    // GDD §15.1 punto 9: un pool de jefes, uno por partida — solo salas con
+    // `boss` (framework de Fase B0) cuentan como sala de jefe "de verdad".
+    // Si el pool aún no tiene ninguna (solo B0 implementado, sin B1-B4), cae
+    // a cualquier sala 'jefe' sin `boss` (boss-den.json, sala de combate
+    // duro heredada) para no romper la generación de mazmorras existente.
+    const withBoss = candidates.filter((r) => r.boss !== undefined);
+    candidates = withBoss.length > 0 ? withBoss : candidates;
+  }
   if (candidates.length === 0) return null;
   const index = Math.floor(rng() * candidates.length);
   return candidates[index];

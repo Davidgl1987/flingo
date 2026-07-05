@@ -7,8 +7,10 @@
  * SIN imports de React ni three.js.
  */
 
+import { BOSS_DEFS } from '../content/bosses';
 import { DOOR_WIDTH, ROOM_MIN_SIZE } from '../content/constants';
 import type {
+  BossId,
   DoorSide,
   DoorSlot,
   EnemyKind,
@@ -30,9 +32,10 @@ export interface RoomParseResult {
 
 const ROOM_TAGS: readonly RoomTag[] = ['inicio', 'combate', 'llave', 'recompensa', 'jefe'];
 const DOOR_SIDES: readonly DoorSide[] = ['north', 'south', 'east', 'west'];
-const ENEMY_KINDS: readonly EnemyKind[] = ['dummy', 'chaser', 'spike', 'trail', 'shooter'];
+const ENEMY_KINDS: readonly EnemyKind[] = ['dummy', 'chaser', 'spike', 'trail', 'shooter', 'boss'];
 const HAZARD_KINDS: readonly HazardKind[] = ['pit', 'spikes', 'barrel', 'rock', 'slow', 'boost'];
 const ITEM_KINDS: readonly ItemKind[] = ['coin', 'potion', 'key'];
+const BOSS_IDS: readonly BossId[] = Object.keys(BOSS_DEFS) as BossId[];
 
 function isVec2(value: unknown): value is Vec2 {
   return (
@@ -137,6 +140,10 @@ export function parseRoomData(input: unknown): RoomParseResult {
         errors.push(`Id de enemigo duplicado: "${raw.id}".`);
       }
       seenIds.add(raw.id);
+      if (raw.kind === 'boss' && !BOSS_IDS.includes(raw.bossId as BossId)) {
+        errors.push(`Enemigo "${raw.id}" es kind:"boss" pero "bossId" no es válido (válidos: ${BOSS_IDS.join(', ')}).`);
+        continue;
+      }
       const spawn: EnemySpawn = { id: raw.id, kind: raw.kind as EnemyKind, position: raw.position as Vec2 };
       if (isVec2(raw.patrolTarget)) spawn.patrolTarget = raw.patrolTarget;
       if (isVec2(raw.facing)) spawn.facing = raw.facing;
@@ -144,6 +151,7 @@ export function parseRoomData(input: unknown): RoomParseResult {
       if (typeof raw.radius === 'number' && Number.isFinite(raw.radius) && raw.radius > 0) {
         spawn.radius = raw.radius;
       }
+      if (raw.kind === 'boss') spawn.bossId = raw.bossId as BossId;
       enemies.push(spawn);
     }
   }
@@ -201,6 +209,18 @@ export function parseRoomData(input: unknown): RoomParseResult {
     }
   }
 
+  // Campo opcional "boss" (GDD §15): marca esta sala como la sala de jefe de
+  // la run. Si está presente debe ser un BossId válido; el generador exige
+  // exactamente 1 sala con `boss` por run (ver sim/dungeon.ts).
+  let boss: BossId | undefined;
+  if (input.boss !== undefined) {
+    if (typeof input.boss !== 'string' || !BOSS_IDS.includes(input.boss as BossId)) {
+      errors.push(`"boss" no es un id de jefe válido (válidos: ${BOSS_IDS.join(', ')}).`);
+    } else {
+      boss = input.boss as BossId;
+    }
+  }
+
   // Validación cruzada: el inicio del jugador no debe caer encima de un hazard rectangular.
   if (isVec2(input.playerStart)) {
     const start = input.playerStart;
@@ -234,6 +254,7 @@ export function parseRoomData(input: unknown): RoomParseResult {
     enemies,
     hazards,
     items,
+    ...(boss !== undefined ? { boss } : {}),
   };
   return { valid: true, errors: [], room };
 }

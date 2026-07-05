@@ -49,6 +49,14 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   'doors-open': NONE,
   'door-locked': NONE,
   victory: { color: '#ffd166', size: 0.15, count: 40, life: 0.8, speed: 3.0, trauma: 0.3 },
+  // ── Jefes (GDD §15) ──────────────────────────────────────────────────────
+  'boss-door-sealed': NONE,
+  'boss-phase-changed': { color: '#fff2c9', size: 0.12, count: 18, life: 0.4, speed: 2.6, trauma: 0.25 },
+  'boss-telegraph': NONE,
+  // Clímax de la run (GDD §15.1 punto 8): la mayor combinación de partículas
+  // + sacudida de cámara + pausa de impacto del juego (reactToEvent.ts añade
+  // el hit-stop más largo, ver STRONG_HIT_DAMAGE_THRESHOLD / triggerHitStop).
+  'boss-defeated': { color: '#ffd166', size: 0.22, count: 64, life: 0.9, speed: 4.2, trauma: 1 },
 };
 
 /** Color de burst específico por tipo de objeto recogido (label del evento 'item-pickup'), GDD §12: dorado/rosa/azul. */
