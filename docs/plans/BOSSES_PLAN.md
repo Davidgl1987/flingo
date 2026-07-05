@@ -68,7 +68,8 @@ Contratos a implementar (sim pura + integración):
 | Specs, prompts, revisión, verificación en preview, commits | **Orquestador (superior)** | Es donde se decide; los errores aquí cuestan fases enteras |
 | B0–B5 implementación | **sonnet** | Implementación guiada por spec cerrada + protocolo AGENTS.md; ha entregado bien las fases 1-6 |
 | Retoques mecánicos sueltos (renombrados, mover constantes, JSON de salas ya diseñadas) | **haiku** | Sin decisiones; más barato |
-| Nunca | ~~opus/fable en sub-agente~~ | Regla del repo (CLAUDE.md) |
+| B4 generadores de patrones de La Tormenta (pasillo garantizado por construcción + tests de propiedad) | **opus** (permitido desde 2026-07-05) | Es la pieza con garantías formales; un error aquí = jefe injusto |
+| Diagnóstico puntual de un bug que un sonnet no cierre al primer intento | **opus** (excepcional) | Más barato que dos rondas fallidas de sonnet |
 
 ## Presupuesto orientativo
 
