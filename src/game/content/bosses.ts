@@ -210,7 +210,21 @@ function guardianRoomBounds(world: World, boss: Enemy): AABB {
   return world.roomRuntimes.get(boss.roomId)?.bounds ?? world.bounds;
 }
 
-/** Avanza la patrulla perimetral lenta hacia la esquina objetivo (`patrolTo`), saltando a la siguiente al llegar. */
+/**
+ * Avanza la patrulla perimetral lenta hacia la esquina objetivo (`patrolTo`),
+ * saltando a la siguiente al llegar.
+ *
+ * Evitación por deslizamiento de eje (axis-slide, fix B1.6.1 tras playtest
+ * 2026-07-06): en B1.6 las rocas pasaron de las esquinas de la sala al
+ * interior, así que el tramo recto patrulla-esquina puede atravesar una roca
+ * (el tramo inicial desde el centro, o la recuperación tras una carga que
+ * termina a mitad de arena). El movimiento recto de antes no comprobaba
+ * `guardianHitsSolid`: la resolución de colisión general (physics.ts) lo
+ * empujaba fuera del sólido cada frame, cancelando el avance neto → el boss
+ * quedaba clavado contra la roca para siempre (nunca progresa, nunca detecta
+ * al héroe). El axis-slide prueba el eje X solo, luego Y solo, y como último
+ * recurso se desvía hacia el muro más cercano para retomar el perímetro.
+ */
 function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
   const dx = boss.patrolTo.x - boss.position.x;
   const dy = boss.patrolTo.y - boss.position.y;
@@ -236,10 +250,103 @@ function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
   }
   const nx = dx / dist;
   const ny = dy / dist;
-  boss.velocity.x = nx * GUARDIAN_PATROL_SPEED;
-  boss.velocity.y = ny * GUARDIAN_PATROL_SPEED;
-  boss.position.x += boss.velocity.x * dt;
-  boss.position.y += boss.velocity.y * dt;
+  const stepX = nx * GUARDIAN_PATROL_SPEED * dt;
+  const stepY = ny * GUARDIAN_PATROL_SPEED * dt;
+  const nextX = boss.position.x + stepX;
+  const nextY = boss.position.y + stepY;
+
+  if (!guardianHitsSolid(world, boss, nextX, nextY)) {
+    // Camino libre: avanza recto, como siempre.
+    boss.position.x = nextX;
+    boss.position.y = nextY;
+    boss.velocity.x = nx * GUARDIAN_PATROL_SPEED;
+    boss.velocity.y = ny * GUARDIAN_PATROL_SPEED;
+    return;
+  }
+
+  // Camino recto bloqueado: bordea el obstáculo por su TANGENTE
+  // (circunnavegación). El simple deslizamiento por eje no basta cuando el
+  // boss toca una ESQUINA convexa en diagonal — mover solo-X o solo-Y HACIA
+  // el objetivo lo acerca aún más al vértice y sigue chocando (era la causa
+  // del atasco permanente del playtest). Se calcula la normal "hacia fuera"
+  // del sólido más cercano (rock interior o muro) y se avanza por la tangente
+  // que más progresa hacia patrolTo, con un pequeño empuje normal para
+  // despegar del vértice; así el boss rodea la roca hasta el corredor libre.
+  let normX = 0;
+  let normY = 0;
+  let bestDist = Infinity;
+  const obstacles = world.obstacles;
+  for (let i = 0; i < obstacles.length; i++) {
+    const a = obstacles[i].aabb;
+    const px = boss.position.x < a.minX ? a.minX : boss.position.x > a.maxX ? a.maxX : boss.position.x;
+    const py = boss.position.y < a.minY ? a.minY : boss.position.y > a.maxY ? a.maxY : boss.position.y;
+    const ddx = boss.position.x - px;
+    const ddy = boss.position.y - py;
+    const d = Math.hypot(ddx, ddy);
+    if (d < bestDist) {
+      bestDist = d;
+      const inv = d > 1e-4 ? 1 / d : 0;
+      normX = ddx * inv;
+      normY = ddy * inv;
+    }
+  }
+  const bounds = guardianRoomBounds(world, boss);
+  // Si ninguna roca está lo bastante cerca, el bloqueo es un muro: normal hacia
+  // el centro de la sala (el boss está pegado al perímetro).
+  if (bestDist > boss.radius + 0.4 || (normX === 0 && normY === 0)) {
+    const ex = (bounds.minX + bounds.maxX) / 2 - boss.position.x;
+    const ey = (bounds.minY + bounds.maxY) / 2 - boss.position.y;
+    const elen = Math.hypot(ex, ey) || 1;
+    normX = ex / elen;
+    normY = ey / elen;
+  }
+
+  const step = GUARDIAN_PATROL_SPEED * dt;
+  const push = 0.05;
+  // Tangente perpendicular a la normal, orientada hacia patrolTo (la que tiene
+  // producto escalar positivo con la dirección deseada). Se prueba primero esa,
+  // luego la opuesta, y por último solo el empuje normal (despegar). Sin
+  // asignaciones: el patrón se repite con `guardianTrySlide` sobre escalares.
+  const tanX = -normY;
+  const tanY = normX;
+  const sign = tanX * nx + tanY * ny >= 0 ? 1 : -1;
+  if (
+    guardianTrySlide(world, boss, sign * tanX, sign * tanY, normX, normY, step, push) ||
+    guardianTrySlide(world, boss, -sign * tanX, -sign * tanY, normX, normY, step, push) ||
+    guardianTrySlide(world, boss, normX, normY, normX, normY, step, push)
+  ) {
+    return;
+  }
+
+  // Todo bloqueado (rarísimo): sin avance este tick.
+  boss.velocity.x = 0;
+  boss.velocity.y = 0;
+}
+
+/**
+ * Intenta mover al Guardián por (vx,vy)·step con un empuje adicional
+ * (nX,nY)·push que lo despega del vértice. Si el destino está despejado, aplica
+ * el movimiento (posición + velocity para el render) y devuelve true. Solo
+ * escalares: cero asignaciones.
+ */
+function guardianTrySlide(
+  world: World,
+  boss: Enemy,
+  vx: number,
+  vy: number,
+  nX: number,
+  nY: number,
+  step: number,
+  push: number,
+): boolean {
+  const tryX = boss.position.x + vx * step + nX * push;
+  const tryY = boss.position.y + vy * step + nY * push;
+  if (guardianHitsSolid(world, boss, tryX, tryY)) return false;
+  boss.position.x = tryX;
+  boss.position.y = tryY;
+  boss.velocity.x = vx * GUARDIAN_PATROL_SPEED;
+  boss.velocity.y = vy * GUARDIAN_PATROL_SPEED;
+  return true;
 }
 
 /**
@@ -283,26 +390,64 @@ function guardianLiveBarrelCount(world: World, boss: Enemy): number {
 }
 
 /**
- * Punto perimetral aleatorio (RNG de la sim, determinista) para la aparición
- * de un barril rodante: uno de los 4 lados de la sala del Guardián, con
- * margen respecto a pared/rocas (GUARDIAN_BARREL_WALL_MARGIN) para que no
- * aparezca clipeado ni dentro de un obstáculo.
+ * Los 8 puntos fijos de aparición de barriles rodantes (GDD §15.2, fix
+ * B1.6.1 tras playtest 2026-07-06): las 4 esquinas de la arena + los 4 puntos
+ * medios de los bordes, todos con margen `GUARDIAN_BARREL_WALL_MARGIN`
+ * respecto a la pared (mismo margen que la versión anterior aleatoria). Orden
+ * fijo, sin significado semántico salvo estabilidad de tests.
  */
-function guardianRandomPerimeterPoint(world: World, boss: Enemy): { x: number; y: number } {
-  const bounds = guardianRoomBounds(world, boss);
+export function guardianBarrelSpawnPoints(bounds: AABB): { x: number; y: number }[] {
   const margin = GUARDIAN_BARREL_WALL_MARGIN;
-  const side = Math.floor(world.rng() * 4);
-  const along = world.rng();
-  switch (side) {
-    case 0: // norte
-      return { x: bounds.minX + margin + along * (bounds.maxX - bounds.minX - 2 * margin), y: bounds.minY + margin };
-    case 1: // sur
-      return { x: bounds.minX + margin + along * (bounds.maxX - bounds.minX - 2 * margin), y: bounds.maxY - margin };
-    case 2: // oeste
-      return { x: bounds.minX + margin, y: bounds.minY + margin + along * (bounds.maxY - bounds.minY - 2 * margin) };
-    default: // este
-      return { x: bounds.maxX - margin, y: bounds.minY + margin + along * (bounds.maxY - bounds.minY - 2 * margin) };
+  const midX = (bounds.minX + bounds.maxX) / 2;
+  const midY = (bounds.minY + bounds.maxY) / 2;
+  const left = bounds.minX + margin;
+  const right = bounds.maxX - margin;
+  const top = bounds.minY + margin;
+  const bottom = bounds.maxY - margin;
+  return [
+    { x: left, y: top }, // esquina NO
+    { x: right, y: top }, // esquina NE
+    { x: right, y: bottom }, // esquina SE
+    { x: left, y: bottom }, // esquina SO
+    { x: midX, y: top }, // punto medio norte
+    { x: midX, y: bottom }, // punto medio sur
+    { x: left, y: midY }, // punto medio oeste
+    { x: right, y: midY }, // punto medio este
+  ];
+}
+
+/**
+ * Punto fijo de aparición de un barril rodante (GDD §15.2, fix B1.6.1 tras
+ * playtest 2026-07-06: los barriles se solapaban con 2 tiradas de RNG
+ * independientes — sin relación entre ellas, podían caer casi en el mismo
+ * sitio). Determinista: de los 8 puntos fijos (`guardianBarrelSpawnPoints`),
+ * elige el que tiene la MAYOR distancia mínima a cualquier barril vivo
+ * (`!exploded`) de la sala del Guardián — "el más alejado de los barriles
+ * vivos", como pide el GDD. Sin barriles vivos, cualquier punto sirve (se usa
+ * el primero, empate determinista).
+ */
+function guardianBarrelSpawnPoint(world: World, boss: Enemy): { x: number; y: number } {
+  const bounds = guardianRoomBounds(world, boss);
+  const points = guardianBarrelSpawnPoints(bounds);
+  const barrels = world.barrels;
+
+  let bestPoint = points[0];
+  let bestMinDist = -Infinity;
+  for (let p = 0; p < points.length; p++) {
+    const point = points[p];
+    let minDistToLiveBarrel = Infinity;
+    for (let i = 0; i < barrels.length; i++) {
+      const barrel = barrels[i];
+      if (barrel.exploded || barrel.roomId !== boss.roomId) continue;
+      const d = Math.hypot(point.x - barrel.position.x, point.y - barrel.position.y);
+      if (d < minDistToLiveBarrel) minDistToLiveBarrel = d;
+    }
+    if (minDistToLiveBarrel > bestMinDist) {
+      bestMinDist = minDistToLiveBarrel;
+      bestPoint = point;
+    }
   }
+  return bestPoint;
 }
 
 /**
@@ -321,7 +466,7 @@ function guardianRandomPerimeterPoint(world: World, boss: Enemy): { x: number; y
  * exacto (la sim corre a dt fijo, el aterrizaje visual cae entre frames).
  */
 function guardianSpawnBarrel(world: World, boss: Enemy, events: EventQueue): void {
-  const point = guardianRandomPerimeterPoint(world, boss);
+  const point = guardianBarrelSpawnPoint(world, boss);
   const landingAt = world.time + GUARDIAN_BARREL_FALL_DURATION;
   const barrels = world.barrels;
   for (let i = 0; i < barrels.length; i++) {

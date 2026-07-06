@@ -13,6 +13,7 @@ import {
   BARREL_DAMAGE,
   GUARDIAN_BARREL_FALL_DURATION,
   GUARDIAN_BARREL_MAX_ACTIVE,
+  GUARDIAN_BARREL_RADIUS,
   GUARDIAN_BARREL_SPAWN_INTERVAL,
   GUARDIAN_BARREL_STUN_DURATION,
   GUARDIAN_CHARGE_DAMAGE_PHASE1,
@@ -22,7 +23,7 @@ import {
   GUARDIAN_STUN_DURATION,
   HERO_RADIUS,
 } from './constants';
-import { getBossDef } from './bosses';
+import { getBossDef, guardianBarrelSpawnPoints } from './bosses';
 import { initBossEnemies, stepBosses } from '../sim/boss';
 import { applyDamageToEnemy } from '../sim/combat';
 import { createEventQueue, drainEvents, type GameEvent } from '../sim/events';
@@ -54,6 +55,11 @@ function makeRoom(partial: Partial<RoomData> = {}): RoomData {
 /** Roca 2x2 pegada al borde este de una sala 15x15 (halfW=7.5): centrada en x=6.5, así que su cara oeste está en x=5.5. */
 function eastRock(): HazardSpawn {
   return { id: 'rock-east', kind: 'rock', position: { x: 6.5, y: 0 }, width: 2, height: 2 };
+}
+
+/** Roca interior 1.8x1.8 al suroeste, igual que `rock-sw` de boss-guardian.json (B1.6). */
+function swRock(): HazardSpawn {
+  return { id: 'rock-sw', kind: 'rock', position: { x: -3.2, y: -3.2 }, width: 1.8, height: 1.8 };
 }
 
 function makeGuardianWorld(opts: { bossSpawn?: Partial<EnemySpawn>; hazards?: HazardSpawn[] } = {}) {
@@ -815,5 +821,157 @@ describe('boss-guardian.json: regla anti-trampa de arena (GDD §15.2)', () => {
       expect(Math.abs(world.hero.position.x)).toBeLessThanOrEqual(world.bounds.maxX - HERO_RADIUS + 1e-9);
       expect(Math.abs(world.hero.position.y)).toBeLessThanOrEqual(world.bounds.maxY - HERO_RADIUS + 1e-9);
     }
+  });
+});
+
+// ── B1.6.1: fixes tras playtest 2026-07-06 (patrulla atascada + barriles superpuestos) ──
+
+describe('Guardián: la patrulla esquiva rocas interiores en su camino (fix B1.6.1, bug crítico de playtest)', () => {
+  it('no queda atascado contra una roca interior en la diagonal hacia su esquina de patrulla', () => {
+    // Reproducción exacta del bug: boss en (0,0), patrolTo en la esquina
+    // diagonal opuesta (-6,-6), con una roca interior tipo B1.6 (SW,
+    // (-3.2,-3.2) tamaño 1.8) justo en esa trayectoria recta. Antes del fix,
+    // guardianStepPatrolMove movía en línea recta sin comprobar colisión: la
+    // resolución de colisión general (physics.ts) lo empujaba fuera del
+    // sólido cada frame, cancelando el avance neto — el boss quedaba clavado
+    // tocando la roca para siempre, sin progresar ni detectar al héroe.
+    const world = makeGuardianWorld({
+      bossSpawn: { position: { x: 0, y: 0 }, patrolTarget: { x: -6, y: -6 } },
+      hazards: [swRock()],
+    });
+    const events = createEventQueue(64);
+    world.hero.position.x = 100; // fuera de GUARDIAN_DETECT_RANGE: solo patrulla
+    world.hero.position.y = 100;
+
+    const boss = world.enemies[0];
+    const startDist = Math.hypot(boss.position.x - 0, boss.position.y - 0);
+    expect(startDist).toBe(0);
+
+    let everOverlapping = false;
+    for (let i = 0; i < 540; i++) {
+      // ~9s: rodear una roca a velocidad de patrulla (1.1 u/s) es un rodeo
+      // legítimo; el desplazamiento NETO crece despacio, así que se mide en un
+      // horizonte amplio y por la propiedad real (no solapa + llega al objetivo)
+      stepBosses(world, FIXED_DT, events);
+      world.time += FIXED_DT;
+      // El círculo del boss nunca debe solapar la roca en ningún tick
+      // intermedio (axis-slide debe rodearla, no atravesarla).
+      const rock = swRock();
+      const halfW = rock.width! / 2;
+      const halfH = rock.height! / 2;
+      const nearestX = Math.max(rock.position.x - halfW, Math.min(boss.position.x, rock.position.x + halfW));
+      const nearestY = Math.max(rock.position.y - halfH, Math.min(boss.position.y, rock.position.y + halfH));
+      const dx = boss.position.x - nearestX;
+      const dy = boss.position.y - nearestY;
+      if (dx * dx + dy * dy < GUARDIAN_RADIUS * GUARDIAN_RADIUS - 1e-6) everOverlapping = true;
+    }
+
+    // Nunca atraviesa la roca (la circunnavegación la BORDEA, no la penetra).
+    expect(everOverlapping).toBe(false);
+    // Rodeó la roca y se acerca de verdad a su objetivo (-6,-6): antes del fix
+    // se quedaba CLAVADO en ~(-3.11,-3.11), a ~6.2u del objetivo, sin progresar
+    // jamás. Tras el fix llega a <3.5u del objetivo (traza medida: ~1.7u a 9s).
+    const distToTarget = Math.hypot(boss.position.x - (-6), boss.position.y - (-6));
+    expect(distToTarget).toBeLessThan(3.5);
+  });
+
+  it('nunca pasa >1s (60 ticks) sin progresar hacia patrolTo mientras patrulla libremente (salvo telegraph/aturdimiento legítimos)', () => {
+    const world = makeGuardianWorld({
+      bossSpawn: { position: { x: 0, y: 0 }, patrolTarget: { x: -6, y: -6 } },
+      hazards: [swRock()],
+    });
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+
+    const boss = world.enemies[0];
+    let lastCheckDist = Infinity;
+    let ticksSinceProgress = 0;
+    for (let i = 0; i < 600; i++) {
+      // 10s
+      stepBosses(world, FIXED_DT, events);
+      world.time += FIXED_DT;
+      if (i % 60 === 0) {
+        const dist = Math.hypot(boss.position.x - boss.patrolTo.x, boss.position.y - boss.patrolTo.y);
+        if (dist < lastCheckDist - 0.01) {
+          ticksSinceProgress = 0;
+        } else {
+          ticksSinceProgress += 60;
+        }
+        lastCheckDist = dist;
+      }
+    }
+    expect(ticksSinceProgress).toBeLessThanOrEqual(60);
+  });
+});
+
+describe('Guardián: puntos fijos de aparición de barriles, sin solapes (fix B1.6.1, GDD §15.2)', () => {
+  it('guardianBarrelSpawnPoints deriva 8 puntos fijos (4 esquinas + 4 puntos medios) de los bounds', () => {
+    const world = makeGuardianWorld();
+    const points = guardianBarrelSpawnPoints(world.bounds);
+    expect(points.length).toBe(8);
+    // Todos dentro de bounds con el margen esperado (ninguno pegado a la pared exacta).
+    for (const p of points) {
+      expect(Math.abs(p.x)).toBeLessThanOrEqual(world.bounds.maxX);
+      expect(Math.abs(p.y)).toBeLessThanOrEqual(world.bounds.maxY);
+    }
+    // Sin duplicados (8 puntos distintos).
+    const unique = new Set(points.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`));
+    expect(unique.size).toBe(8);
+  });
+
+  it('3 apariciones consecutivas caen en 3 de los 8 puntos fijos, sin solaparse (distancia mínima ≥ 2×radio)', () => {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100; // lejos: solo patrulla, sin cargas que detonen barriles
+    world.hero.position.y = 100;
+
+    const fixedPoints = guardianBarrelSpawnPoints(world.bounds);
+    const intervalTicks = Math.round(GUARDIAN_BARREL_SPAWN_INTERVAL / FIXED_DT);
+
+    // Fuerza 3 slots consecutivos de aparición (cada ~8s).
+    advance(world, events, 1); // primer barril (slot 0)
+    advance(world, events, intervalTicks); // segundo barril (slot 1)
+    advance(world, events, intervalTicks); // tercer barril (slot 2)
+
+    const spawned = liveBarrels(world);
+    expect(spawned.length).toBe(3);
+
+    // Cada barril spawneado coincide (con tolerancia) con uno de los 8 puntos fijos.
+    for (const barrel of spawned) {
+      const matchesFixedPoint = fixedPoints.some(
+        (p) => Math.abs(p.x - barrel.position.x) < 1e-6 && Math.abs(p.y - barrel.position.y) < 1e-6,
+      );
+      expect(matchesFixedPoint).toBe(true);
+    }
+
+    // Distancia mínima entre cualquier par de barriles vivos ≥ 2×radio (sin solape).
+    let minPairDist = Infinity;
+    for (let i = 0; i < spawned.length; i++) {
+      for (let j = i + 1; j < spawned.length; j++) {
+        const d = Math.hypot(spawned[i].position.x - spawned[j].position.x, spawned[i].position.y - spawned[j].position.y);
+        minPairDist = Math.min(minPairDist, d);
+      }
+    }
+    expect(minPairDist).toBeGreaterThanOrEqual(2 * GUARDIAN_BARREL_RADIUS);
+
+    // Los 3 puntos elegidos son distintos entre sí (no repite el mismo punto fijo).
+    const uniquePositions = new Set(spawned.map((b) => `${b.position.x.toFixed(3)},${b.position.y.toFixed(3)}`));
+    expect(uniquePositions.size).toBe(3);
+  });
+
+  it('sin barriles vivos, el primer spawn elige un punto fijo (cualquiera, empate determinista)', () => {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+
+    const fixedPoints = guardianBarrelSpawnPoints(world.bounds);
+    advance(world, events, 1);
+    const barrel = liveBarrels(world)[0];
+    const matchesFixedPoint = fixedPoints.some(
+      (p) => Math.abs(p.x - barrel.position.x) < 1e-6 && Math.abs(p.y - barrel.position.y) < 1e-6,
+    );
+    expect(matchesFixedPoint).toBe(true);
   });
 });
