@@ -261,6 +261,68 @@ export const GUARDIAN_BARREL_SHADOW_FRACTION = 0.55;
 /** Altura (u) desde la que el barril entra a plomo al empezar la caída del cuerpo. */
 export const GUARDIAN_BARREL_FALL_HEIGHT = 5;
 
+// ── Reina del Enjambre (GDD §15.3, Fase B2) ───────────────────────────────
+
+/** Vida máxima (GDD §15.6): mucha vida, sin ataque directo fuerte. */
+export const QUEEN_MAX_HP = 55;
+/** Radio de colisión: grande, distinta del Guardián (GDD §15.3 "cuerpo grande y distinto"). */
+export const QUEEN_RADIUS = 0.58;
+/** Techo de daño de un golpe de la Reina al héroe, por fase (GDD §15.1 punto 6): no tiene ataque directo, solo contacto de cuerpo si se le encima el jugador. */
+export const QUEEN_HIT_DAMAGE_CAP_FRACTION: [number, number, number] = [0.6, 0.65, 0.7];
+/**
+ * Vulnerable SIEMPRE (GDD §15.3: "no tiene fase de aturdimiento clásica...
+ * es golpeable en todo momento"): `damageOutsideWindow=1` en su BossDef, y
+ * `bossVulnerable` se fija a `true` de forma permanente al inicializarse
+ * (ver content/bosses.ts::queenStepPattern) — nunca hay ventana que abrir.
+ */
+export const QUEEN_DAMAGE_OUTSIDE_WINDOW = 1;
+
+/** Velocidad de desplazamiento fase 1: lenta, gestión de terreno, no persecución agresiva (GDD §15.3). */
+export const QUEEN_MOVE_SPEED_PHASE1 = 0.65;
+/** Fase 2 (66%): rastro más rápido → la propia Reina se mueve algo más rápido para tejerlo (GDD §15.3). */
+export const QUEEN_MOVE_SPEED_PHASE2 = 0.95;
+/** Fase 3 (33%): pánico, más movimiento (GDD §15.3). */
+export const QUEEN_MOVE_SPEED_PHASE3 = 1.3;
+/** Cada cuánto la Reina elige un nuevo punto de deambulación dentro de su sala (s). */
+export const QUEEN_WANDER_INTERVAL = 2.6;
+
+/**
+ * Rastro de la Reina (GDD §15.3 "como el Trail, pero más grande y duradero"):
+ * reutiliza el pool de charcos del Trail (world.puddles, sim/hazards.ts::
+ * stepPuddles) con parámetros PROPIOS —radio mayor, vida más larga— en vez de
+ * los de TRAIL_PUDDLE_RADIUS/TRAIL_PUDDLE_LIFETIME (que son del enemigo Trail
+ * normal). Cadencia fase 1; fase 2 la acelera (QUEEN_TRAIL_DROP_INTERVAL_PHASE2).
+ */
+export const QUEEN_TRAIL_DROP_INTERVAL = 0.8;
+export const QUEEN_TRAIL_DROP_INTERVAL_PHASE2 = 0.45;
+export const QUEEN_TRAIL_PUDDLE_RADIUS = 0.85;
+export const QUEEN_TRAIL_PUDDLE_LIFETIME = 6.5;
+
+/**
+ * Larvas (GDD §15.3/§15.6): oleada cada ~3s, Dummy débil de 1 HP, avanzan
+ * hacia el héroe (línea recta en fase 1, persiguen de verdad en fase 2/3).
+ * Cap de larvas vivas simultáneas por rendimiento (QUEEN_LARVA_MAX): la Reina
+ * reserva ese nº de slots en `world.enemies` (pool preasignado, mismo espíritu
+ * que `createProjectilePool`/`createPuddlePool`) en vez de hacer `.push` en
+ * caliente — evita el bug de renderers que hacen `.map` sobre un array que
+ * crece a mitad de partida sin trigger de re-render (ver AGENTS.md, nota de
+ * `BarrelViews`/`ItemViews`): los slots ya existen desde el spawn de la sala,
+ * inactivos (hp=0) hasta que una oleada los active.
+ */
+export const QUEEN_WAVE_INTERVAL = 3;
+export const QUEEN_LARVA_MAX = 6;
+/** Nº de larvas invocadas por oleada (dentro del cap de vivas). */
+export const QUEEN_LARVA_PER_WAVE = 2;
+export const QUEEN_LARVA_HP = 1;
+export const QUEEN_LARVA_RADIUS = 0.26;
+/** Velocidad de avance de una larva hacia el héroe (recta en fase 1). */
+export const QUEEN_LARVA_SPEED = 1.1;
+/** Fase 2/3 (GDD §15.3): las larvas persiguen (esquivan hazards) en vez de ir en línea recta; algo más rápidas y agresivas en fase 3. */
+export const QUEEN_LARVA_CHASE_SPEED_PHASE2 = 1.35;
+export const QUEEN_LARVA_CHASE_SPEED_PHASE3 = 1.7;
+/** Prefijo de id de los slots de larva de la Reina (para distinguirlos del resto de `world.enemies`, ver `isQueenLarva`). */
+export const QUEEN_LARVA_ID_PREFIX = 'queen-larva-';
+
 // ── Mundo y run ───────────────────────────────────────────────────────────
 
 export const ROOMS_PER_RUN = 6;

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "id": "boss-queen",
+  "name": "Sala de la Reina del Enjambre",
+  "width": 11,
+  "height": 21,
+  "playerStart": { "x": 0, "y": 9 },
+  "tags": ["jefe"],
+  "boss": "queen",
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [
+    {
+      "id": "boss-1",
+      "kind": "boss",
+      "bossId": "queen",
+      "position": { "x": 0, "y": 0 },
+      "patrolTarget": { "x": 0, "y": 0 }
+    }
+  ],
+  "hazards": [
+    { "id": "column-nw-1", "kind": "rock", "position": { "x": -3.3, "y": 6 }, "width": 1.0, "height": 1.0 },
+    { "id": "column-nw-2", "kind": "rock", "position": { "x": -3.3, "y": 1.8 }, "width": 1.0, "height": 1.0 },
+    { "id": "column-nw-3", "kind": "rock", "position": { "x": -3.3, "y": -1.8 }, "width": 1.0, "height": 1.0 },
+    { "id": "column-nw-4", "kind": "rock", "position": { "x": -3.3, "y": -6 }, "width": 1.0, "height": 1.0 },
+    { "id": "column-ne-1", "kind": "rock", "position": { "x": 3.3, "y": 6 }, "width": 1.0, "height": 1.0 },
+    { "id": "column-ne-2", "kind": "rock", "position": { "x": 3.3, "y": 1.8 }, "width": 1.0, "height": 1.0 },
+    { "id": "column-ne-3", "kind": "rock", "position": { "x": 3.3, "y": -1.8 }, "width": 1.0, "height": 1.0 },
+    { "id": "column-ne-4", "kind": "rock", "position": { "x": 3.3, "y": -6 }, "width": 1.0, "height": 1.0 }
+  ],
+  "items": []
+}

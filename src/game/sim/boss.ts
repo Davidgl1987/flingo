@@ -39,8 +39,13 @@ export function isBoss(enemy: Enemy): enemy is Enemy & { bossId: BossId } {
  * placeholder de `createEnemy` con el valor real de `BossDef.maxHp`.
  */
 export function initBossEnemies(world: World): void {
-  for (const enemy of world.enemies) {
-    if (!isBoss(enemy)) continue;
+  // No se puede iterar `world.enemies` directamente con un `for...of` mientras
+  // `onInit` le hace `.push` (la Reina, GDD §15.3, reserva sus slots de larva
+  // aquí): un `for` clásico sobre el array vivo bastaría, pero como `onInit`
+  // solo debe ver al jefe ya inicializado (hp/radius reales) se resuelve en
+  // dos pasadas separadas, sin ambigüedad sobre qué entradas son "el jefe".
+  const bosses = world.enemies.filter(isBoss);
+  for (const enemy of bosses) {
     const def = getBossDef(enemy.bossId);
     enemy.maxHp = def.maxHp;
     enemy.hp = def.maxHp;
@@ -48,6 +53,9 @@ export function initBossEnemies(world: World): void {
     // Guardián colisionaba y se veía como un enemigo normal de 0.4 (bug B1).
     if (def.radius !== undefined) enemy.radius = def.radius;
     enemy.bossDamageOutsideWindowFactor = def.damageOutsideWindow;
+  }
+  for (const enemy of bosses) {
+    getBossDef(enemy.bossId).onInit?.(world, enemy);
   }
 }
 

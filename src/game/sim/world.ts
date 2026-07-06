@@ -92,9 +92,10 @@ export interface ItemSpawn {
  * Id de jefe (GDD §15): identifica la entrada en `content/bosses.ts` que
  * define vida, umbrales de fase y función de patrón. `test-boss` es el jefe
  * trivial de la Fase B0 (framework), disponible solo en dev/tests. `guardian`
- * es el Guardián de Canto (GDD §15.2, Fase B1).
+ * es el Guardián de Canto (GDD §15.2, Fase B1). `queen` es la Reina del
+ * Enjambre (GDD §15.3, Fase B2).
  */
-export type BossId = 'test-boss' | 'guardian';
+export type BossId = 'test-boss' | 'guardian' | 'queen';
 
 /** Estado en vivo de una puerta de una sala en la mazmorra multi-sala. */
 export interface RoomDoorRuntime {

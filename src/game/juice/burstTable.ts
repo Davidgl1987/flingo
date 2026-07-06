@@ -74,6 +74,10 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // burst grande); este evento es puramente informativo para juice/HUD sobre
   // el aturdimiento largo, sin burst propio (NONE) para no duplicar partículas.
   'boss-barrel-charge-stun': NONE,
+  // Reina del Enjambre (GDD §15.3): burst pequeño y verdoso (mismo lenguaje
+  // que el Trail, trailMaterial) en el punto de invocación, sin trauma de
+  // cámara (no es un golpe, es un aviso ambiental de "ruido nuevo en la sala").
+  'boss-wave-spawn': { color: '#4dd68a', size: 0.09, count: 10, life: 0.35, speed: 2.0, trauma: 0 },
 };
 
 /** Color de burst específico por tipo de objeto recogido (label del evento 'item-pickup'), GDD §12: dorado/rosa/azul. */

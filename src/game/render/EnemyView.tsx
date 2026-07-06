@@ -44,6 +44,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Group, Material, Mesh } from 'three';
+import { QUEEN_LARVA_ID_PREFIX } from '../content/constants';
 import type { GameSession } from '../session';
 import type { BossId, Enemy, EnemyKind } from '../sim/world';
 import {
@@ -64,6 +65,10 @@ import {
   guardianStunStarGeometry,
   guardianStunStarMaterial,
   guardianTelegraphGlowMaterial,
+  queenBodyMaterial,
+  queenCrownMaterial,
+  queenCrownSpikeGeometry,
+  queenSummonPulseMaterial,
   shooterEyeChargeMaterial,
   shooterEyeMaterial,
   shooterMaterial,
@@ -97,7 +102,13 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
  */
 function restingBodyMaterial(kind: EnemyKind, bossId: BossId | undefined): Material {
   if (kind === 'boss' && bossId === 'guardian') return guardianBodyMaterial;
+  if (kind === 'boss' && bossId === 'queen') return queenBodyMaterial;
   return ENEMY_MATERIAL[kind];
+}
+
+/** true si este id de enemigo es una larva de la Reina del Enjambre (GDD §15.3): mini-dummy, escala menor. */
+function isQueenLarvaId(enemyId: string): boolean {
+  return enemyId.startsWith(QUEEN_LARVA_ID_PREFIX);
 }
 
 const ENEMY_RADIUS_RENDER = 0.4;
@@ -167,6 +178,12 @@ function EnemyMesh({
   const guardianStunGroupRef = useRef<Group>(null);
   const guardianStunStarRefs = useRef<(Mesh | null)[]>([]);
   const wasGuardianTelegraphing = useRef(false);
+  // Reina del Enjambre (GDD §15.3): pulso de invocación (anillo que se
+  // expande brevemente cada vez que suelta una oleada de larvas); la corona
+  // (JSX más abajo) es estática, sin ref necesaria.
+  const queenSummonPulseRef = useRef<Mesh>(null);
+  const queenSummonPulseUntil = useRef(0);
+  const lastQueenWaveTimer = useRef(0);
 
   useFrame(() => {
     const world = session.world;
@@ -184,12 +201,16 @@ function EnemyMesh({
     // suave, puramente cosmético, no afecta a la física.
     const bob =
       kind === 'dummy' && !enemy.chasing ? Math.sin(world.time * 5 + enemy.position.x * 3) * 0.035 : 0;
+    const isLarva = kind === 'dummy' && isQueenLarvaId(enemyId);
     // Jefe (GDD §15): a diferencia del resto de arquetipos (radio visual fijo
     // ENEMY_RADIUS_RENDER pase lo que pase en la sim), el cuerpo del jefe
     // escala con su radio REAL de colisión (enemy.radius, configurable por
     // sala vía EnemySpawn.radius) — un jefe se diseña visiblemente más
-    // grande, y su radio de golpeo debe leerse igual de grande.
-    const bodyRadius = kind === 'boss' ? enemy.radius : ENEMY_RADIUS_RENDER;
+    // grande, y su radio de golpeo debe leerse igual de grande. Las larvas de
+    // la Reina (GDD §15.3, mini-dummy) son el caso simétrico: más PEQUEÑAS
+    // que un Dummy normal, también leyendo `enemy.radius` real en vez del
+    // tamaño fijo del arquetipo.
+    const bodyRadius = kind === 'boss' || isLarva ? enemy.radius : ENEMY_RADIUS_RENDER;
     group.position.set(enemy.position.x, bodyRadius + bob, enemy.position.y);
 
     // La sombra es HIJA del grupo (que ya lleva la posición del enemigo):
@@ -198,7 +219,7 @@ function EnemyMesh({
     // "sombras fantasma que se mueven" del playtest de David (2026-07-05).
     const shadow = shadowRef.current;
     if (shadow) shadow.position.set(0, 0.02 - (bodyRadius + bob), 0);
-    if (kind === 'boss' && bodyRef.current) {
+    if ((kind === 'boss' || isLarva) && bodyRef.current) {
       bodyRef.current.scale.setScalar(bodyRadius);
     }
 
@@ -369,6 +390,28 @@ function EnemyMesh({
             star.position.set(Math.cos(angle) * orbitRadius, bodyRadius * 1.3, Math.sin(angle) * orbitRadius);
             star.rotation.y = angle * 2;
           }
+        }
+      }
+    }
+
+    if (kind === 'boss' && bossId === 'queen') {
+      // Pulso de invocación (GDD §15.3): `enemy.bossTelegraphUntil` se
+      // reutiliza en queenStepPattern como cuenta atrás (no un timestamp)
+      // hasta la próxima oleada de larvas — se RESETEA a QUEEN_WAVE_INTERVAL
+      // justo cuando invoca. Detectar ese salto hacia arriba (en vez de su
+      // decaimiento normal) es la señal de "acaba de invocar", sin necesitar
+      // leer eventos de sim desde el render.
+      if (enemy.bossTelegraphUntil > lastQueenWaveTimer.current + 0.05) {
+        queenSummonPulseUntil.current = world.time + 0.35;
+      }
+      lastQueenWaveTimer.current = enemy.bossTelegraphUntil;
+
+      const pulsing = world.time < queenSummonPulseUntil.current;
+      if (queenSummonPulseRef.current) {
+        queenSummonPulseRef.current.visible = pulsing;
+        if (pulsing) {
+          const t = 1 - Math.max(0, queenSummonPulseUntil.current - world.time) / 0.35;
+          queenSummonPulseRef.current.scale.setScalar(bodyRadius * (1.2 + t * 1.8));
         }
       }
     }
@@ -569,6 +612,39 @@ function EnemyMesh({
               />
             ))}
           </group>
+        </>
+      )}
+
+      {kind === 'boss' && bossId === 'queen' && (
+        <>
+          {/* Corona: 5 púas finas en abanico sobre la cabeza (silueta de
+              "reina de enjambre", distinta del Guardián) — estática en local,
+              ya vive dentro del `group` que escala con `enemy.radius`. */}
+          {[0, 1, 2, 3, 4].map((i) => {
+            const angle = (i - 2) * 0.5;
+            return (
+              <mesh
+                key={i}
+                geometry={queenCrownSpikeGeometry}
+                material={queenCrownMaterial}
+                position={[Math.sin(angle) * 0.32, 0.55, Math.cos(angle) * 0.32]}
+                rotation-x={-0.25}
+                rotation-z={angle * 0.4}
+              />
+            );
+          })}
+
+          {/* Pulso de invocación (GDD §15.3): anillo que se expande
+              brevemente bajo los pies cada vez que suelta una oleada de
+              larvas; posición/escala reales en useFrame. */}
+          <mesh
+            ref={queenSummonPulseRef}
+            geometry={unitCircle}
+            material={queenSummonPulseMaterial}
+            rotation-x={-Math.PI / 2}
+            position={[0, -0.38, 0]}
+            visible={false}
+          />
         </>
       )}
     </group>

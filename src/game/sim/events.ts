@@ -74,7 +74,13 @@ export type GameEventType =
    * contra roca/pared (mismo `boss-telegraph`-style feedback, intensity =
    * duración del aturdimiento).
    */
-  | 'boss-barrel-charge-stun';
+  | 'boss-barrel-charge-stun'
+  /**
+   * Reina del Enjambre (GDD §15.3): invoca una oleada de larvas. intensity =
+   * nº de larvas invocadas en esta oleada (puede ser menor que
+   * QUEEN_LARVA_PER_WAVE si el cap de vivas ya estaba casi lleno).
+   */
+  | 'boss-wave-spawn';
 
 export interface GameEvent {
   type: GameEventType;

@@ -176,6 +176,22 @@ export const guardianHornGeometry = new THREE.ConeGeometry(0.32, 0.55, 6);
 /** Estrellita del aturdimiento: tetraedro minúsculo, barato, orbitando. */
 export const guardianStunStarGeometry = new THREE.TetrahedronGeometry(1, 0);
 
+// ── Reina del Enjambre (GDD §15.3, Fase B2): cuerpo propio + corona ────────
+
+/** Cuerpo de la Reina: violeta-verdoso oscuro, grande y distinto del Guardián (piedra) y del genérico de jefe. */
+export const queenBodyMaterial = new THREE.MeshLambertMaterial({ color: '#5c2a6e' });
+/** Púas de la corona: dorado-verdoso, evoca "enjambre"/insecto sin copiar el ámbar del Guardián. */
+export const queenCrownMaterial = new THREE.MeshLambertMaterial({ color: '#9fd65c' });
+/** Pulso de invocación (GDD §15.3): breve anillo verdoso que se expande al soltar una oleada de larvas. */
+export const queenSummonPulseMaterial = new THREE.MeshBasicMaterial({
+  color: '#4dd68a',
+  transparent: true,
+  opacity: 0.55,
+  depthWrite: false,
+});
+/** Púa de la corona: cono fino y alargado (silueta de insecto/enjambre), distinto del cuerno romo del Guardián. */
+export const queenCrownSpikeGeometry = new THREE.ConeGeometry(0.14, 0.5, 6);
+
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
 // silueta/color de contrato del GDD. ──────────────────────────────────────

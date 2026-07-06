@@ -34,6 +34,27 @@ import {
   GUARDIAN_SHARD_RADIUS,
   GUARDIAN_STUN_DURATION,
   GUARDIAN_TELEGRAPH_DURATION,
+  QUEEN_DAMAGE_OUTSIDE_WINDOW,
+  QUEEN_HIT_DAMAGE_CAP_FRACTION,
+  QUEEN_LARVA_CHASE_SPEED_PHASE2,
+  QUEEN_LARVA_CHASE_SPEED_PHASE3,
+  QUEEN_LARVA_HP,
+  QUEEN_LARVA_ID_PREFIX,
+  QUEEN_LARVA_MAX,
+  QUEEN_LARVA_PER_WAVE,
+  QUEEN_LARVA_RADIUS,
+  QUEEN_LARVA_SPEED,
+  QUEEN_MAX_HP,
+  QUEEN_MOVE_SPEED_PHASE1,
+  QUEEN_MOVE_SPEED_PHASE2,
+  QUEEN_MOVE_SPEED_PHASE3,
+  QUEEN_RADIUS,
+  QUEEN_TRAIL_DROP_INTERVAL,
+  QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
+  QUEEN_TRAIL_PUDDLE_LIFETIME,
+  QUEEN_TRAIL_PUDDLE_RADIUS,
+  QUEEN_WANDER_INTERVAL,
+  QUEEN_WAVE_INTERVAL,
 } from '../content/constants';
 import { applyDamageToHero, fireEnemyProjectile } from '../sim/combat';
 import { pushEvent, type EventQueue } from '../sim/events';
@@ -79,6 +100,14 @@ export interface BossDef {
   stepPattern: BossPatternStep;
   /** Se llama una vez al cruzar a fase 2 o 3 (para resetear bossStage/timers propios del patrón). */
   onPhaseChanged?: (world: World, boss: Enemy, phase: 2 | 3) => void;
+  /**
+   * Se llama una vez, justo tras construir el mundo (mismo momento que fija
+   * hp/maxHp/radius reales, ver `sim/boss.ts::initBossEnemies`). Punto de
+   * extensión para jefes que necesitan reservar estado propio en el mundo al
+   * arrancar (p.ej. la Reina del Enjambre, GDD §15.3: preasigna sus slots de
+   * larva en `world.enemies`, igual espíritu que `createProjectilePool`).
+   */
+  onInit?: (world: World, boss: Enemy) => void;
 }
 
 // ── Jefe de pruebas (Fase B0): quieto, un ataque telegrafiado simple en ────
@@ -754,6 +783,302 @@ function guardianOnPhaseChanged(world: World, boss: Enemy): void {
   dropPotionAt(world, boss.position.x, boss.position.y);
 }
 
+// ── Reina del Enjambre (GDD §15.3, Fase B2) ─────────────────────────────────
+//
+// Reuso de campos de `Enemy` (mismo espíritu que el Guardián, ver nota más
+// arriba): la Reina NUNCA pasa por `stepEnemyAi`, así que:
+// - `patrolTo`: punto de deambulación objetivo actual (elegido al azar dentro
+//   de su sala cada QUEEN_WANDER_INTERVAL, o hacia el héroe en fase 3 pánico).
+// - `bossTimer`: cuenta atrás hasta el próximo cambio de punto de deambulación.
+// - `bossCounter`: cuenta atrás (en segundos, no ticks) hasta soltar el
+//   próximo charco de rastro — comparte "reloj" con `trailDropTimer` del Trail
+//   normal en espíritu, pero como campo genérico de jefe.
+// - `bossTelegraphUntil`: reutilizado como reloj de cuenta atrás hasta la
+//   próxima oleada de larvas (QUEEN_WAVE_INTERVAL); no es un telegraph real
+//   (la Reina no tiene, GDD §15.3), pero el campo ya existe y el render lo
+//   deja en paz porque `bossId==='queen'` no dibuja el anillo genérico de
+//   telegraph (ver EnemyView.tsx: solo bossVulnerable pinta algo, y aquí es
+//   permanente).
+//
+// Larvas: NO son un `BossDef` ni un `EnemyKind` nuevo — son `Enemy` normales
+// de `kind:'dummy'` con `hp`/`radius` propios, viviendo como slots
+// PREASIGNADOS al final de `world.enemies` (ver `queenOnInit`), igual pool
+// preasignado que proyectiles/charcos. `enemy.facing` guarda su dirección de
+// avance fija (fase 1, línea recta); en fase 2/3 se recalcula cada tick
+// (persecución real) y no se usa `facing` como caché.
+
+function isQueenLarva(enemy: Enemy): boolean {
+  return enemy.id.startsWith(QUEEN_LARVA_ID_PREFIX);
+}
+
+/** Sala dueña de la Reina (multi-sala) o `world.bounds` en el modo sala única de los tests. */
+function queenRoomBounds(world: World, boss: Enemy): AABB {
+  if (boss.roomId === undefined) return world.bounds;
+  return world.roomRuntimes.get(boss.roomId)?.bounds ?? world.bounds;
+}
+
+/**
+ * Reserva `QUEEN_LARVA_MAX` slots de larva en `world.enemies`, inactivos
+ * (hp=0) hasta que una oleada los active (GDD §15.3: "invoca larvas por
+ * oleadas"). Se hace UNA vez al construir el mundo (`onInit`, llamado desde
+ * `sim/boss.ts::initBossEnemies`) para que el render (`EnemyViews`, que hace
+ * `.map` sobre `world.enemies` en el cuerpo del componente, no en useFrame)
+ * los vea desde el primer render — evita el bug de entidades que nacen sin
+ * mesh por `.push` a mitad de partida (ver nota de `BarrelViews`/`ItemViews`
+ * en AGENTS.md). `collectDeadDrops` (step.ts) los marca como "ya soltaron
+ * moneda" desde el primer tick (hp<=0 antes de activarse nunca): así, al
+ * activarse y morir de verdad más tarde, nunca sueltan moneda — cumple GDD
+ * §15.3 "sin drop de moneda" sin tocar el pipeline de drops.
+ */
+function queenOnInit(world: World, boss: Enemy): void {
+  for (let i = 0; i < QUEEN_LARVA_MAX; i++) {
+    world.enemies.push({
+      id: `${QUEEN_LARVA_ID_PREFIX}${i}`,
+      kind: 'dummy',
+      roomId: boss.roomId,
+      position: { x: boss.position.x, y: boss.position.y },
+      velocity: { x: 0, y: 0 },
+      radius: QUEEN_LARVA_RADIUS,
+      hp: 0,
+      maxHp: QUEEN_LARVA_HP,
+      patrolFrom: { x: boss.position.x, y: boss.position.y },
+      patrolTo: { x: boss.position.x, y: boss.position.y },
+      patrolForward: true,
+      chasing: false,
+      facing: { x: 0, y: 1 },
+      trailDropTimer: 0,
+      shooterPhase: 'chase',
+      shooterPhaseTimer: 0,
+      hitFlashUntil: 0,
+      spikeDamageCooldownUntil: 0,
+      knockbackUntil: 0,
+      steerBias: 0,
+      bossPhase: 1,
+      bossVulnerable: false,
+      bossDamageOutsideWindowFactor: 0,
+      bossTelegraphUntil: 0,
+      bossTelegraphKind: '',
+      bossTimer: 0,
+      bossStage: 0,
+      bossCounter: 0,
+    });
+  }
+  // Deambulación: primer objetivo válido de inmediato (evita un tick con
+  // patrolTo en su propia posición, que leería dist=0 y elegiría uno nuevo
+  // igualmente, pero así queda determinista desde el primer frame).
+  boss.bossTimer = QUEEN_WANDER_INTERVAL;
+  queenPickWanderTarget(world, boss);
+  // Vulnerable SIEMPRE (GDD §15.3: sin ventana de aturdimiento clásica) —
+  // se fija una única vez aquí, no hay ningún stage que la desactive nunca.
+  boss.bossVulnerable = true;
+}
+
+/** Nº de larvas vivas (hp>0) de ESTA Reina (cap de rendimiento, GDD §15.3/§15.6). */
+function queenLiveLarvaCount(world: World, boss: Enemy): number {
+  const enemies = world.enemies;
+  let count = 0;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (isQueenLarva(e) && e.roomId === boss.roomId && e.hp > 0) count++;
+  }
+  return count;
+}
+
+/** Elige un nuevo punto de deambulación dentro de la sala de la Reina (determinista vía world.rng). */
+function queenPickWanderTarget(world: World, boss: Enemy): void {
+  const bounds = queenRoomBounds(world, boss);
+  const margin = QUEEN_RADIUS + 0.6;
+  const minX = bounds.minX + margin;
+  const maxX = bounds.maxX - margin;
+  const minY = bounds.minY + margin;
+  const maxY = bounds.maxY - margin;
+  boss.patrolTo.x = maxX > minX ? minX + world.rng() * (maxX - minX) : (bounds.minX + bounds.maxX) / 2;
+  boss.patrolTo.y = maxY > minY ? minY + world.rng() * (maxY - minY) : (bounds.minY + bounds.maxY) / 2;
+}
+
+/** Velocidad de desplazamiento de la Reina según fase (GDD §15.3: lenta en fase 1, más movimiento en 2/3). */
+function queenMoveSpeedForPhase(phase: 1 | 2 | 3): number {
+  if (phase >= 3) return QUEEN_MOVE_SPEED_PHASE3;
+  if (phase === 2) return QUEEN_MOVE_SPEED_PHASE2;
+  return QUEEN_MOVE_SPEED_PHASE1;
+}
+
+/** Cadencia de rastro según fase (GDD §15.3: "en fase 2 el rastro se genera más rápido"). */
+function queenTrailIntervalForPhase(phase: 1 | 2 | 3): number {
+  return phase >= 2 ? QUEEN_TRAIL_DROP_INTERVAL_PHASE2 : QUEEN_TRAIL_DROP_INTERVAL;
+}
+
+/**
+ * Deambulación lenta (GDD §15.3: "se mueve poco, no es persecución, es
+ * gestión de terreno"). Fase 3 pánico: en vez de deambular al azar, el punto
+ * objetivo se re-orienta periódicamente hacia una posición que tiende a
+ * rodear al héroe (offset perpendicular a la línea Reina-héroe), leyéndose
+ * como "traza un rastro que busca envolver al jugador" sin necesitar un
+ * sistema de rastro-dirigido aparte.
+ */
+function queenStepMove(world: World, boss: Enemy, dt: number): void {
+  boss.bossTimer -= dt;
+  if (boss.bossTimer <= 0) {
+    boss.bossTimer = QUEEN_WANDER_INTERVAL;
+    if (boss.bossPhase >= 3) {
+      const dx = boss.position.x - world.hero.position.x;
+      const dy = boss.position.y - world.hero.position.y;
+      const len = Math.hypot(dx, dy) || 1;
+      // Perpendicular a la línea héroe→Reina: tiende a rodear en vez de
+      // acercarse/alejarse en línea recta, leyéndose como "envolvente".
+      const perpX = -dy / len;
+      const perpY = dx / len;
+      const bounds = queenRoomBounds(world, boss);
+      const spread = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.35;
+      const sign = world.rng() < 0.5 ? 1 : -1;
+      boss.patrolTo.x = boss.position.x + perpX * spread * sign;
+      boss.patrolTo.y = boss.position.y + perpY * spread * sign;
+      // Clampa dentro de bounds con margen (mismo margen que queenPickWanderTarget).
+      const margin = QUEEN_RADIUS + 0.6;
+      boss.patrolTo.x = Math.min(Math.max(boss.patrolTo.x, bounds.minX + margin), bounds.maxX - margin);
+      boss.patrolTo.y = Math.min(Math.max(boss.patrolTo.y, bounds.minY + margin), bounds.maxY - margin);
+    } else {
+      queenPickWanderTarget(world, boss);
+    }
+  }
+
+  const speed = queenMoveSpeedForPhase(boss.bossPhase);
+  const dx = boss.patrolTo.x - boss.position.x;
+  const dy = boss.patrolTo.y - boss.position.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.2) {
+    boss.velocity.x = 0;
+    boss.velocity.y = 0;
+    return;
+  }
+  const nx = dx / dist;
+  const ny = dy / dist;
+  boss.position.x += nx * speed * dt;
+  boss.position.y += ny * speed * dt;
+  boss.velocity.x = nx * speed;
+  boss.velocity.y = ny * speed;
+}
+
+/**
+ * Rastro permanente (GDD §15.3: "como el Trail, pero más grande y duradero,
+ * va cerrando el espacio limpio de la arena"). Reutiliza `world.puddles`
+ * (mismo pool que el Trail y las esquirlas del Guardián) con parámetros
+ * PROPIOS (QUEEN_TRAIL_PUDDLE_RADIUS/QUEEN_TRAIL_PUDDLE_LIFETIME): si el pool
+ * está lleno, no suelta charco este tick (degradación silenciosa, igual
+ * criterio que `acquirePuddle` de ai.ts) en vez de crecer el array.
+ */
+function queenStepTrail(world: World, boss: Enemy, dt: number): void {
+  boss.bossCounter -= dt;
+  if (boss.bossCounter > 0) return;
+  boss.bossCounter = queenTrailIntervalForPhase(boss.bossPhase);
+  const pool = world.puddles;
+  for (let i = 0; i < pool.length; i++) {
+    if (!pool[i].active) {
+      pool[i].active = true;
+      pool[i].position.x = boss.position.x;
+      pool[i].position.y = boss.position.y;
+      pool[i].radius = QUEEN_TRAIL_PUDDLE_RADIUS;
+      pool[i].ttl = QUEEN_TRAIL_PUDDLE_LIFETIME;
+      return;
+    }
+  }
+}
+
+/** Activa hasta `QUEEN_LARVA_PER_WAVE` slots libres (hp<=0) de larva, sin superar el cap de vivas. */
+function queenSpawnWave(world: World, boss: Enemy, events: EventQueue): void {
+  const alreadyLive = queenLiveLarvaCount(world, boss);
+  let toSpawn = Math.min(QUEEN_LARVA_PER_WAVE, QUEEN_LARVA_MAX - alreadyLive);
+  if (toSpawn <= 0) return;
+
+  const enemies = world.enemies;
+  for (let i = 0; i < enemies.length && toSpawn > 0; i++) {
+    const larva = enemies[i];
+    if (!isQueenLarva(larva) || larva.roomId !== boss.roomId || larva.hp > 0) continue;
+
+    larva.hp = QUEEN_LARVA_HP;
+    larva.maxHp = QUEEN_LARVA_HP;
+    larva.position.x = boss.position.x;
+    larva.position.y = boss.position.y;
+    larva.velocity.x = 0;
+    larva.velocity.y = 0;
+    larva.hitFlashUntil = 0;
+    larva.knockbackUntil = 0;
+
+    // Fase 1: dirección fija hacia la posición del héroe EN ESTE INSTANTE
+    // (línea recta, GDD §15.3); fase 2/3 recalculan cada tick (queenStepLarvae)
+    // y no leen `facing`, pero se fija igual por si la fase cambia después.
+    const dx = world.hero.position.x - larva.position.x;
+    const dy = world.hero.position.y - larva.position.y;
+    const len = Math.hypot(dx, dy) || 1;
+    larva.facing.x = dx / len;
+    larva.facing.y = dy / len;
+
+    toSpawn--;
+  }
+  pushEvent(events, 'boss-wave-spawn', boss.position.x, boss.position.y, QUEEN_LARVA_PER_WAVE);
+}
+
+/** Cadencia de oleadas (GDD §15.6: "oleada cada ~3s"), independiente de la cadencia del rastro. */
+function queenStepWaves(world: World, boss: Enemy, dt: number, events: EventQueue): void {
+  boss.bossTelegraphUntil -= dt;
+  if (boss.bossTelegraphUntil > 0) return;
+  boss.bossTelegraphUntil = QUEEN_WAVE_INTERVAL;
+  queenSpawnWave(world, boss, events);
+}
+
+/**
+ * Avanza el movimiento de todas las larvas vivas de la Reina un tick (paso
+ * propio simple, GDD §15.3: no pasan por `stepEnemyAi` — no tienen detección
+ * ni correa, solo avanzan hacia el héroe desde que nacen). Fase 1: línea
+ * recta (`facing` fijado al nacer). Fase 2/3: persiguen de verdad (recalculan
+ * dirección cada tick), más agresivas en fase 3 (más rápidas).
+ */
+function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
+  const chasing = boss.bossPhase >= 2;
+  const speed =
+    boss.bossPhase >= 3 ? QUEEN_LARVA_CHASE_SPEED_PHASE3 : boss.bossPhase === 2 ? QUEEN_LARVA_CHASE_SPEED_PHASE2 : QUEEN_LARVA_SPEED;
+
+  const enemies = world.enemies;
+  for (let i = 0; i < enemies.length; i++) {
+    const larva = enemies[i];
+    if (!isQueenLarva(larva) || larva.roomId !== boss.roomId || larva.hp <= 0) continue;
+
+    let dirX = larva.facing.x;
+    let dirY = larva.facing.y;
+    if (chasing) {
+      const dx = world.hero.position.x - larva.position.x;
+      const dy = world.hero.position.y - larva.position.y;
+      const len = Math.hypot(dx, dy) || 1;
+      dirX = dx / len;
+      dirY = dy / len;
+      larva.facing.x = dirX;
+      larva.facing.y = dirY;
+    }
+
+    larva.position.x += dirX * speed * dt;
+    larva.position.y += dirY * speed * dt;
+    larva.velocity.x = dirX * speed;
+    larva.velocity.y = dirY * speed;
+  }
+}
+
+function queenStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
+  // Vulnerable SIEMPRE (GDD §15.3): no hay stage que lo desactive nunca, pero
+  // se reafirma cada tick por si algún día un stepPattern futuro lo tocara.
+  boss.bossVulnerable = true;
+
+  queenStepMove(world, boss, dt);
+  queenStepTrail(world, boss, dt);
+  queenStepWaves(world, boss, dt, events);
+  queenStepLarvae(world, boss, dt);
+}
+
+function queenOnPhaseChanged(world: World, boss: Enemy): void {
+  // Igual criterio que el Guardián (GDD §15.2): sostiene la pelea larga y
+  // premia el progreso con una poción en el punto del cambio de fase.
+  dropPotionAt(world, boss.position.x, boss.position.y);
+}
+
 export const BOSS_DEFS: Record<BossId, BossDef> = {
   'test-boss': {
     id: 'test-boss',
@@ -772,6 +1097,21 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     damageOutsideWindow: 0,
     stepPattern: guardianStepPattern,
     onPhaseChanged: guardianOnPhaseChanged,
+  },
+  queen: {
+    id: 'queen',
+    name: 'Reina del Enjambre',
+    maxHp: QUEEN_MAX_HP,
+    radius: QUEEN_RADIUS,
+    hitDamageCapFraction: QUEEN_HIT_DAMAGE_CAP_FRACTION,
+    // Vulnerable SIEMPRE (GDD §15.3/§15.6: "permanente, sin aturdimiento"):
+    // factor 1 = daño normal en todo momento; `queenOnInit` además fija
+    // `bossVulnerable=true` de una vez, así que este factor es en la práctica
+    // un cinturón de seguridad (combat.ts solo lo consulta si !bossVulnerable).
+    damageOutsideWindow: QUEEN_DAMAGE_OUTSIDE_WINDOW,
+    stepPattern: queenStepPattern,
+    onPhaseChanged: queenOnPhaseChanged,
+    onInit: queenOnInit,
   },
 };
 
