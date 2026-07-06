@@ -199,9 +199,13 @@ export const GUARDIAN_CHARGE_SPEED = 7.5;
 export const GUARDIAN_CHARGE_MAX_DURATION = 2.5;
 /** Aturdimiento tras chocar contra roca/pared: su ventana de vulnerabilidad (GDD §15.6). */
 export const GUARDIAN_STUN_DURATION = 1.4;
-/** Daño de la carga al golpear al héroe, fase 1 (GDD §15.6: 2 → 3 en fases posteriores). */
-export const GUARDIAN_CHARGE_DAMAGE_PHASE1 = 2;
-export const GUARDIAN_CHARGE_DAMAGE_PHASE3 = 3;
+/**
+ * Daño de la carga al golpear al héroe, fases 1-2 (GDD §15.6: bajado de 2→1
+ * tras playtest 2026-07-06; fase 3 baja igualmente de 3→2). El techo de daño
+ * de jefe (GUARDIAN_HIT_DAMAGE_CAP_FRACTION) sigue aplicando por encima.
+ */
+export const GUARDIAN_CHARGE_DAMAGE_PHASE1 = 1;
+export const GUARDIAN_CHARGE_DAMAGE_PHASE3 = 2;
 /** Empujón fuerte al héroe si la carga le golpea (u/s). */
 export const GUARDIAN_CHARGE_KNOCKBACK_SPEED = 6.5;
 /** Cooldown de patrulla tras recuperarse del aturdimiento antes de poder detectar de nuevo (s). */
@@ -227,6 +231,20 @@ export const GUARDIAN_SHARD_LIFETIME = 2.0;
 export const GUARDIAN_HIT_DAMAGE_CAP_FRACTION: [number, number, number] = [0.6, 0.65, 0.7];
 /** Radio de colisión del Guardián: cuerpo grande y pesado (frente a ENEMY_RADIUS=0.4). */
 export const GUARDIAN_RADIUS = 0.62;
+
+/**
+ * Barriles rodantes del Guardián (GDD §15.2, playtest 2026-07-06): cadencia
+ * de aparición perimetral, aturdimiento largo si la carga arrolla uno, y cap
+ * de barriles vivos simultáneos (evita saturar la arena).
+ */
+export const GUARDIAN_BARREL_SPAWN_INTERVAL = 8;
+/** Aturdimiento si la carga arrolla un barril rodante (vs GUARDIAN_STUN_DURATION normal de 1.4s). */
+export const GUARDIAN_BARREL_STUN_DURATION = 2.2;
+export const GUARDIAN_BARREL_MAX_ACTIVE = 3;
+/** Margen respecto a la pared/roca al elegir un punto perimetral para el barril (evita clipping). */
+export const GUARDIAN_BARREL_WALL_MARGIN = 0.6;
+/** Radio del barril rodante: mismo tamaño que el barril estándar de sala (0.8×0.8 → radio 0.4). */
+export const GUARDIAN_BARREL_RADIUS = 0.4;
 
 // ── Mundo y run ───────────────────────────────────────────────────────────
 

@@ -51,7 +51,21 @@ export type GameEventType =
    * punto donde una carga choca contra roca/pared. intensity = radio del
    * campo (u).
    */
-  | 'boss-shard-burst';
+  | 'boss-shard-burst'
+  /**
+   * Guardián de Canto (GDD §15.2, playtest 2026-07-06): aparece un barril
+   * rodante en el perímetro de la arena. Aviso visual de aparición.
+   */
+  | 'boss-barrel-spawn'
+  /**
+   * Guardián de Canto (GDD §15.2): su carga arrolla un barril rodante — el
+   * barril explota (daño normal + shockwave, ya cubierto por
+   * 'barrel-explosion') y el Guardián queda aturdido más tiempo de lo normal.
+   * Evento propio para diferenciar el aturdimiento largo del choque normal
+   * contra roca/pared (mismo `boss-telegraph`-style feedback, intensity =
+   * duración del aturdimiento).
+   */
+  | 'boss-barrel-charge-stun';
 
 export interface GameEvent {
   type: GameEventType;

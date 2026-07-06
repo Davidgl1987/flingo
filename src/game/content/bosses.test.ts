@@ -9,11 +9,23 @@
 
 import { describe, expect, it } from 'vitest';
 import bossGuardianJson from '../../levels/boss-guardian.json';
-import { GUARDIAN_CHARGE_DAMAGE_PHASE1, GUARDIAN_MAX_HP, GUARDIAN_RADIUS } from './constants';
+import {
+  BARREL_DAMAGE,
+  GUARDIAN_BARREL_MAX_ACTIVE,
+  GUARDIAN_BARREL_SPAWN_INTERVAL,
+  GUARDIAN_BARREL_STUN_DURATION,
+  GUARDIAN_CHARGE_DAMAGE_PHASE1,
+  GUARDIAN_CHARGE_DAMAGE_PHASE3,
+  GUARDIAN_MAX_HP,
+  GUARDIAN_RADIUS,
+  GUARDIAN_STUN_DURATION,
+  HERO_RADIUS,
+} from './constants';
 import { getBossDef } from './bosses';
 import { initBossEnemies, stepBosses } from '../sim/boss';
 import { applyDamageToEnemy } from '../sim/combat';
 import { createEventQueue, drainEvents, type GameEvent } from '../sim/events';
+import { stepHeroPhysics } from '../sim/physics';
 import { parseRoomData } from '../sim/room-format';
 import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '../sim/world';
 import { createWorld } from '../sim/world';
@@ -187,7 +199,10 @@ describe('Guardián: ciclo patrulla → telegraph → carga → choque → aturd
 });
 
 describe('Guardián: carga contra el héroe', () => {
-  it('la carga que golpea al héroe hace GUARDIAN_CHARGE_DAMAGE_PHASE1 (2) de daño y lo empuja', () => {
+  it('la carga que golpea al héroe hace 1 de daño en fases 1-2 (GDD §15.6, bajado de 2 tras playtest 2026-07-06) y lo empuja', () => {
+    // El valor literal es parte del contrato de tuning del GDD §15.6.
+    expect(GUARDIAN_CHARGE_DAMAGE_PHASE1).toBe(1);
+
     const world = makeGuardianWorld();
     const events = createEventQueue(64);
     const boss = world.enemies[0];
@@ -204,10 +219,32 @@ describe('Guardián: carga contra el héroe', () => {
     const hpBefore = world.hero.hp;
     advance(world, events, 120); // agota telegraph y avanza la carga hasta el impacto
 
-    expect(world.hero.hp).toBe(hpBefore - GUARDIAN_CHARGE_DAMAGE_PHASE1);
+    expect(world.hero.hp).toBe(hpBefore - 1);
     expect(collectTypes(events)).toContain('player-damaged');
     // Empujón fuerte: el héroe sale despedido en la dirección de la carga (+y).
     expect(world.hero.velocity.y).toBeGreaterThan(0);
+  });
+
+  it('la carga hace 2 de daño en fase 3 (GDD §15.6, bajado de 3 tras playtest 2026-07-06)', () => {
+    expect(GUARDIAN_CHARGE_DAMAGE_PHASE3).toBe(2);
+
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    boss.hp = Math.floor(boss.maxHp * 0.2); // fuerza fase 3
+    boss.bossPhase = 3;
+    world.hero.position.x = 0;
+    world.hero.position.y = 2;
+    boss.position.x = 0;
+    boss.position.y = 0;
+    boss.bossStage = 1;
+    boss.bossTelegraphUntil = world.time + 0.8;
+    boss.bossTimer = 0.8;
+
+    const hpBefore = world.hero.hp;
+    advance(world, events, 120);
+
+    expect(world.hero.hp).toBe(hpBefore - 2);
   });
 
   it('nunca hace un golpe letal a vida llena (techo de daño de jefe, GDD §15.1 punto 6)', () => {
@@ -393,5 +430,198 @@ describe('Guardián: radio real de jefe (regresión B1)', () => {
   it('initBossEnemies aplica GUARDIAN_RADIUS (colisión y render escalan con él)', () => {
     const world = makeGuardianWorld();
     expect(world.enemies[0].radius).toBeCloseTo(GUARDIAN_RADIUS, 6);
+  });
+});
+
+// ── B1.5: barriles rodantes (GDD §15.2, playtest 2026-07-06) ────────────────
+
+/** Barriles vivos (sin explotar) del mundo de test (sala única: roomId undefined en todos). */
+function liveBarrels(world: ReturnType<typeof createWorld>) {
+  return world.barrels.filter((b) => !b.exploded);
+}
+
+describe('Guardián: aparición periódica de barriles rodantes (GDD §15.2)', () => {
+  it('aparece un barril por slot de GUARDIAN_BARREL_SPAWN_INTERVAL, con evento boss-barrel-spawn y en el perímetro', () => {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100; // lejos: solo patrulla, sin cargas que detonen barriles
+    world.hero.position.y = 100;
+
+    advance(world, events, 1); // primer tick: cruza el slot 0 → primer barril
+    expect(liveBarrels(world).length).toBe(1);
+    expect(collectTypes(events)).toContain('boss-barrel-spawn');
+
+    // El barril aparece en el perímetro (a ≤1u de alguna pared), no en medio de la arena.
+    const barrel = liveBarrels(world)[0];
+    const halfW = world.bounds.maxX;
+    const distToWall = Math.min(
+      halfW - Math.abs(barrel.position.x),
+      halfW - Math.abs(barrel.position.y),
+    );
+    expect(distToWall).toBeLessThanOrEqual(1);
+
+    // Antes del siguiente slot (~8s) no aparece otro.
+    const intervalTicks = Math.round(GUARDIAN_BARREL_SPAWN_INTERVAL / FIXED_DT);
+    advance(world, events, intervalTicks - 60); // hasta ~1s antes del slot
+    expect(liveBarrels(world).length).toBe(1);
+
+    // Cruzado el slot: segundo barril.
+    advance(world, events, 120); // ~1s después del slot
+    expect(liveBarrels(world).length).toBe(2);
+  });
+
+  it('respeta el cap GUARDIAN_BARREL_MAX_ACTIVE de barriles vivos simultáneos', () => {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+
+    // ~50s = 6 slots de 8s: sin cap habría 6+ barriles.
+    advance(world, events, 3000);
+    expect(liveBarrels(world).length).toBe(GUARDIAN_BARREL_MAX_ACTIVE);
+    // Y el array no crece sin límite (los slots se reutilizan, patrón dropCoinAt).
+    expect(world.barrels.length).toBe(GUARDIAN_BARREL_MAX_ACTIVE);
+  });
+});
+
+describe('Guardián: carga que arrolla un barril (GDD §15.2)', () => {
+  /** Mundo con el Guardián telegrafiando una carga hacia el este y un barril vivo plantado en su trayectoria. */
+  function setupChargeIntoBarrel() {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    world.barrels.push({ id: 'barrel-in-path', position: { x: 3, y: 0 }, radius: 0.4, exploded: false });
+
+    boss.bossStage = 1; // GUARDIAN_STAGE_TELEGRAPH
+    boss.bossTelegraphUntil = world.time + 0.8;
+    boss.bossTimer = 0.8;
+    world.hero.position.x = 10; // fija la dirección de carga (este), lejos del blast
+    world.hero.position.y = 0;
+    return { world, events, boss };
+  }
+
+  it('explota el barril y el Guardián recibe BARREL_DAMAGE SIN gating de ventana (su castigo)', () => {
+    const { world, events, boss } = setupChargeIntoBarrel();
+
+    advanceUntil(world, events, () => boss.bossVulnerable);
+
+    const barrel = world.barrels.find((b) => b.id === 'barrel-in-path')!;
+    expect(barrel.exploded).toBe(true);
+    // No estaba en ventana al arrollarlo (venía cargando): sin el bypass el
+    // daño sería 0 (damageOutsideWindow=0). Debe ser exactamente BARREL_DAMAGE.
+    expect(boss.hp).toBe(GUARDIAN_MAX_HP - BARREL_DAMAGE);
+    const types = collectTypes(events);
+    expect(types).toContain('barrel-explosion');
+    expect(types).toContain('boss-barrel-charge-stun');
+  });
+
+  it('queda aturdido GUARDIAN_BARREL_STUN_DURATION (~2.2s), más que el aturdimiento normal de 1.4s', () => {
+    expect(GUARDIAN_BARREL_STUN_DURATION).toBeGreaterThan(GUARDIAN_STUN_DURATION);
+
+    const { world, events, boss } = setupChargeIntoBarrel();
+    advanceUntil(world, events, () => boss.bossVulnerable);
+    expect(boss.bossStage).toBe(3); // GUARDIAN_STAGE_STUNNED
+    expect(boss.bossTimer).toBeCloseTo(GUARDIAN_BARREL_STUN_DURATION, 6);
+
+    // Pasado el aturdimiento NORMAL (1.4s) sigue vulnerable: es el largo.
+    advance(world, events, 90); // 1.5s
+    expect(boss.bossVulnerable).toBe(true);
+
+    // Y pasado el largo (2.2s en total), se cierra.
+    advance(world, events, 60); // total 2.5s
+    expect(boss.bossVulnerable).toBe(false);
+  });
+});
+
+describe('Guardián: poción de recompensa al cambiar de fase (GDD §15.2)', () => {
+  it('suelta 1 poción al cruzar a fase 2 y otra al cruzar a fase 3 (2 en total, sin repetir)', () => {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    world.hero.position.x = 100; // lejos: no recoge nada ni provoca cargas
+    world.hero.position.y = 100;
+
+    const activePotions = () => world.items.filter((i) => i.active && i.kind === 'potion');
+    expect(activePotions().length).toBe(0);
+
+    // Cruza a fase 2 (≤66%).
+    boss.hp = Math.floor(boss.maxHp * 0.6);
+    advance(world, events, 1);
+    expect(boss.bossPhase).toBe(2);
+    expect(activePotions().length).toBe(1);
+    // La suelta en su posición (el punto del cambio).
+    const potion1 = activePotions()[0];
+    expect(Math.hypot(potion1.position.x - boss.position.x, potion1.position.y - boss.position.y)).toBeLessThan(0.1);
+    expect(collectTypes(events)).toContain('boss-phase-changed');
+
+    // Cruza a fase 3 (≤33%).
+    boss.hp = Math.floor(boss.maxHp * 0.2);
+    advance(world, events, 1);
+    expect(boss.bossPhase).toBe(3);
+    expect(activePotions().length).toBe(2);
+
+    // Sin más cruces no hay más pociones (el cambio de fase es de una sola vez).
+    advance(world, events, 120);
+    expect(activePotions().length).toBe(2);
+  });
+});
+
+describe('boss-guardian.json: regla anti-trampa de arena (GDD §15.2)', () => {
+  /**
+   * Radio máximo de un círculo capaz de atravesar el hueco diagonal entre la
+   * esquina exterior de una roca y la esquina de la sala (centro pegado a las
+   * dos paredes: c = esquina − r; toca la esquina de la roca cuando
+   * (g − r)·√2 = r, con g = holgura por eje). Debe ser MENOR que el radio del
+   * héroe: ni el héroe (0.38) ni el Guardián (0.62) caben — "o caben los dos,
+   * o no cabe ninguno".
+   */
+  function maxRadiusThroughCornerPocket(gap: number): number {
+    return (gap * Math.SQRT2) / (1 + Math.SQRT2);
+  }
+
+  it('ningún hueco roca-esquina es transitable para el héroe (y por tanto tampoco asimétrico)', () => {
+    const room = parseRoomData(bossGuardianJson).room!;
+    const halfW = room.width / 2;
+    const halfH = room.height / 2;
+
+    for (const rock of room.hazards) {
+      const gapX = halfW - (Math.abs(rock.position.x) + rock.width / 2);
+      const gapY = halfH - (Math.abs(rock.position.y) + rock.height / 2);
+      // Las rocas de esquina son simétricas: misma holgura en ambos ejes.
+      expect(gapX).toBeCloseTo(gapY, 6);
+      expect(maxRadiusThroughCornerPocket(gapX)).toBeLessThan(HERO_RADIUS);
+    }
+    // El Guardián es más grande que el héroe: si el héroe no cabe, él tampoco.
+    expect(GUARDIAN_RADIUS).toBeGreaterThan(HERO_RADIUS);
+  });
+
+  it('en modo sala única los huecos de puerta están sellados: héroe empujado contra cada puerta no sale de bounds', () => {
+    const room = parseRoomData(bossGuardianJson).room!;
+    const world = createWorld(room);
+    initBossEnemies(world);
+    const events = createEventQueue(64);
+
+    const outward: Record<string, { x: number; y: number }> = {
+      north: { x: 0, y: -1 },
+      south: { x: 0, y: 1 },
+      west: { x: -1, y: 0 },
+      east: { x: 1, y: 0 },
+    };
+
+    for (const slot of room.doorSlots) {
+      const dir = outward[slot.side];
+      // Héroe plantado en el centro del hueco de puerta, empujado hacia fuera
+      // durante 4s a tope de velocidad (la fricción no importa: se re-imprime
+      // la velocidad cada tick, peor caso que cualquier knockback real).
+      world.hero.position.x = dir.x * (world.bounds.maxX - 1) + (dir.x === 0 ? slot.offset : 0);
+      world.hero.position.y = dir.y * (world.bounds.maxY - 1) + (dir.y === 0 ? slot.offset : 0);
+      for (let i = 0; i < 240; i++) {
+        world.hero.velocity.x = dir.x * 50; // clampado a MAX_SPEED dentro de stepHeroPhysics
+        world.hero.velocity.y = dir.y * 50;
+        stepHeroPhysics(world, events);
+      }
+      expect(Math.abs(world.hero.position.x)).toBeLessThanOrEqual(world.bounds.maxX - HERO_RADIUS + 1e-9);
+      expect(Math.abs(world.hero.position.y)).toBeLessThanOrEqual(world.bounds.maxY - HERO_RADIUS + 1e-9);
+    }
   });
 });

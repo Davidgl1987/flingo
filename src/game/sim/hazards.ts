@@ -207,7 +207,15 @@ export function stepPuddles(world: World, dt: number, events: EventQueue): void 
 
 // ── Barriles ───────────────────────────────────────────────────────────────
 
-function explodeBarrel(world: World, barrel: Barrel, events: EventQueue): void {
+/**
+ * `ignoreBossWindow` (GDD §15.2, playtest 2026-07-06): cuando la carga a
+ * ciegas de un jefe (Guardián) arrolla el barril, el daño a ESE jefe se
+ * aplica siempre — "es su castigo" — sin el gating normal de ventana de
+ * vulnerabilidad. No afecta al daño al héroe ni a otros enemigos/barriles en
+ * la cadena. Por defecto false (comportamiento existente intacto para
+ * cualquier otro disparador de la explosión).
+ */
+export function explodeBarrel(world: World, barrel: Barrel, events: EventQueue, ignoreBossWindow = false): void {
   if (barrel.exploded) return;
   barrel.exploded = true;
   pushEvent(events, 'barrel-explosion', barrel.position.x, barrel.position.y, BARREL_BLAST_RADIUS);
@@ -226,7 +234,7 @@ function explodeBarrel(world: World, barrel: Barrel, events: EventQueue): void {
     const dy = enemy.position.y - barrel.position.y;
     const dist = Math.hypot(dx, dy);
     if (dist <= BARREL_BLAST_RADIUS) {
-      applyDamageToEnemy(world, enemy, BARREL_DAMAGE, dx || 1, dy, events);
+      applyDamageToEnemy(world, enemy, BARREL_DAMAGE, dx || 1, dy, events, ignoreBossWindow && enemy.kind === 'boss');
     }
   }
 
@@ -236,7 +244,7 @@ function explodeBarrel(world: World, barrel: Barrel, events: EventQueue): void {
     if (other === barrel || other.exploded) continue;
     const dist = Math.hypot(other.position.x - barrel.position.x, other.position.y - barrel.position.y);
     if (dist <= BARREL_BLAST_RADIUS) {
-      explodeBarrel(world, other, events);
+      explodeBarrel(world, other, events, ignoreBossWindow);
     }
   }
 }

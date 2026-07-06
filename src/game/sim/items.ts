@@ -28,6 +28,30 @@ export function dropCoinAt(world: World, x: number, y: number): void {
   });
 }
 
+/**
+ * Activa una poción suelta en la posición dada (GDD §15.2: el Guardián suelta
+ * una al cruzar a fase 2 y a fase 3). Mismo patrón que `dropCoinAt`: reutiliza
+ * un slot inactivo del pool de items si lo hay, si no añade uno nuevo (evento
+ * raro, no hot path).
+ */
+export function dropPotionAt(world: World, x: number, y: number): void {
+  for (let i = 0; i < world.items.length; i++) {
+    const item = world.items[i];
+    if (!item.active && item.kind === 'potion') {
+      item.active = true;
+      item.position.x = x;
+      item.position.y = y;
+      return;
+    }
+  }
+  world.items.push({
+    id: `potion-drop-${world.items.length}-${Math.floor(world.time * 1000)}`,
+    kind: 'potion',
+    position: { x, y },
+    active: true,
+  });
+}
+
 function tryPickup(world: World, item: Item, events: EventQueue): void {
   const hero = world.hero;
   const dx = hero.position.x - item.position.x;

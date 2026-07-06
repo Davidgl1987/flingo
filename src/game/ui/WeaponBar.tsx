@@ -45,6 +45,14 @@ function cooldownProgress(session: GameSession, mode: WeaponMode): number {
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
 
+/** true si el foco actual está en un campo de texto editable (inputs del editor): el atajo de teclado no debe robarle las teclas 1/2/3. */
+function isTypingInTextField(): boolean {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement)) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
+
 export function WeaponBar({ session }: { session: GameSession }) {
   const [active, setActive] = useState<WeaponMode>(session.world.hero.weaponMode);
   const overlayRefs = useRef<(HTMLDivElement | null)[]>([null, null, null]);
@@ -70,6 +78,39 @@ export function WeaponBar({ session }: { session: GameSession }) {
     session.world.hero.weaponMode = mode;
     setActive(mode);
   };
+
+  // Comodidad de PC/playtest (GDD §3): teclas 1/2/3 seleccionan directamente
+  // y la rueda del ratón cicla entre las 3 (arriba = anterior, abajo =
+  // siguiente). Mismo camino de selección que los botones (`select`), así
+  // que WeaponBar refleja el cambio igual en ambos casos. El teclado sigue
+  // sin ser necesario para jugar (sin romper táctil): son listeners extra en
+  // window, no sustituyen a los botones.
+  useEffect(() => {
+    const KEY_TO_MODE: Record<string, WeaponMode> = { '1': 'body', '2': 'arrow', '3': 'spell' };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingInTextField()) return;
+      if (session.world.phase !== 'playing') return;
+      const mode = KEY_TO_MODE[e.key];
+      if (mode) select(mode);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (isTypingInTextField()) return;
+      if (session.world.phase !== 'playing') return;
+      const currentIndex = MODES.findIndex((m) => m.mode === session.world.hero.weaponMode);
+      const step = e.deltaY > 0 ? 1 : -1; // abajo = siguiente, arriba = anterior
+      const nextIndex = (currentIndex + step + MODES.length) % MODES.length;
+      select(MODES[nextIndex].mode);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('wheel', onWheel, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('wheel', onWheel);
+    };
+  }, [session]);
 
   return (
     <div className="weapon-bar">

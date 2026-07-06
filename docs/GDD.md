@@ -39,7 +39,7 @@ No hay turnos: el mundo es en tiempo real. Los enemigos se mueven siempre, tambi
 - **Indicador de puntería:** mientras arrastras se ve la dirección y la fuerza (línea/puntos de trayectoria + intensidad). Debe leerse bien bajo el dedo en móvil.
 - **Soltar fuera / gesto de cancelar:** anula el tiro sin coste.
 - **Se puede apuntar y disparar en movimiento** (los modos de disparo con proyectil no requieren estar parado; el lanzamiento corporal tampoco, aunque en la práctica encadena la nueva velocidad).
-- **Selector de modo de arma:** 3 botones grandes en la parte inferior (cuerpo / flecha / hechizo), cada uno con su barra de recarga visible.
+- **Selector de modo de arma:** 3 botones grandes en la parte inferior (cuerpo / flecha / hechizo), cada uno con su barra de recarga visible. En escritorio, además: teclas **1/2/3** y **rueda del ratón** (cicla entre armas) — el teclado sigue sin ser necesario para jugar, es comodidad de PC/playtest.
 - **Pausa:** botón en esquina superior. La pausa muestra las mejoras acumuladas y una leyenda del juego.
 - Sin teclado: el juego debe ser 100% jugable táctil. Ratón funciona igual que el dedo.
 
@@ -289,7 +289,9 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 
 *Enseña el pilar más antiguo del juego llevado al extremo: rebotes y embestida como arma principal.*
 
-- **Arena:** sala grande y cuadrada, cuatro rocas grandes, una en cada esquina. Sin fosos: el choque debe sentirse limpio y legible, sin ruido añadido.
+- **Arena:** sala grande y cuadrada, cuatro rocas grandes, una en cada esquina. Sin fosos: el choque debe sentirse limpio y legible, sin ruido añadido. **Regla anti-trampa:** ningún hueco de la arena (roca-muro, hueco de puerta) puede ser transitable para el héroe e intransitable para el Guardián — o caben los dos, o no cabe ninguno.
+- **Barriles rodantes (playtest 2026-07-06):** cada ~8 s aparece un barril en un punto del perímetro (con aviso visual de aparición). Si la carga del Guardián lo arrolla, explota: daño al jefe y **aturdimiento largo** (~2.2 s en vez de 1.4). Colocarte para que su carga cruce el barril es la jugada inteligente — la carga es a ciegas, el Guardián NO esquiva barriles (a diferencia de los enemigos normales).
+- **Vida de recompensa:** al cruzar a fase 2 y a fase 3, el Guardián suelta una poción en el punto del cambio — sostiene la pelea larga y premia el progreso.
 - **Comportamiento base:** patrulla despacio por el perímetro. Cuando el héroe entra en su rango medio, se prepara (brilla y vibra ~0.8 s: el aviso) y luego **carga en línea recta** a gran velocidad hacia la última posición vista del héroe.
   - Si la carga golpea una roca o una pared: el Guardián queda **aturdido ~1.4 s** — su ventana de vulnerabilidad.
   - Si la carga golpea al héroe: empujón fuerte + daño (por debajo del techo de un golpe, nunca letal a vida llena).
@@ -345,7 +347,7 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 
 | Jefe | Vida | Daño de golpe (fase 1 → 3) | Ventana de vulnerabilidad | Ritmo de patrón |
 |---|---|---|---|---|
-| Guardián de Canto | 40 | 2 → 3 (empuje de carga) | ~1.4 s tras chocar | carga cada ~2.5 s, encadenada en fase 2 |
+| Guardián de Canto | 40 | 1 → 2 (empuje de carga; bajado de 2→3 tras playtest 2026-07-06) | ~1.4 s tras chocar (~2.2 s si arrolla un barril) | carga cada ~2.5 s, encadenada en fase 2; barril perimetral cada ~8 s |
 | Reina del Enjambre | 55 | sin ataque directo fuerte; larvas 1 daño de contacto | permanente (sin aturdimiento) | oleada cada ~3 s, rastro continuo |
 | El Prisma | 45 | 1–2 según modo | fin de cada ataque + color correcto | modo cada ~6 s (→ ~4 s en fase 3), solapes en fase 3 |
 | La Tormenta | 40 | 1 por bala | recarga ~1.2 s tras cada patrón | patrón cada ~4 s; balas ≤ 4.5 u/s |

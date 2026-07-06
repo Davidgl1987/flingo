@@ -276,6 +276,12 @@ function stepEnemyProjectileCollision(world: World, p: Projectile, events: Event
  * leído como escalar plano del propio Enemy — mantiene esta función y todo
  * `sim/combat.ts` ajenos a `content/bosses.ts` (evita un ciclo de imports;
  * ver nota de diseño en `sim/boss.ts`).
+ *
+ * `ignoreVulnerabilityWindow` (GDD §15.2, playtest 2026-07-06): el Guardián
+ * arrollando su propio barril rodante es "su castigo" por cargar a ciegas —
+ * el daño se aplica SIEMPRE, incluso fuera de ventana. Únicamente
+ * `content/bosses.ts::guardianStepPattern` lo usa; por defecto false
+ * (comportamiento existente intacto para el resto de llamadores).
  */
 export function applyDamageToEnemy(
   world: World,
@@ -284,9 +290,10 @@ export function applyDamageToEnemy(
   impulseX: number,
   impulseY: number,
   events: EventQueue,
+  ignoreVulnerabilityWindow = false,
 ): void {
   if (enemy.hp <= 0) return;
-  if (enemy.kind === 'boss' && !enemy.bossVulnerable) {
+  if (enemy.kind === 'boss' && !enemy.bossVulnerable && !ignoreVulnerabilityWindow) {
     damage = Math.floor(damage * enemy.bossDamageOutsideWindowFactor);
     if (damage <= 0) return;
   }

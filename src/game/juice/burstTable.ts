@@ -62,6 +62,14 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // estallido de esquirlas más grande/anguloso en el punto de impacto.
   'boss-charge-dust': { color: '#8d8367', size: 0.07, count: 3, life: 0.35, speed: 0.6, trauma: 0 },
   'boss-shard-burst': { color: '#c9c2a8', size: 0.1, count: 16, life: 0.4, speed: 2.8, trauma: 0.18 },
+  // Barriles rodantes (playtest 2026-07-06): aviso de aparición discreto (el
+  // propio barril, ya con su silueta reconocible vía BarrelViews, es el aviso
+  // principal; este burst solo puntúa el instante en que aparece).
+  'boss-barrel-spawn': { color: '#ff9f45', size: 0.09, count: 10, life: 0.35, speed: 1.6, trauma: 0.08 },
+  // Arrollar un barril con la carga ya dispara 'barrel-explosion' (su propio
+  // burst grande); este evento es puramente informativo para juice/HUD sobre
+  // el aturdimiento largo, sin burst propio (NONE) para no duplicar partículas.
+  'boss-barrel-charge-stun': NONE,
 };
 
 /** Color de burst específico por tipo de objeto recogido (label del evento 'item-pickup'), GDD §12: dorado/rosa/azul. */

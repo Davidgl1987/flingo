@@ -10,6 +10,11 @@
  */
 
 import {
+  GUARDIAN_BARREL_MAX_ACTIVE,
+  GUARDIAN_BARREL_RADIUS,
+  GUARDIAN_BARREL_SPAWN_INTERVAL,
+  GUARDIAN_BARREL_STUN_DURATION,
+  GUARDIAN_BARREL_WALL_MARGIN,
   GUARDIAN_CHARGE_DAMAGE_PHASE1,
   GUARDIAN_CHARGE_DAMAGE_PHASE3,
   GUARDIAN_CHARGE_KNOCKBACK_SPEED,
@@ -31,6 +36,8 @@ import {
 } from '../content/constants';
 import { applyDamageToHero, fireEnemyProjectile } from '../sim/combat';
 import { pushEvent, type EventQueue } from '../sim/events';
+import { explodeBarrel } from '../sim/hazards';
+import { dropPotionAt } from '../sim/items';
 import type { AABB, BossId, Enemy, World } from '../sim/world';
 
 /**
@@ -167,6 +174,10 @@ function testBossStepPattern(world: World, boss: Enemy, dt: number, events: Even
 // - `patrolTo`: siguiente esquina objetivo de la patrulla perimetral
 //   (recorrido cíclico de las 4 esquinas de la sala, no ida/vuelta).
 //   `patrolFrom` no se usa.
+// Los barriles rodantes (GDD §15.2, playtest 2026-07-06) NO necesitan estado
+// propio en el Guardián: la cadencia de aparición se deriva sin estado del
+// "slot" de world.time (mismo truco que GUARDIAN_DUST_INTERVAL más abajo),
+// y el barril en sí vive en `world.barrels` (pool genérico, ver hazards.ts).
 // - `bossTimer`: cuenta atrás del stage actual (telegraph/pausa/duración
 //   máxima de carga de seguridad/pausa de recuperación).
 // - `bossStage`: GUARDIAN_STAGE_* de abajo.
@@ -260,6 +271,100 @@ function guardianHitsSolid(world: World, boss: Enemy, x: number, y: number): boo
   return false;
 }
 
+/** Nº de barriles rodantes vivos (sin explotar) de la sala del Guardián (GDD §15.2: cap `GUARDIAN_BARREL_MAX_ACTIVE`). */
+function guardianLiveBarrelCount(world: World, boss: Enemy): number {
+  const barrels = world.barrels;
+  let count = 0;
+  for (let i = 0; i < barrels.length; i++) {
+    if (!barrels[i].exploded && barrels[i].roomId === boss.roomId) count++;
+  }
+  return count;
+}
+
+/**
+ * Punto perimetral aleatorio (RNG de la sim, determinista) para la aparición
+ * de un barril rodante: uno de los 4 lados de la sala del Guardián, con
+ * margen respecto a pared/rocas (GUARDIAN_BARREL_WALL_MARGIN) para que no
+ * aparezca clipeado ni dentro de un obstáculo.
+ */
+function guardianRandomPerimeterPoint(world: World, boss: Enemy): { x: number; y: number } {
+  const bounds = guardianRoomBounds(world, boss);
+  const margin = GUARDIAN_BARREL_WALL_MARGIN;
+  const side = Math.floor(world.rng() * 4);
+  const along = world.rng();
+  switch (side) {
+    case 0: // norte
+      return { x: bounds.minX + margin + along * (bounds.maxX - bounds.minX - 2 * margin), y: bounds.minY + margin };
+    case 1: // sur
+      return { x: bounds.minX + margin + along * (bounds.maxX - bounds.minX - 2 * margin), y: bounds.maxY - margin };
+    case 2: // oeste
+      return { x: bounds.minX + margin, y: bounds.minY + margin + along * (bounds.maxY - bounds.minY - 2 * margin) };
+    default: // este
+      return { x: bounds.maxX - margin, y: bounds.minY + margin + along * (bounds.maxY - bounds.minY - 2 * margin) };
+  }
+}
+
+/**
+ * Activa un barril rodante en un slot ya explotado del pool (reutiliza,
+ * mismo patrón que `dropCoinAt`/`dropPotionAt` de sim/items.ts) o añade uno
+ * nuevo si no hay ninguno libre (evento raro, cada ~8s, no hot path).
+ */
+function guardianSpawnBarrel(world: World, boss: Enemy, events: EventQueue): void {
+  const point = guardianRandomPerimeterPoint(world, boss);
+  const barrels = world.barrels;
+  for (let i = 0; i < barrels.length; i++) {
+    if (barrels[i].exploded) {
+      barrels[i].exploded = false;
+      barrels[i].position.x = point.x;
+      barrels[i].position.y = point.y;
+      pushEvent(events, 'boss-barrel-spawn', point.x, point.y, 1);
+      return;
+    }
+  }
+  barrels.push({
+    id: `guardian-barrel-${barrels.length}`,
+    roomId: boss.roomId,
+    position: { x: point.x, y: point.y },
+    radius: GUARDIAN_BARREL_RADIUS,
+    exploded: false,
+  });
+  pushEvent(events, 'boss-barrel-spawn', point.x, point.y, 1);
+}
+
+/**
+ * Cadencia de aparición de barriles rodantes (GDD §15.2, playtest
+ * 2026-07-06): sin estado propio en el Guardián — se dispara al cruzar un
+ * "slot" de `GUARDIAN_BARREL_SPAWN_INTERVAL` segundos (mismo truco que
+ * `GUARDIAN_DUST_INTERVAL` en la carga), respetando el cap de vivos.
+ */
+function guardianStepBarrelSpawn(world: World, boss: Enemy, dt: number, events: EventQueue): void {
+  const crossedSlot =
+    Math.floor(world.time / GUARDIAN_BARREL_SPAWN_INTERVAL) !==
+    Math.floor((world.time - dt) / GUARDIAN_BARREL_SPAWN_INTERVAL);
+  if (!crossedSlot) return;
+  if (guardianLiveBarrelCount(world, boss) >= GUARDIAN_BARREL_MAX_ACTIVE) return;
+  guardianSpawnBarrel(world, boss, events);
+}
+
+/**
+ * Barril vivo de la sala del Guardián cuyo círculo solapa (x,y) con el radio
+ * del jefe (GDD §15.2: "si la carga del Guardián lo arrolla"). El Guardián NO
+ * esquiva barriles (su carga es a ciegas) — este chequeo es solo para
+ * resolver la colisión de la carga EN CURSO, nunca para desviarla.
+ */
+function guardianFindLiveBarrelAt(world: World, boss: Enemy, x: number, y: number) {
+  const barrels = world.barrels;
+  for (let i = 0; i < barrels.length; i++) {
+    const barrel = barrels[i];
+    if (barrel.exploded || barrel.roomId !== boss.roomId) continue;
+    const dx = x - barrel.position.x;
+    const dy = y - barrel.position.y;
+    const rr = boss.radius + barrel.radius;
+    if (dx * dx + dy * dy <= rr * rr) return barrel;
+  }
+  return null;
+}
+
 /** Telegrafía el inicio de una carga (primera de la secuencia o encadenada tras la pausa corta de fase 2/3): mismo aviso en ambos casos. */
 function guardianEnterTelegraph(world: World, boss: Enemy, events: EventQueue): void {
   boss.bossTelegraphKind = 'guardian-charge';
@@ -293,12 +398,13 @@ function guardianEnterCharge(world: World, boss: Enemy): void {
   boss.bossTimer = GUARDIAN_CHARGE_MAX_DURATION;
 }
 
-function guardianEnterStunned(boss: Enemy): void {
+/** `duration` por defecto GUARDIAN_STUN_DURATION (choque normal); el barril rodante (GDD §15.2) pasa GUARDIAN_BARREL_STUN_DURATION. */
+function guardianEnterStunned(boss: Enemy, duration: number = GUARDIAN_STUN_DURATION): void {
   boss.velocity.x = 0;
   boss.velocity.y = 0;
   boss.bossVulnerable = true;
   boss.bossStage = GUARDIAN_STAGE_STUNNED;
-  boss.bossTimer = GUARDIAN_STUN_DURATION;
+  boss.bossTimer = duration;
 }
 
 /** Cuántas cargas encadenadas corresponden a la fase actual (GDD §15.2: fase 2/3 encadenan 2). */
@@ -322,6 +428,10 @@ function spawnGuardianShardField(world: World, x: number, y: number): void {
 }
 
 function guardianStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
+  // Barriles rodantes (GDD §15.2): cadencia independiente del stage actual —
+  // aparecen mientras el Guardián patrulla, telegrafía, carga o está aturdido.
+  guardianStepBarrelSpawn(world, boss, dt, events);
+
   switch (boss.bossStage) {
     case GUARDIAN_STAGE_TELEGRAPH: {
       boss.bossTimer -= dt;
@@ -364,6 +474,28 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
           hero.velocity.y = boss.facing.y * GUARDIAN_CHARGE_KNOCKBACK_SPEED;
         }
         boss.bossTelegraphKind = GUARDIAN_CHARGE_HIT_FLAG;
+      }
+
+      // Barril rodante arrollado (GDD §15.2, playtest 2026-07-06): la carga es
+      // a ciegas — el Guardián NO esquiva barriles (a diferencia de la IA
+      // normal, ver ai.ts::pointInAvoidHazard) — así que se comprueba ANTES
+      // que el choque contra sólidos y, si acierta, sustituye ese choque:
+      // explosión normal (daño a héroe/enemigos/cadena) + daño SIN gating de
+      // ventana al propio Guardián (su castigo) + aturdimiento largo.
+      const rammedBarrel = guardianFindLiveBarrelAt(world, boss, nextX, nextY);
+      if (rammedBarrel) {
+        // Solo avanza a (nextX,nextY) si ese punto no solapa TAMBIÉN un
+        // sólido (barril pegado a una roca/pared): si no, se queda donde
+        // estaba, igual que el choque normal contra sólidos de abajo — nunca
+        // se le deja penetrar visualmente un obstáculo.
+        if (!guardianHitsSolid(world, boss, nextX, nextY)) {
+          boss.position.x = nextX;
+          boss.position.y = nextY;
+        }
+        explodeBarrel(world, rammedBarrel, events, true);
+        pushEvent(events, 'boss-barrel-charge-stun', boss.position.x, boss.position.y, GUARDIAN_BARREL_STUN_DURATION);
+        guardianEnterStunned(boss, GUARDIAN_BARREL_STUN_DURATION);
+        break;
       }
 
       if (guardianHitsSolid(world, boss, nextX, nextY)) {
@@ -444,7 +576,7 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
   }
 }
 
-function guardianOnPhaseChanged(): void {
+function guardianOnPhaseChanged(world: World, boss: Enemy): void {
   // Sin reset de bossStage/timers propios: un cambio de fase a mitad de
   // patrulla/telegraph/carga no debe interrumpir el gesto en curso (GDD §15.1
   // punto 3: "intensifica, nunca sustituye a mitad"). El único efecto de
@@ -453,6 +585,12 @@ function guardianOnPhaseChanged(): void {
   // que el daño de la carga en curso (si golpea al héroe) ya lee
   // `boss.bossPhase` actualizado (checkPhaseAndDefeat en sim/boss.ts corre
   // ANTES de que el siguiente tick vuelva a llamar a este patrón).
+  //
+  // Vida de recompensa (GDD §15.2, playtest 2026-07-06): al cruzar a fase 2 y
+  // a fase 3, suelta una poción en su posición actual (sostiene la pelea
+  // larga y premia el progreso). Reutiliza el pipeline normal de items: el
+  // pickup dispara el evento 'item-pickup' de siempre, sin plumbing propio.
+  dropPotionAt(world, boss.position.x, boss.position.y);
 }
 
 export const BOSS_DEFS: Record<BossId, BossDef> = {
