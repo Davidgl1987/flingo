@@ -21,7 +21,7 @@ import {
 } from '../content/constants';
 import { applyDamageToEnemy, applyDamageToHero } from './combat';
 import { pushEvent, type EventQueue } from './events';
-import type { Barrel, HazardSpawn, World } from './world';
+import { barrelInAir, type Barrel, type HazardSpawn, type World } from './world';
 
 /**
  * Geometría solo con escalares (cero asignaciones por tick): rect del hazard
@@ -268,7 +268,9 @@ export function stepBarrels(world: World, events: EventQueue): void {
   const barrels = world.barrels;
   for (let i = 0; i < barrels.length; i++) {
     const barrel = barrels[i];
-    if (barrel.exploded) continue;
+    // Barril del Guardián aún cayendo del cielo (GDD §15.2): no explota por
+    // contacto hasta que aterriza (world.time >= landingAt).
+    if (barrel.exploded || barrelInAir(barrel, world.time)) continue;
 
     const hero = world.hero;
     if (circleTouchesEntity(hero.position.x, hero.position.y, hero.radius, barrel.position.x, barrel.position.y, barrel.radius)) {

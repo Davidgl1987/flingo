@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import bossGuardianJson from '../../levels/boss-guardian.json';
 import {
   BARREL_DAMAGE,
+  GUARDIAN_BARREL_FALL_DURATION,
   GUARDIAN_BARREL_MAX_ACTIVE,
   GUARDIAN_BARREL_SPAWN_INTERVAL,
   GUARDIAN_BARREL_STUN_DURATION,
@@ -25,10 +26,11 @@ import { getBossDef } from './bosses';
 import { initBossEnemies, stepBosses } from '../sim/boss';
 import { applyDamageToEnemy } from '../sim/combat';
 import { createEventQueue, drainEvents, type GameEvent } from '../sim/events';
+import { stepBarrels } from '../sim/hazards';
 import { stepHeroPhysics } from '../sim/physics';
 import { parseRoomData } from '../sim/room-format';
 import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '../sim/world';
-import { createWorld } from '../sim/world';
+import { barrelInAir, createWorld } from '../sim/world';
 
 const FIXED_DT = 1 / 60;
 
@@ -484,6 +486,85 @@ describe('Guardián: aparición periódica de barriles rodantes (GDD §15.2)', (
   });
 });
 
+describe('Guardián: barril recién caído del cielo no es sólido hasta aterrizar (GDD §15.2, playtest 2026-07-06)', () => {
+  it('guardianSpawnBarrel fija landingAt en el futuro y barrelInAir es true hasta que world.time lo alcanza', () => {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+
+    advance(world, events, 1); // primer slot: aparece el primer barril
+    const barrel = liveBarrels(world)[0];
+    expect(barrel.landingAt).toBeCloseTo(world.time - FIXED_DT + GUARDIAN_BARREL_FALL_DURATION, 3);
+    expect(barrelInAir(barrel, world.time)).toBe(true);
+
+    advance(world, events, Math.round(GUARDIAN_BARREL_FALL_DURATION / FIXED_DT) + 5);
+    expect(barrelInAir(barrel, world.time)).toBe(false);
+  });
+
+  it('NO explota por contacto del héroe mientras cae (stepBarrels lo ignora), y SÍ explota tras aterrizar', () => {
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+
+    advance(world, events, 1); // aparece el barril, aún cayendo
+    const barrel = liveBarrels(world)[0];
+    expect(barrelInAir(barrel, world.time)).toBe(true);
+
+    // Héroe plantado justo encima del barril mientras cae: no debe detonar.
+    world.hero.position.x = barrel.position.x;
+    world.hero.position.y = barrel.position.y;
+    stepBarrels(world, events);
+    expect(barrel.exploded).toBe(false);
+
+    // Avanza hasta después de landingAt (mismo héroe encima) y repite el contacto.
+    advance(world, events, Math.round(GUARDIAN_BARREL_FALL_DURATION / FIXED_DT) + 5);
+    expect(barrelInAir(barrel, world.time)).toBe(false);
+    stepBarrels(world, events);
+    expect(barrel.exploded).toBe(true);
+  });
+
+  it('la carga del Guardián ATRAVIESA un barril que aún cae (no lo arrolla) y SÍ lo arrolla una vez aterrizado', () => {
+    // Barril recién colocado a mano en la trayectoria de carga, con landingAt
+    // futuro (simula el instante justo tras `guardianSpawnBarrel`).
+    const world = makeGuardianWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    // Barril muy cerca del Guardián (x=0.5): con GUARDIAN_CHARGE_SPEED=7.5u/s
+    // la carga lo alcanza a los ~0.07s de empezar a cargar, muy por debajo de
+    // GUARDIAN_BARREL_FALL_DURATION (1.1s) — sigue en el aire cuando la carga
+    // pasa por su posición.
+    world.barrels.push({
+      id: 'falling-barrel',
+      position: { x: 0.5, y: 0 },
+      radius: 0.4,
+      exploded: false,
+      landingAt: world.time + GUARDIAN_BARREL_FALL_DURATION,
+    });
+
+    boss.bossStage = 1; // GUARDIAN_STAGE_TELEGRAPH
+    boss.bossTelegraphUntil = world.time + 0.8;
+    boss.bossTimer = 0.8;
+    world.hero.position.x = 10; // fija la dirección de carga (este)
+    world.hero.position.y = 0;
+
+    // Avanza justo lo suficiente para agotar el telegraph (0.8s) y que la
+    // carga recorra los 0.5u hasta el barril, sin llegar a landingAt (1.1s
+    // tras el spawn en t=0): barril aún en el aire, atravesado sin arrollar.
+    advance(world, events, 55); // ~0.92s
+    const barrel = world.barrels.find((b) => b.id === 'falling-barrel')!;
+    expect(barrelInAir(barrel, world.time)).toBe(true);
+    expect(barrel.exploded).toBe(false);
+    expect(boss.bossStage).not.toBe(3); // no se detuvo/aturdió por el barril en el aire
+
+    // El Guardián sigue cargando hasta topar con la pared este (bounds
+    // ±7.5): ahí se aturde normal (no por barril).
+    advanceUntil(world, events, () => boss.bossVulnerable, 400);
+    expect(collectTypes(events)).not.toContain('boss-barrel-charge-stun');
+  });
+});
+
 describe('Guardián: carga que arrolla un barril (GDD §15.2)', () => {
   /** Mundo con el Guardián telegrafiando una carga hacia el este y un barril vivo plantado en su trayectoria. */
   function setupChargeIntoBarrel() {
@@ -571,15 +652,21 @@ describe('boss-guardian.json: regla anti-trampa de arena (GDD §15.2)', () => {
    * Radio máximo de un círculo capaz de atravesar el hueco diagonal entre la
    * esquina exterior de una roca y la esquina de la sala (centro pegado a las
    * dos paredes: c = esquina − r; toca la esquina de la roca cuando
-   * (g − r)·√2 = r, con g = holgura por eje). Debe ser MENOR que el radio del
-   * héroe: ni el héroe (0.38) ni el Guardián (0.62) caben — "o caben los dos,
-   * o no cabe ninguno".
+   * (g − r)·√2 = r, con g = holgura por eje). El criterio anti-trampa NO es
+   * "nadie pasa": es que no quede a medias (héroe sí, Guardián no). Con las
+   * rocas pegadas a las esquinas (2.8x2.8 en ±5.5, versión anterior) el hueco
+   * era tan estrecho que NINGUNO de los dos cabía (gap=1.2 → radio máx
+   * ≈0.284, menor que ambos radios: sin trampa, pero arena "sosa" según
+   * playtest 2026-07-06). Con las rocas movidas al centro (1.8x1.8 en ±3.2)
+   * el hueco roca-muro se abre mucho (gap=3.4 → radio máx ≈1.992): ahora caben
+   * los DOS con holgura de sobra — sigue sin ser trampa, por el motivo
+   * contrario.
    */
   function maxRadiusThroughCornerPocket(gap: number): number {
     return (gap * Math.SQRT2) / (1 + Math.SQRT2);
   }
 
-  it('ningún hueco roca-esquina es transitable para el héroe (y por tanto tampoco asimétrico)', () => {
+  it('el hueco roca-esquina (roca-muro) es transitable para héroe Y Guardián por igual: sin trampa', () => {
     const room = parseRoomData(bossGuardianJson).room!;
     const halfW = room.width / 2;
     const halfH = room.height / 2;
@@ -589,10 +676,115 @@ describe('boss-guardian.json: regla anti-trampa de arena (GDD §15.2)', () => {
       const gapY = halfH - (Math.abs(rock.position.y) + rock.height / 2);
       // Las rocas de esquina son simétricas: misma holgura en ambos ejes.
       expect(gapX).toBeCloseTo(gapY, 6);
-      expect(maxRadiusThroughCornerPocket(gapX)).toBeLessThan(HERO_RADIUS);
+      // Rocas movidas hacia el centro tras playtest 2026-07-06 (1.8x1.8 en
+      // ±3.2, antes 2.8x2.8 en ±5.5): la holgura roca-muro pasa de 1.2 a 3.4.
+      expect(gapX).toBeCloseTo(3.4, 6);
+      // Radio máximo que cabe por ese hueco (≈1.992) ahora es MAYOR que el
+      // radio del Guardián (el más grande de los dos): caben ambos.
+      expect(maxRadiusThroughCornerPocket(gapX)).toBeGreaterThan(GUARDIAN_RADIUS);
     }
-    // El Guardián es más grande que el héroe: si el héroe no cabe, él tampoco.
+    // El Guardián es más grande que el héroe: si él cabe, el héroe también.
     expect(GUARDIAN_RADIUS).toBeGreaterThan(HERO_RADIUS);
+  });
+
+  /**
+   * Radio máximo de un círculo capaz de atravesar en línea recta el hueco
+   * rectangular entre dos rocas vecinas (mismo eje, enfrentadas): el círculo
+   * más grande que cabe justo entre ambas caras tiene radio = hueco/2 (se
+   * queda centrado, tangente a las dos). A diferencia del hueco roca-esquina
+   * (donde la trampa sería que NADIE pase), aquí la trampa real sería que el
+   * hueco quede a medias: el héroe cabe pero el Guardián no, dejándole
+   * "refugios" tras las rocas donde el jefe nunca puede seguirlo ni cargar
+   * limpiamente. Por eso el criterio no es "menor que HERO_RADIUS" sino
+   * "mayor que GUARDIAN_RADIUS": caben los dos con holgura.
+   */
+  function maxRadiusThroughStraightGap(gap: number): number {
+    return gap / 2;
+  }
+
+  it('ningún hueco roca-roca (rocas vecinas del mismo lado) deja al héroe pasar sin que quepa también el Guardián', () => {
+    const room = parseRoomData(bossGuardianJson).room!;
+    const byId = new Map(room.hazards.map((h) => [h.id, h]));
+
+    // Por simetría (4 rocas en ±3.2, mismo tamaño) solo hace falta comprobar
+    // un par horizontal (NW-NE) y un par vertical (NW-SW); los otros 2 pares
+    // (SE-SW horizontal, NE-SE vertical) son geométricamente idénticos.
+    const pairs: [string, string, 'x' | 'y'][] = [
+      ['rock-nw', 'rock-ne', 'x'],
+      ['rock-nw', 'rock-sw', 'y'],
+    ];
+
+    for (const [idA, idB, axis] of pairs) {
+      const a = byId.get(idA)!;
+      const b = byId.get(idB)!;
+      const centerGap = Math.abs(a.position[axis] - b.position[axis]);
+      const halfWidthA = axis === 'x' ? a.width / 2 : a.height / 2;
+      const halfWidthB = axis === 'x' ? b.width / 2 : b.height / 2;
+      const gap = centerGap - halfWidthA - halfWidthB;
+      expect(gap).toBeCloseTo(4.6, 6);
+      expect(maxRadiusThroughStraightGap(gap)).toBeGreaterThan(GUARDIAN_RADIUS);
+    }
+  });
+
+  it('el Guardián patrulla el perímetro sin atascarse contra las rocas nuevas (esquinas de patrulla lejos de ±3.2)', () => {
+    // guardianPatrolCorners (content/bosses.ts) usa margen GUARDIAN_RADIUS+0.5
+    // respecto al bounds de la sala: con halfW=halfH=7.5 las esquinas de
+    // patrulla caen en ±(7.5 − (0.62+0.5)) = ±6.38, muy lejos de las rocas
+    // (que ahora ocupan hasta ±(3.2+0.9)=±4.1) — no debería haber solape.
+    const world = makeGuardianWorld({
+      bossSpawn: { position: { x: 6.38, y: 6.38 }, patrolTarget: { x: 6.38, y: 6.38 } },
+      hazards: (parseRoomData(bossGuardianJson).room!.hazards as HazardSpawn[]),
+    });
+    const events = createEventQueue(64);
+    world.hero.position.x = 100; // lejos: solo patrulla, sin detección/carga
+    world.hero.position.y = 100;
+
+    const boss = world.enemies[0];
+    // 20s de patrulla pura: si quedara atascado contra una roca, su posición
+    // se congelaría (guardianHitsSolid no se comprueba en patrulla, pero un
+    // atasco real se vería como oscilación nula o posición fija imposible).
+    let minDistToAnyRockCenter = Infinity;
+    for (let i = 0; i < 1200; i++) {
+      stepBosses(world, FIXED_DT, events);
+      world.time += FIXED_DT;
+      for (const rock of world.obstacles) {
+        const dx = boss.position.x - (rock.aabb.minX + rock.aabb.maxX) / 2;
+        const dy = boss.position.y - (rock.aabb.minY + rock.aabb.maxY) / 2;
+        minDistToAnyRockCenter = Math.min(minDistToAnyRockCenter, Math.hypot(dx, dy));
+      }
+    }
+    // Nunca vulnerable (nunca choca: patrulla en un rectángulo que no
+    // solapa ninguna roca) y siempre dentro de bounds.
+    expect(boss.bossVulnerable).toBe(false);
+    expect(Math.abs(boss.position.x)).toBeLessThanOrEqual(world.bounds.maxX);
+    expect(Math.abs(boss.position.y)).toBeLessThanOrEqual(world.bounds.maxY);
+    expect(minDistToAnyRockCenter).toBeGreaterThan(0);
+  });
+
+  it('el Guardián puede completar una carga contra el héroe sin travarse en las rocas nuevas (bossStage cicla con normalidad)', () => {
+    const room = parseRoomData(bossGuardianJson).room!;
+    const world = createWorld(room);
+    initBossEnemies(world);
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+
+    // Coloca al héroe a rango de detección, lejos de cualquier roca (centro
+    // de un lado libre), para forzar una carga limpia patrulla→telegraph→
+    // carga→(choque con pared, ninguna roca en la trayectoria)→aturdido→
+    // recuperación, confirmando que el ciclo no se cuelga con la arena nueva.
+    world.hero.position.x = 0;
+    world.hero.position.y = 0;
+    boss.position.x = 0;
+    boss.position.y = 3;
+    boss.patrolTo.x = 0;
+    boss.patrolTo.y = 3;
+
+    advanceUntil(world, events, () => boss.bossStage === 1 /* GUARDIAN_STAGE_TELEGRAPH */, 400);
+    expect(boss.bossStage).toBe(1);
+    advanceUntil(world, events, () => boss.bossStage === 3 /* GUARDIAN_STAGE_STUNNED */, 400);
+    expect(boss.bossStage).toBe(3);
+    advanceUntil(world, events, () => boss.bossStage === 0 /* de vuelta a PATROL */, 400);
+    expect(boss.bossStage).toBe(0);
   });
 
   it('en modo sala única los huecos de puerta están sellados: héroe empujado contra cada puerta no sale de bounds', () => {

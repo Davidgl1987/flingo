@@ -1,8 +1,9 @@
 /**
  * Objetos recogibles (GDD §9): moneda, poción, llave. Los items nuevos
- * (monedas soltadas por enemigos) se añaden al array `world.items` en runtime
- * (ver sim/items.ts `dropCoinAt`); React reconcilia por key/id con normalidad
- * ya que esto ocurre a tasa de eventos discretos, no por frame.
+ * (monedas soltadas por enemigos, ver sim/items.ts `dropCoinAt`/`dropPotionAt`)
+ * se añaden a `world.items` en runtime vía `.push`, sin pasar por setState de
+ * React: `ItemViews` necesita su propio trigger de re-render por `.length`
+ * (ver comentario en `ItemViews` más abajo) o esos items nacen sin mesh.
  *
  * Formas (feedback de playtest):
  * - Moneda (punto 9): cilindro plano ("moneda de canto visible") que gira
@@ -17,7 +18,7 @@
  */
 
 import { useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { Group } from 'three';
 import type { GameSession } from '../session';
 import type { Item } from '../sim/world';
@@ -105,6 +106,15 @@ function ItemMesh({ session, itemId }: { session: GameSession; itemId: string })
 }
 
 export function ItemViews({ session }: { session: GameSession }) {
+  // Mismo bug/fix que BarrelViews (HazardView.tsx): `world.items` crece por
+  // `.push` (dropCoinAt/dropPotionAt) sin ningún setState de React de por
+  // medio, así que el `.map` de abajo nunca ve los items nuevos a menos que
+  // este componente vuelva a renderizar. Trigger barato: length leída una vez
+  // por frame, setState solo si cambió.
+  const [count, setCount] = useState(session.world.items.length);
+  useFrame(() => {
+    if (session.world.items.length !== count) setCount(session.world.items.length);
+  });
   return (
     <>
       {session.world.items.map((item) => (

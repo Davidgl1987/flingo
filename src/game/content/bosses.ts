@@ -10,6 +10,7 @@
  */
 
 import {
+  GUARDIAN_BARREL_FALL_DURATION,
   GUARDIAN_BARREL_MAX_ACTIVE,
   GUARDIAN_BARREL_RADIUS,
   GUARDIAN_BARREL_SPAWN_INTERVAL,
@@ -38,7 +39,7 @@ import { applyDamageToHero, fireEnemyProjectile } from '../sim/combat';
 import { pushEvent, type EventQueue } from '../sim/events';
 import { explodeBarrel } from '../sim/hazards';
 import { dropPotionAt } from '../sim/items';
-import type { AABB, BossId, Enemy, World } from '../sim/world';
+import { barrelInAir, type AABB, type BossId, type Enemy, type World } from '../sim/world';
 
 /**
  * Contrato de patrón de un jefe: se llama una vez por tick (mismo dt fijo que
@@ -308,15 +309,27 @@ function guardianRandomPerimeterPoint(world: World, boss: Enemy): { x: number; y
  * Activa un barril rodante en un slot ya explotado del pool (reutiliza,
  * mismo patrón que `dropCoinAt`/`dropPotionAt` de sim/items.ts) o añade uno
  * nuevo si no hay ninguno libre (evento raro, cada ~8s, no hot path).
+ *
+ * Caída del cielo (GDD §15.2, playtest 2026-07-06): al spawnear fija
+ * `landingAt = world.time + GUARDIAN_BARREL_FALL_DURATION`. Hasta ese
+ * instante el barril está "en el aire" (sombra creciendo + cuerpo cayendo):
+ * `stepBarrels`/`guardianFindLiveBarrelAt` lo ignoran (no es
+ * arrollable/explotable) y el render deriva la animación de ese timestamp. El
+ * evento `boss-barrel-spawn` marca el INICIO (aparición de la sombra, aviso);
+ * el aterrizaje lo emite el render como `boss-barrel-land` (polvo) al detectar
+ * el cruce de `landingAt`, para no acoplar el burst de polvo a un tick de sim
+ * exacto (la sim corre a dt fijo, el aterrizaje visual cae entre frames).
  */
 function guardianSpawnBarrel(world: World, boss: Enemy, events: EventQueue): void {
   const point = guardianRandomPerimeterPoint(world, boss);
+  const landingAt = world.time + GUARDIAN_BARREL_FALL_DURATION;
   const barrels = world.barrels;
   for (let i = 0; i < barrels.length; i++) {
     if (barrels[i].exploded) {
       barrels[i].exploded = false;
       barrels[i].position.x = point.x;
       barrels[i].position.y = point.y;
+      barrels[i].landingAt = landingAt;
       pushEvent(events, 'boss-barrel-spawn', point.x, point.y, 1);
       return;
     }
@@ -327,6 +340,7 @@ function guardianSpawnBarrel(world: World, boss: Enemy, events: EventQueue): voi
     position: { x: point.x, y: point.y },
     radius: GUARDIAN_BARREL_RADIUS,
     exploded: false,
+    landingAt,
   });
   pushEvent(events, 'boss-barrel-spawn', point.x, point.y, 1);
 }
@@ -356,7 +370,9 @@ function guardianFindLiveBarrelAt(world: World, boss: Enemy, x: number, y: numbe
   const barrels = world.barrels;
   for (let i = 0; i < barrels.length; i++) {
     const barrel = barrels[i];
-    if (barrel.exploded || barrel.roomId !== boss.roomId) continue;
+    // Barril aún cayendo del cielo (GDD §15.2): no arrollable — la carga lo
+    // atraviesa hasta que aterriza (world.time >= landingAt).
+    if (barrel.exploded || barrel.roomId !== boss.roomId || barrelInAir(barrel, world.time)) continue;
     const dx = x - barrel.position.x;
     const dy = y - barrel.position.y;
     const rr = boss.radius + barrel.radius;

@@ -245,6 +245,21 @@ export const GUARDIAN_BARREL_MAX_ACTIVE = 3;
 export const GUARDIAN_BARREL_WALL_MARGIN = 0.6;
 /** Radio del barril rodante: mismo tamaño que el barril estándar de sala (0.8×0.8 → radio 0.4). */
 export const GUARDIAN_BARREL_RADIUS = 0.4;
+/**
+ * Caída del cielo del barril del Guardián (GDD §15.2, playtest 2026-07-06):
+ * ventana total desde que aparece la sombra hasta que aterriza y pasa a
+ * activo. El GDD pide ~0.8s de sombra creciente "legible desde toda la sala";
+ * la caída visual del cuerpo se solapa con el último tramo de la sombra (el
+ * cuerpo entra a plomo cuando la sombra ya está casi a tamaño final), así que
+ * el total es un pelín mayor: 1.1s. Mientras dura, el barril NO es
+ * arrollable/explotable. El render deriva de este valor (junto con
+ * `barrel.landingAt`) en qué punto de la caída/sombra está.
+ */
+export const GUARDIAN_BARREL_FALL_DURATION = 1.1;
+/** Fracción del tramo de caída dedicada solo a la sombra creciente antes de que el cuerpo empiece a bajar (el resto es la caída del cuerpo). */
+export const GUARDIAN_BARREL_SHADOW_FRACTION = 0.55;
+/** Altura (u) desde la que el barril entra a plomo al empezar la caída del cuerpo. */
+export const GUARDIAN_BARREL_FALL_HEIGHT = 5;
 
 // ── Mundo y run ───────────────────────────────────────────────────────────
 

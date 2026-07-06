@@ -26,6 +26,7 @@
 - **Lo visual debe prometer lo mecánico**: radios de efecto visibles (explosiones, telegrafiados) = radios de daño reales.
 - La IA nunca debe suicidarse contra hazards (fosos, pinchos, barriles vivos): la zona vetada incluye el radio del cuerpo.
 - Ids de entidad namespaced por sala (`sala:id`) en mundo multi-sala.
+- **Vistas contenedoras que hacen `.map` sobre un array que crece por `.push` en runtime** (p. ej. `world.barrels`/`world.items` cuando `guardianSpawnBarrel`/`dropPotionAt`/`dropCoinAt` añaden entidades a mitad de partida) necesitan su propio trigger de re-render por `.length`: un `useState` con el último length visto + comparación dentro de un `useFrame` que solo llama a `setState` cuando cambia (nunca por frame). Sin esto, `session` es una ref estable creada una vez y nada dispara `setState` de React al hacer `push` — las entidades nacidas tras el montaje del componente no reciben mesh NUNCA (bug confirmado en playtest B1.6: barriles/pociones/monedas invisibles). Patrón ya aplicado en `BarrelViews`/`ItemViews` (render/HazardView.tsx, render/ItemView.tsx).
 
 ## Criterios de aceptación (verifícalos TÚ antes del informe final)
 

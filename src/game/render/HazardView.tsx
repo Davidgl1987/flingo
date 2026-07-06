@@ -20,14 +20,21 @@
  */
 
 import { useFrame } from '@react-three/fiber';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { Group, Mesh } from 'three';
+import {
+  GUARDIAN_BARREL_FALL_DURATION,
+  GUARDIAN_BARREL_FALL_HEIGHT,
+  GUARDIAN_BARREL_SHADOW_FRACTION,
+} from '../content/constants';
 import type { GameSession } from '../session';
-import type { HazardSpawn } from '../sim/world';
+import { pushEvent } from '../sim/events';
+import { barrelInAir, type HazardSpawn } from '../sim/world';
 import {
   barrelHoopMaterial,
   barrelMaterial,
+  blobShadowMaterial,
   boostMaterial,
   mudMaterial,
   pitMaterial,
@@ -42,6 +49,9 @@ import {
 
 const HAZARD_QUAD_Y = 0.03;
 const BARREL_HEIGHT = 0.7;
+/** Rebote visual del barril al aterrizar (GDD §15.2): altura y duración del pequeño arco tras tocar suelo. Puramente de render. */
+const BARREL_BOUNCE_HEIGHT = 0.28;
+const BARREL_BOUNCE_DURATION = 0.22;
 /** Separación aproximada entre agujas del campo de pinchos (u de mundo). */
 const SPIKE_NEEDLE_SPACING = 0.32;
 /** Altura de la aguja instanciada (debe coincidir con la geometría unitSpikeNeedle). */
@@ -168,20 +178,85 @@ export function HazardViews({ world }: { world: { hazards: HazardSpawn[] } }) {
   );
 }
 
+/** Fracción [0,1] de la ventana de caída ya transcurrida en `time` (0 = recién spawneado, 1 = ya aterrizado o barril normal sin landingAt). */
+function fallProgress(landingAt: number | undefined, time: number): number {
+  if (landingAt === undefined) return 1;
+  const remaining = landingAt - time;
+  if (remaining <= 0) return 1;
+  const p = 1 - remaining / GUARDIAN_BARREL_FALL_DURATION;
+  return p < 0 ? 0 : p;
+}
+
 function BarrelMesh({ session, barrelId }: { session: GameSession; barrelId: string }) {
   const groupRef = useRef<Group>(null);
   const scorchRef = useRef<Mesh>(null);
+  const shadowRef = useRef<Mesh>(null);
+  // true mientras el barril actual sigue "en el aire" (aún no se emitió su
+  // evento de aterrizaje); se resetea a true cuando un slot reciclado vuelve
+  // a caer (guardianSpawnBarrel fija un landingAt nuevo y futuro).
+  const awaitingLandingRef = useRef(true);
 
   useFrame(() => {
     const barrel = session.world.barrels.find((b) => b.id === barrelId);
     const group = groupRef.current;
     const scorch = scorchRef.current;
+    const shadow = shadowRef.current;
     if (!barrel || !group) return;
     group.visible = !barrel.exploded;
-    group.position.set(barrel.position.x, 0, barrel.position.y);
-    if (scorch) {
-      scorch.visible = barrel.exploded;
-      scorch.position.set(barrel.position.x, 0.025, barrel.position.y);
+
+    const inAir = barrelInAir(barrel, session.world.time);
+    // Si sigue (o vuelve a estar) en el aire, hay un aterrizaje pendiente que
+    // emitir cuando cruce landingAt (recicla el flag al reaparecer).
+    if (inAir) awaitingLandingRef.current = true;
+
+    if (barrel.exploded) {
+      if (shadow) shadow.visible = false;
+    } else if (inAir) {
+      // Fase de caída (GDD §15.2): sombra creciendo de 0 al tamaño final
+      // durante GUARDIAN_BARREL_SHADOW_FRACTION del total, cuerpo cayendo a
+      // plomo desde GUARDIAN_BARREL_FALL_HEIGHT durante el resto — un pelín
+      // solapados para que el cuerpo ya se vea entrar cuando la sombra está
+      // casi a tamaño completo (se lee como "cae sobre su propia sombra").
+      const p = fallProgress(barrel.landingAt, session.world.time);
+      const shadowP = Math.min(1, p / GUARDIAN_BARREL_SHADOW_FRACTION);
+      const fallStart = GUARDIAN_BARREL_SHADOW_FRACTION * 0.5;
+      const fallP = fallStart >= 1 ? 1 : Math.min(1, Math.max(0, (p - fallStart) / (1 - fallStart)));
+      // Easing cuadrático de caída (acelera al caer, como la gravedad) sin
+      // asignar nada nuevo: solo aritmética escalar.
+      const y = GUARDIAN_BARREL_FALL_HEIGHT * (1 - fallP * fallP);
+      group.position.set(barrel.position.x, y, barrel.position.y);
+      if (shadow) {
+        shadow.visible = true;
+        shadow.position.set(barrel.position.x, 0.025, barrel.position.y);
+        shadow.scale.setScalar(barrel.radius * 1.5 * shadowP);
+      }
+      if (scorch) scorch.visible = false;
+    } else {
+      // Aterrizado: si acaba de cruzar landingAt este frame, dispara el burst
+      // de polvo (evento emitido desde el render porque el instante exacto de
+      // aterrizaje cae entre ticks fijos de la sim, ver comentario en
+      // events.ts sobre 'boss-barrel-land').
+      if (awaitingLandingRef.current) {
+        awaitingLandingRef.current = false;
+        pushEvent(session.events, 'boss-barrel-land', barrel.position.x, barrel.position.y, 1);
+      }
+      // Rebote de aterrizaje (GDD §15.2, "aterriza con rebote"): un breve
+      // medio-arco hacia arriba justo tras tocar suelo, decreciente, derivado
+      // de (time - landingAt) sin estado extra. Fuera de la ventana bounce=0.
+      let bounceY = 0;
+      if (barrel.landingAt !== undefined) {
+        const since = session.world.time - barrel.landingAt;
+        if (since >= 0 && since < BARREL_BOUNCE_DURATION) {
+          const bt = since / BARREL_BOUNCE_DURATION; // 0..1
+          bounceY = BARREL_BOUNCE_HEIGHT * Math.sin(bt * Math.PI) * (1 - bt);
+        }
+      }
+      group.position.set(barrel.position.x, bounceY, barrel.position.y);
+      if (shadow) shadow.visible = false;
+      if (scorch) {
+        scorch.visible = barrel.exploded;
+        scorch.position.set(barrel.position.x, 0.025, barrel.position.y);
+      }
     }
   });
 
@@ -213,6 +288,15 @@ function BarrelMesh({ session, barrelId }: { session: GameSession; barrelId: str
           scale={[diameter * 1.06, BARREL_HEIGHT * 0.08, diameter * 1.06]}
         />
       </group>
+      {/* Sombra de aviso mientras cae del cielo (GDD §15.2): crece de 0 al tamaño final. */}
+      <mesh
+        ref={shadowRef}
+        geometry={unitCircle}
+        material={blobShadowMaterial}
+        rotation-x={-Math.PI / 2}
+        scale={radius * 1.5}
+        visible={false}
+      />
       {/* Mancha chamuscada tras la explosión. */}
       <mesh
         ref={scorchRef}
@@ -227,6 +311,17 @@ function BarrelMesh({ session, barrelId }: { session: GameSession; barrelId: str
 }
 
 export function BarrelViews({ session }: { session: GameSession }) {
+  // `world.barrels` crece por `.push` en runtime (guardianSpawnBarrel): el
+  // `.map` de abajo solo ve elementos nuevos si React vuelve a renderizar
+  // este componente. Nada dispara setState al hacer push, así que sin este
+  // trigger las entidades nacidas tras el montaje nunca reciben mesh (bug
+  // confirmado en playtest: barriles/pociones/monedas invisibles). Se lee la
+  // longitud una vez por frame (mismo patrón que useGameLoop.ts) y solo se
+  // llama a setState cuando cambia, para no forzar un render de más.
+  const [count, setCount] = useState(session.world.barrels.length);
+  useFrame(() => {
+    if (session.world.barrels.length !== count) setCount(session.world.barrels.length);
+  });
   return (
     <>
       {session.world.barrels.map((barrel) => (

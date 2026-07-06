@@ -54,9 +54,18 @@ export type GameEventType =
   | 'boss-shard-burst'
   /**
    * Guardián de Canto (GDD §15.2, playtest 2026-07-06): aparece un barril
-   * rodante en el perímetro de la arena. Aviso visual de aparición.
+   * rodante en el perímetro de la arena — INICIO de la caída del cielo (surge
+   * la sombra creciente en el suelo como aviso legible desde toda la sala).
    */
   | 'boss-barrel-spawn'
+  /**
+   * Guardián de Canto (GDD §15.2, playtest 2026-07-06): el barril que caía del
+   * cielo ATERRIZA (rebote + burst de polvo). Lo emite el render al detectar el
+   * cruce de `barrel.landingAt`, no la sim: el aterrizaje visual cae entre
+   * ticks de dt fijo, así el polvo se sincroniza con el frame en que el cuerpo
+   * toca suelo. A partir de aquí el barril es arrollable/explotable normal.
+   */
+  | 'boss-barrel-land'
   /**
    * Guardián de Canto (GDD §15.2): su carga arrolla un barril rodante — el
    * barril explota (daño normal + shockwave, ya cubierto por

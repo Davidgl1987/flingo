@@ -316,6 +316,28 @@ export interface Barrel {
   radius: number;
   exploded: boolean;
   roomId?: string;
+  /**
+   * Barril del Guardián que cae del cielo (GDD §15.2, playtest 2026-07-06):
+   * `world.time` en el que el barril ATERRIZA y pasa a activo normal. Mientras
+   * `world.time < landingAt` está "en el aire" (sombra creciendo + trayecto de
+   * caída): NO es arrollable/explotable (se ignora en stepBarrels y en la
+   * detección de arrollamiento de la carga del Guardián), y el render anima su
+   * sombra + la caída de su Y. Ausente/0 = barril normal, ya en suelo (los
+   * barriles estáticos de sala nunca lo llevan). El render deriva TODA la
+   * animación de este único timestamp (sin campo booleano extra).
+   */
+  landingAt?: number;
+}
+
+/**
+ * true si el barril del Guardián está aún cayendo del cielo (GDD §15.2): tiene
+ * un `landingAt` futuro respecto a `time`. Los barriles en el aire no son
+ * arrollables/explotables (se ignoran en stepBarrels y en la detección de
+ * arrollamiento de la carga del Guardián). Función pura compartida por sim y
+ * render para no duplicar el criterio.
+ */
+export function barrelInAir(barrel: Barrel, time: number): boolean {
+  return barrel.landingAt !== undefined && time < barrel.landingAt;
 }
 
 /** Hazard estático con su sala dueña (mazmorra multi-sala). */

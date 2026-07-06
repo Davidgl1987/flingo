@@ -62,10 +62,14 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // estallido de esquirlas más grande/anguloso en el punto de impacto.
   'boss-charge-dust': { color: '#8d8367', size: 0.07, count: 3, life: 0.35, speed: 0.6, trauma: 0 },
   'boss-shard-burst': { color: '#c9c2a8', size: 0.1, count: 16, life: 0.4, speed: 2.8, trauma: 0.18 },
-  // Barriles rodantes (playtest 2026-07-06): aviso de aparición discreto (el
-  // propio barril, ya con su silueta reconocible vía BarrelViews, es el aviso
-  // principal; este burst solo puntúa el instante en que aparece).
-  'boss-barrel-spawn': { color: '#ff9f45', size: 0.09, count: 10, life: 0.35, speed: 1.6, trauma: 0.08 },
+  // Barriles rodantes (playtest 2026-07-06): la APARICIÓN es el inicio de la
+  // caída del cielo (surge la sombra creciente, el barril aún está arriba), así
+  // que sin burst propio (NONE) — el polvo va en el ATERRIZAJE ('boss-barrel-land').
+  'boss-barrel-spawn': NONE,
+  // Aterrizaje del barril caído (playtest 2026-07-06): burst de polvo pétreo a
+  // ras de suelo + un pelín de trauma de cámara, para que el impacto contra el
+  // suelo se sienta (el rebote visual del cuerpo lo hace el render).
+  'boss-barrel-land': { color: '#a89a76', size: 0.11, count: 14, life: 0.4, speed: 2.2, trauma: 0.14 },
   // Arrollar un barril con la carga ya dispara 'barrel-explosion' (su propio
   // burst grande); este evento es puramente informativo para juice/HUD sobre
   // el aturdimiento largo, sin burst propio (NONE) para no duplicar partículas.
