@@ -39,7 +39,19 @@ export type GameEventType =
   /** Aviso de ataque telegrafiado (GDD §15.1 punto 2). label = `bossTelegraphKind`. */
   | 'boss-telegraph'
   /** El jefe muere: dispara el clímax audiovisual (GDD §15.1 punto 8). */
-  | 'boss-defeated';
+  | 'boss-defeated'
+  /**
+   * Guardián de Canto (GDD §15.2): rastro de polvo emitido periódicamente
+   * mientras carga. Genérico (cualquier jefe futuro con un ataque de
+   * embestida puede reutilizarlo); intensity = velocidad de carga (u/s).
+   */
+  | 'boss-charge-dust'
+  /**
+   * Guardián de Canto fase 3 (GDD §15.2): campo de esquirlas temporal en el
+   * punto donde una carga choca contra roca/pared. intensity = radio del
+   * campo (u).
+   */
+  | 'boss-shard-burst';
 
 export interface GameEvent {
   type: GameEventType;

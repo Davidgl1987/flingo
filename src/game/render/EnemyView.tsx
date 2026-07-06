@@ -27,6 +27,15 @@
  *   `bossTelegraphUntil` está activo (aviso de ataque), anillo verde mientras
  *   `bossVulnerable` (ventana de castigo) y flash blanco-cálido de cuerpo
  *   entero al cambiar de fase (retrigger por `bossPhase`).
+ * - Guardián de Canto (GDD §15.2, Fase B1, `bossId==='guardian'`): sustituye
+ *   el cuerpo genérico por uno propio (esfera pétrea grande + 2 "cuernos"
+ *   cónicos de hombro, escalados con `enemy.radius` como cualquier jefe),
+ *   brillo+vibración durante el telegraph (material ámbar intercambiado +
+ *   jitter de posición, más intenso que el aro genérico), y estado aturdido
+ *   INCONFUNDIBLE: tambaleo (oscilación de rotación en Z) + 3 estrellitas
+ *   doradas orbitando sobre la cabeza — todo con geometrías/materiales
+ *   compartidos de assets.ts, encima (no en sustitución) de los anillos
+ *   genéricos de telegraph/vulnerabilidad ya heredados.
  *
  * Todo con geometrías/materiales compartidos de assets.ts; cero asignaciones
  * en useFrame (solo escalares y mutación de refs ya existentes).
@@ -36,7 +45,7 @@ import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Group, Material, Mesh } from 'three';
 import type { GameSession } from '../session';
-import type { Enemy, EnemyKind } from '../sim/world';
+import type { BossId, Enemy, EnemyKind } from '../sim/world';
 import {
   blobShadowMaterial,
   bossBodyMaterial,
@@ -49,6 +58,12 @@ import {
   enemyHitFlashMaterial,
   eyePupilMaterial,
   eyeWhiteMaterial,
+  guardianBodyMaterial,
+  guardianHornGeometry,
+  guardianHornMaterial,
+  guardianStunStarGeometry,
+  guardianStunStarMaterial,
+  guardianTelegraphGlowMaterial,
   shooterEyeChargeMaterial,
   shooterEyeMaterial,
   shooterMaterial,
@@ -72,6 +87,18 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
   shooter: shooterMaterial,
   boss: bossBodyMaterial,
 };
+
+/**
+ * Material "en reposo" del cuerpo (sin flash de golpe/fase/telegraph
+ * encima): el genérico por arquetipo, salvo el Guardián de Canto
+ * (`bossId==='guardian'`), que sustituye el violeta genérico de jefe por su
+ * propio pétreo (GDD §15.2). Único punto de verdad para los 3 sitios que
+ * restauran el material tras un flash temporal.
+ */
+function restingBodyMaterial(kind: EnemyKind, bossId: BossId | undefined): Material {
+  if (kind === 'boss' && bossId === 'guardian') return guardianBodyMaterial;
+  return ENEMY_MATERIAL[kind];
+}
 
 const ENEMY_RADIUS_RENDER = 0.4;
 /** Duración del flash de cuerpo entero al cambiar de fase (GDD §15.1 punto 3). Puramente cosmético. */
@@ -100,10 +127,12 @@ function EnemyMesh({
   session,
   enemyId,
   kind,
+  bossId,
 }: {
   session: GameSession;
   enemyId: string;
   kind: EnemyKind;
+  bossId?: BossId;
 }) {
   const bodyRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
@@ -132,6 +161,12 @@ function EnemyMesh({
   const bossPhaseFlashUntil = useRef(0);
   const lastBossPhase = useRef(1);
   const wasPhaseFlashing = useRef(false);
+  // Guardián de Canto (GDD §15.2): brillo de telegraph propio (jitter de
+  // vibración) y grupo de estrellitas del aturdimiento (orbitan sobre la
+  // cabeza); los cuernos (JSX más abajo) son estáticos, sin ref necesaria.
+  const guardianStunGroupRef = useRef<Group>(null);
+  const guardianStunStarRefs = useRef<(Mesh | null)[]>([]);
+  const wasGuardianTelegraphing = useRef(false);
 
   useFrame(() => {
     const world = session.world;
@@ -172,7 +207,7 @@ function EnemyMesh({
       wasFlashing.current = flashing;
       const body = bodyRef.current;
       if (body) {
-        body.material = flashing ? enemyHitFlashMaterial : ENEMY_MATERIAL[kind];
+        body.material = flashing ? enemyHitFlashMaterial : restingBodyMaterial(kind, bossId);
       }
     }
 
@@ -293,7 +328,48 @@ function EnemyMesh({
         // instante, así que el flash de fase continúa el gesto sin pisarlo.
         wasPhaseFlashing.current = phaseFlashing;
         const body = bodyRef.current;
-        if (body) body.material = phaseFlashing ? bossPhaseFlashMaterial : ENEMY_MATERIAL[kind];
+        if (body) body.material = phaseFlashing ? bossPhaseFlashMaterial : restingBodyMaterial(kind, bossId);
+      }
+    }
+
+    if (kind === 'boss' && bossId === 'guardian') {
+      // Vibración + brillo del telegraph (GDD §15.2 "brilla y vibra ~0.8s"):
+      // MÁS intenso que el aro genérico ya dibujado arriba — jitter de
+      // posición del propio cuerpo (no de un anillo aparte) + material ámbar
+      // intercambiado, para que sea inconfundible el aviso de un jefe que va
+      // a embestir en línea recta.
+      const telegraphing = world.time < enemy.bossTelegraphUntil && !flashing;
+      if (telegraphing !== wasGuardianTelegraphing.current) {
+        wasGuardianTelegraphing.current = telegraphing;
+        const body = bodyRef.current;
+        if (body && !flashing) body.material = telegraphing ? guardianTelegraphGlowMaterial : guardianBodyMaterial;
+      }
+      const body = bodyRef.current;
+      if (body) {
+        const jitter = telegraphing ? Math.sin(world.time * 40) * 0.05 : 0;
+        body.position.x = jitter;
+      }
+
+      // Tambaleo del aturdimiento (estado INCONFUNDIBLE, entregable 3):
+      // oscilación de rotación en Z (se "balancea" como grogui) + 3
+      // estrellitas doradas orbitando sobre la cabeza. Nunca se confunde con
+      // el telegraph: distinto eje de movimiento (bamboleo lateral vs jitter
+      // de posición) y color (dorado vs ámbar).
+      if (groupRef.current) {
+        groupRef.current.rotation.z = enemy.bossVulnerable ? Math.sin(world.time * 6) * 0.18 : 0;
+      }
+      if (guardianStunGroupRef.current) {
+        guardianStunGroupRef.current.visible = enemy.bossVulnerable;
+        if (enemy.bossVulnerable) {
+          for (let i = 0; i < guardianStunStarRefs.current.length; i++) {
+            const star = guardianStunStarRefs.current[i];
+            if (!star) continue;
+            const angle = world.time * 3 + (i / guardianStunStarRefs.current.length) * Math.PI * 2;
+            const orbitRadius = bodyRadius * 0.7;
+            star.position.set(Math.cos(angle) * orbitRadius, bodyRadius * 1.3, Math.sin(angle) * orbitRadius);
+            star.rotation.y = angle * 2;
+          }
+        }
       }
     }
 
@@ -328,7 +404,7 @@ function EnemyMesh({
       <mesh
         ref={bodyRef}
         geometry={unitSphere}
-        material={ENEMY_MATERIAL[kind]}
+        material={restingBodyMaterial(kind, bossId)}
         scale={ENEMY_RADIUS_RENDER}
       />
       <mesh
@@ -454,6 +530,47 @@ function EnemyMesh({
           />
         </>
       )}
+
+      {kind === 'boss' && bossId === 'guardian' && (
+        <>
+          {/* Cuerpo grande y pesado con "hombros"/cuernos (GDD §15.2): 2 conos
+              cortos y anchos anclados a los lados de la esfera pétrea,
+              orientados hacia fuera — silueta reconocible de embestida antes
+              de que empiece a moverse. Escala fija en local (ya vive dentro
+              del `group` que escala con `enemy.radius` vía bodyRef arriba). */}
+          <mesh
+            geometry={guardianHornGeometry}
+            material={guardianHornMaterial}
+            position={[-0.45, 0.15, 0.15]}
+            rotation-z={Math.PI / 2.4}
+            rotation-y={-0.4}
+          />
+          <mesh
+            geometry={guardianHornGeometry}
+            material={guardianHornMaterial}
+            position={[0.45, 0.15, 0.15]}
+            rotation-z={-Math.PI / 2.4}
+            rotation-y={0.4}
+          />
+
+          {/* Estado aturdido INCONFUNDIBLE (entregable 3): 3 estrellitas
+              doradas orbitando sobre la cabeza mientras `bossVulnerable`;
+              posición real recalculada en useFrame (órbita). */}
+          <group ref={guardianStunGroupRef} visible={false}>
+            {[0, 1, 2].map((i) => (
+              <mesh
+                key={i}
+                ref={(el) => {
+                  guardianStunStarRefs.current[i] = el;
+                }}
+                geometry={guardianStunStarGeometry}
+                material={guardianStunStarMaterial}
+                scale={0.1}
+              />
+            ))}
+          </group>
+        </>
+      )}
     </group>
   );
 }
@@ -462,7 +579,7 @@ export function EnemyViews({ session }: { session: GameSession }) {
   return (
     <>
       {session.world.enemies.map((enemy) => (
-        <EnemyMesh key={enemy.id} session={session} enemyId={enemy.id} kind={enemy.kind} />
+        <EnemyMesh key={enemy.id} session={session} enemyId={enemy.id} kind={enemy.kind} bossId={enemy.bossId} />
       ))}
     </>
   );

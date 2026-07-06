@@ -14,6 +14,7 @@
 - **NO toques git** salvo lecturas (`status`/`diff`/`log`). Los commits los hace el orquestador.
 - **NO arranques ni mates servidores.** El dev server del puerto 5180 puede estar sirviendo un túnel ngrok del usuario. Si ves HMR recompilando mientras editas, es normal.
 - **NO ejecutes `npm install`** (y menos en background). Si crees imprescindible una dependencia nueva: párate y dilo en el informe.
+- **vitest SIEMPRE con `run`**: `npm test` o `npx vitest run <fichero>`. `npx vitest <fichero>` a secas entra en modo WATCH y no termina nunca → el watchdog de inactividad te mata a los 600 s (pasó tres veces seguidas el 2026-07-06). En general: ningún comando que pueda quedarse >5 min sin emitir salida.
 - **NO mires código de ramas antiguas** (main, rapier-rewrite) ni el historial git. Este juego se implementa solo desde los docs + el código actual de la rama.
 - Conserva funcionales los puentes dev-only `window.__flingo` (useGameLoop.ts) y `window.__flingoScene` (GameRoot.tsx).
 

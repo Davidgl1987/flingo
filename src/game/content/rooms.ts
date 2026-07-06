@@ -8,6 +8,7 @@
  */
 
 import boossDenJson from '../../levels/boss-den.json';
+import bossGuardianJson from '../../levels/boss-guardian.json';
 import bossTestJson from '../../levels/boss-test.json';
 import combatArenaJson from '../../levels/combat-arena.json';
 import combatCrossroadsJson from '../../levels/combat-crossroads.json';
@@ -90,6 +91,7 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
   combatArenaJson,
   keyVaultJson,
   boossDenJson,
+  bossGuardianJson,
 ];
 
 /**
@@ -101,6 +103,13 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
  * (sim/dungeon.ts) prefiere salas 'jefe' con `boss` — y de haber varias,
  * elige entre TODAS con la misma probabilidad, así que hay que excluirlo
  * explícitamente aquí en vez de confiar en esa preferencia.
+ *
+ * `boss-guardian.json` (Fase B1, GDD §15.2) ya está en `SERIES_LEVEL_JSON`
+ * con `boss: 'guardian'`: a partir de esta fase, `pickRoomForRole('jefe', …)`
+ * la elige siempre (única sala 'jefe' con `boss` definido en producción).
+ * `boss-den.json` sigue en el pool con tag 'jefe' pero SIN `boss` — queda
+ * inerte (nunca se sortea para ningún rol) hasta que B2-B4 añadan más jefes
+ * de diseño; se conserva sin tocar por ser una decisión ya tomada en B0.
  */
 const DEV_ONLY_LEVEL_JSON: readonly unknown[] = [bossTestJson];
 

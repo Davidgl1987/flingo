@@ -17,11 +17,17 @@ interface VisibleBoss {
   name: string;
 }
 
-/** Busca el primer jefe vivo o muerto de la sala actual del héroe (una sola sala de jefe por run). */
+/**
+ * Busca el primer jefe vivo o muerto de la sala actual del héroe (una sola
+ * sala de jefe por run). En modo sala única (?boss= / playtest del editor)
+ * las entidades no llevan roomId: el jefe pertenece a la única sala que hay.
+ */
 function findCurrentBoss(session: GameSession): Enemy | null {
   const world = session.world;
   for (const enemy of world.enemies) {
-    if (isBoss(enemy) && enemy.roomId === world.currentRoomId) return enemy;
+    if (isBoss(enemy) && (enemy.roomId === undefined || enemy.roomId === world.currentRoomId)) {
+      return enemy;
+    }
   }
   return null;
 }

@@ -183,6 +183,51 @@ export const ITEM_PICKUP_RADIUS = 0.5;
 /** Curación de la poción (corazones). */
 export const POTION_HEAL = 1;
 
+// ── Guardián de Canto (GDD §15.2, Fase B1) ────────────────────────────────
+
+/** Vida máxima (GDD §15.6). */
+export const GUARDIAN_MAX_HP = 40;
+/** Velocidad de patrulla perimetral, lenta (u/s). */
+export const GUARDIAN_PATROL_SPEED = 1.1;
+/** Distancia a la que detecta al héroe y empieza el telegraph de carga (u). */
+export const GUARDIAN_DETECT_RANGE = 4.5;
+/** Duración del aviso de carga: brillo/vibración (GDD §15.2, mínimo 0.6s del framework). */
+export const GUARDIAN_TELEGRAPH_DURATION = 0.8;
+/** Velocidad de la carga recta (u/s): notablemente más rápida que su patrulla. */
+export const GUARDIAN_CHARGE_SPEED = 7.5;
+/** Duración máxima de una carga antes de abortar por seguridad si no choca con nada (s). */
+export const GUARDIAN_CHARGE_MAX_DURATION = 2.5;
+/** Aturdimiento tras chocar contra roca/pared: su ventana de vulnerabilidad (GDD §15.6). */
+export const GUARDIAN_STUN_DURATION = 1.4;
+/** Daño de la carga al golpear al héroe, fase 1 (GDD §15.6: 2 → 3 en fases posteriores). */
+export const GUARDIAN_CHARGE_DAMAGE_PHASE1 = 2;
+export const GUARDIAN_CHARGE_DAMAGE_PHASE3 = 3;
+/** Empujón fuerte al héroe si la carga le golpea (u/s). */
+export const GUARDIAN_CHARGE_KNOCKBACK_SPEED = 6.5;
+/** Cooldown de patrulla tras recuperarse del aturdimiento antes de poder detectar de nuevo (s). */
+export const GUARDIAN_RECOVER_PAUSE = 0.4;
+/** Fase 2 (66%): pausa corta entre las dos cargas encadenadas (s). */
+export const GUARDIAN_DOUBLE_CHARGE_PAUSE = 0.5;
+/** Nº de cargas encadenadas en fase 2/3 (una pausa corta entre ambas). */
+export const GUARDIAN_PHASE2_CHARGE_COUNT = 2;
+/** Cadencia de partículas de polvo mientras carga (s entre spawns). */
+export const GUARDIAN_DUST_INTERVAL = 0.05;
+/**
+ * Fase 3 (33%): campo de esquirlas al chocar una carga contra roca/pared.
+ * Reutiliza el pool de charcos del Trail (sim/hazards.ts::stepPuddles), cuyo
+ * daño de contacto al héroe está fijo en 1 (mismo valor pedido por el GDD
+ * para las esquirlas) — no hay una constante de daño propia porque
+ * `stepPuddles` no la parametriza (es genérica para cualquier `Puddle`,
+ * Trail incluido); si el framework de charcos se ampliara a daño variable,
+ * este sería el valor a pasar.
+ */
+export const GUARDIAN_SHARD_RADIUS = 1.1;
+export const GUARDIAN_SHARD_LIFETIME = 2.0;
+/** Techo de daño de un golpe del Guardián al héroe, por fase (GDD §15.1 punto 6). */
+export const GUARDIAN_HIT_DAMAGE_CAP_FRACTION: [number, number, number] = [0.6, 0.65, 0.7];
+/** Radio de colisión del Guardián: cuerpo grande y pesado (frente a ENEMY_RADIUS=0.4). */
+export const GUARDIAN_RADIUS = 0.62;
+
 // ── Mundo y run ───────────────────────────────────────────────────────────
 
 export const ROOMS_PER_RUN = 6;

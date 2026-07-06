@@ -152,6 +152,30 @@ export const bossVulnerableMaterial = new THREE.MeshBasicMaterial({
 /** Flash de cambio de fase (GDD §15.1 punto 3): breve destello blanco-cálido en todo el cuerpo. */
 export const bossPhaseFlashMaterial = new THREE.MeshBasicMaterial({ color: '#fff2c9' });
 
+// ── Guardián de Canto (GDD §15.2, Fase B1): cuerpo pétreo propio ───────────
+
+/** Cuerpo del Guardián: piedra gris-azulada, distinta de cualquier enemigo normal y del violeta genérico de jefe. */
+export const guardianBodyMaterial = new THREE.MeshLambertMaterial({ color: '#5b6270' });
+/** Hombros/cuernos: tono más oscuro, silueta "pesada" reconocible. */
+export const guardianHornMaterial = new THREE.MeshLambertMaterial({ color: '#3c4048' });
+/** Vetas del cuerpo pétreo: tono cálido tenue (ámbar apagado), sugiere el "canto" que le da nombre. */
+export const guardianVeinMaterial = new THREE.MeshBasicMaterial({ color: '#d9a531' });
+/** Brillo/vibración del telegraph (GDD §15.2 "brilla y vibra"): sustituye al cuerpo entero mientras avisa. */
+export const guardianTelegraphGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffb84d' });
+/** Estrellitas del aturdimiento (estado INCONFUNDIBLE, entregable 3): doradas, orbitan sobre la cabeza. */
+export const guardianStunStarMaterial = new THREE.MeshBasicMaterial({ color: '#fff2c9' });
+/** Partícula de polvo de la carga: se emite como evento (burstTable.ts); geometría reutilizada de unitSphere. */
+export const guardianDustMaterial = new THREE.MeshBasicMaterial({
+  color: '#8d8367',
+  transparent: true,
+  opacity: 0.6,
+  depthWrite: false,
+});
+/** Cuerno/hombro del Guardián: cono corto y ancho (más "roca tallada" que púa afilada). */
+export const guardianHornGeometry = new THREE.ConeGeometry(0.32, 0.55, 6);
+/** Estrellita del aturdimiento: tetraedro minúsculo, barato, orbitando. */
+export const guardianStunStarGeometry = new THREE.TetrahedronGeometry(1, 0);
+
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
 // silueta/color de contrato del GDD. ──────────────────────────────────────

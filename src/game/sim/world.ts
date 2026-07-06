@@ -91,9 +91,10 @@ export interface ItemSpawn {
 /**
  * Id de jefe (GDD §15): identifica la entrada en `content/bosses.ts` que
  * define vida, umbrales de fase y función de patrón. `test-boss` es el jefe
- * trivial de la Fase B0 (framework), disponible solo en dev/tests.
+ * trivial de la Fase B0 (framework), disponible solo en dev/tests. `guardian`
+ * es el Guardián de Canto (GDD §15.2, Fase B1).
  */
-export type BossId = 'test-boss';
+export type BossId = 'test-boss' | 'guardian';
 
 /** Estado en vivo de una puerta de una sala en la mazmorra multi-sala. */
 export interface RoomDoorRuntime {
@@ -280,6 +281,16 @@ export interface Enemy {
   bossStage: number;
   bossCounter: number;
 }
+
+/**
+ * Nota de reuso de campos por `content/bosses.ts::guardianStepPattern` (Fase
+ * B1, GDD §15.2): un jefe nunca pasa por `stepEnemyAi` (solo por
+ * `sim/boss.ts::stepBosses`), así que `facing`/`patrolFrom`/`patrolTo` —
+ * pensados para Dummy/Spike/Trail — quedan libres como almacenamiento
+ * vectorial genérico sin ampliar `Enemy` con campos "boss3"/"boss4":
+ * `facing` guarda la dirección unitaria de carga en curso; `patrolTo` guarda
+ * el punto de patrulla perimetral objetivo. Ver comentario en bosses.ts.
+ */
 
 /** Charco dejado por el Trail: pool preasignado, activar/desactivar. */
 export interface Puddle {

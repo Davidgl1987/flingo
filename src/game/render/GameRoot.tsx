@@ -58,13 +58,37 @@ function readForcedSeed(): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * Alias cortos de `?boss=` (herramienta de playtest, BOSSES_PLAN B5): salta
+ * directo a la arena del jefe en modo sala única, sin recorrer la mazmorra.
+ * Acepta el id del jefe (`?boss=guardian`) o el alias de fase (`?boss=b1`).
+ * `b0`/`test-boss` solo existe en dev (DEV_ONLY_LEVEL_JSON de rooms.ts).
+ */
+const BOSS_PARAM_ALIAS: Record<string, string> = {
+  b0: 'test-boss',
+  test: 'test-boss',
+  b1: 'guardian',
+  b2: 'queen',
+  b3: 'prisma',
+  b4: 'storm',
+};
+
+/** Sala del jefe pedido vía ?boss=<id|alias>; null si no hay parámetro o no existe tal jefe en el pool. */
+function readForcedBossRoom(): RoomData | null {
+  const raw = new URLSearchParams(window.location.search).get('boss');
+  if (raw === null) return null;
+  const bossId = BOSS_PARAM_ALIAS[raw.toLowerCase()] ?? raw.toLowerCase();
+  return getRoomPool().find((room) => room.boss === bossId) ?? null;
+}
+
 export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | null }) {
   // useState con inicializador: la sesión se crea una sola vez y nunca causa re-render.
-  const [session] = useState(() =>
-    playtestRoom
-      ? createGameSession(playtestRoom)
-      : createDungeonGameSession(getRoomPool(), readForcedSeed()),
-  );
+  const [session] = useState(() => {
+    if (playtestRoom) return createGameSession(playtestRoom);
+    const bossRoom = readForcedBossRoom();
+    if (bossRoom) return createGameSession(bossRoom);
+    return createDungeonGameSession(getRoomPool(), readForcedSeed());
+  });
   // Secuencia de run: cambia solo al reiniciar tras game-over/victoria (remonta el canvas).
   const [runSeq, setRunSeq] = useState(0);
 

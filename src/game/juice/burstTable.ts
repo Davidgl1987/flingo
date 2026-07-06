@@ -57,6 +57,11 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // + sacudida de cámara + pausa de impacto del juego (reactToEvent.ts añade
   // el hit-stop más largo, ver STRONG_HIT_DAMAGE_THRESHOLD / triggerHitStop).
   'boss-defeated': { color: '#ffd166', size: 0.22, count: 64, life: 0.9, speed: 4.2, trauma: 1 },
+  // Guardián de Canto (GDD §15.2): rastro de polvo pétreo tenue mientras
+  // carga (burst pequeño y frecuente, no debe saturar el pool a 60Hz) y
+  // estallido de esquirlas más grande/anguloso en el punto de impacto.
+  'boss-charge-dust': { color: '#8d8367', size: 0.07, count: 3, life: 0.35, speed: 0.6, trauma: 0 },
+  'boss-shard-burst': { color: '#c9c2a8', size: 0.1, count: 16, life: 0.4, speed: 2.8, trauma: 0.18 },
 };
 
 /** Color de burst específico por tipo de objeto recogido (label del evento 'item-pickup'), GDD §12: dorado/rosa/azul. */

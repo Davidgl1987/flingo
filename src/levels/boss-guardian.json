@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "id": "boss-guardian",
+  "name": "Sala del Guardián de Canto",
+  "width": 15,
+  "height": 15,
+  "playerStart": { "x": 0, "y": 6 },
+  "tags": ["jefe"],
+  "boss": "guardian",
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [
+    {
+      "id": "boss-1",
+      "kind": "boss",
+      "bossId": "guardian",
+      "position": { "x": 0, "y": 0 },
+      "patrolTarget": { "x": -5.5, "y": -5.5 }
+    }
+  ],
+  "hazards": [
+    { "id": "rock-nw", "kind": "rock", "position": { "x": -5.5, "y": 5.5 }, "width": 2.2, "height": 2.2 },
+    { "id": "rock-ne", "kind": "rock", "position": { "x": 5.5, "y": 5.5 }, "width": 2.2, "height": 2.2 },
+    { "id": "rock-se", "kind": "rock", "position": { "x": 5.5, "y": -5.5 }, "width": 2.2, "height": 2.2 },
+    { "id": "rock-sw", "kind": "rock", "position": { "x": -5.5, "y": -5.5 }, "width": 2.2, "height": 2.2 }
+  ],
+  "items": []
+}

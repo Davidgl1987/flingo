@@ -9,9 +9,29 @@
  * render/EnemyView.tsx via `bossId`).
  */
 
-import { fireEnemyProjectile } from '../sim/combat';
+import {
+  GUARDIAN_CHARGE_DAMAGE_PHASE1,
+  GUARDIAN_CHARGE_DAMAGE_PHASE3,
+  GUARDIAN_CHARGE_KNOCKBACK_SPEED,
+  GUARDIAN_CHARGE_MAX_DURATION,
+  GUARDIAN_CHARGE_SPEED,
+  GUARDIAN_DETECT_RANGE,
+  GUARDIAN_DOUBLE_CHARGE_PAUSE,
+  GUARDIAN_DUST_INTERVAL,
+  GUARDIAN_HIT_DAMAGE_CAP_FRACTION,
+  GUARDIAN_MAX_HP,
+  GUARDIAN_PATROL_SPEED,
+  GUARDIAN_PHASE2_CHARGE_COUNT,
+  GUARDIAN_RADIUS,
+  GUARDIAN_RECOVER_PAUSE,
+  GUARDIAN_SHARD_LIFETIME,
+  GUARDIAN_SHARD_RADIUS,
+  GUARDIAN_STUN_DURATION,
+  GUARDIAN_TELEGRAPH_DURATION,
+} from '../content/constants';
+import { applyDamageToHero, fireEnemyProjectile } from '../sim/combat';
 import { pushEvent, type EventQueue } from '../sim/events';
-import type { BossId, Enemy, World } from '../sim/world';
+import type { AABB, BossId, Enemy, World } from '../sim/world';
 
 /**
  * Contrato de patrón de un jefe: se llama una vez por tick (mismo dt fijo que
@@ -29,6 +49,12 @@ export interface BossDef {
   name: string;
   /** Vida máxima (GDD §15.6). */
   maxHp: number;
+  /**
+   * Radio de colisión/visual (los jefes se diseñan más grandes que el 0.4 de
+   * un enemigo normal y su cuerpo de render escala con el radio REAL). Si se
+   * omite, se conserva el radio por defecto de createEnemy.
+   */
+  radius?: number;
   /**
    * Techo de daño de un único golpe del jefe al héroe, como fracción de su
    * vida MÁXIMA (GDD §15.1 punto 6: 60% en fase 1, puede escalar un poco en
@@ -129,6 +155,306 @@ function testBossStepPattern(world: World, boss: Enemy, dt: number, events: Even
   }
 }
 
+// ── Guardián de Canto (GDD §15.2, Fase B1) ──────────────────────────────────
+//
+// Reuso de campos escalares/vectoriales de `Enemy` (ver nota en world.ts): un
+// jefe nunca pasa por `stepEnemyAi` (solo por `sim/boss.ts::stepBosses`), así
+// que estos campos —pensados para Dummy/Spike/Trail— quedan libres como
+// almacenamiento genérico sin ampliar `Enemy` con más campos "boss*":
+// - `facing`: dirección unitaria de la carga en curso (fijada al final del
+//   telegraph, hacia la última posición vista del héroe; no se recalcula
+//   durante la carga, GDD §15.2 "carga en línea recta").
+// - `patrolTo`: siguiente esquina objetivo de la patrulla perimetral
+//   (recorrido cíclico de las 4 esquinas de la sala, no ida/vuelta).
+//   `patrolFrom` no se usa.
+// - `bossTimer`: cuenta atrás del stage actual (telegraph/pausa/duración
+//   máxima de carga de seguridad/pausa de recuperación).
+// - `bossStage`: GUARDIAN_STAGE_* de abajo.
+// - `bossCounter`: nº de cargas YA completadas en la secuencia encadenada
+//   actual (0 al iniciar; fase 2/3 encadena GUARDIAN_PHASE2_CHARGE_COUNT
+//   antes de volver a patrullar, GDD §15.2).
+
+const GUARDIAN_STAGE_PATROL = 0;
+const GUARDIAN_STAGE_TELEGRAPH = 1;
+const GUARDIAN_STAGE_CHARGING = 2;
+const GUARDIAN_STAGE_STUNNED = 3;
+/** Pausa corta entre cargas encadenadas (fase 2/3, GDD §15.2). */
+const GUARDIAN_STAGE_CHAIN_PAUSE = 4;
+
+/** Las 4 esquinas del rectángulo de patrulla perimetral, en orden cíclico (con margen respecto a la pared). */
+function guardianPatrolCorners(bounds: AABB): { x: number; y: number }[] {
+  const margin = GUARDIAN_RADIUS + 0.5;
+  return [
+    { x: bounds.minX + margin, y: bounds.minY + margin },
+    { x: bounds.maxX - margin, y: bounds.minY + margin },
+    { x: bounds.maxX - margin, y: bounds.maxY - margin },
+    { x: bounds.minX + margin, y: bounds.maxY - margin },
+  ];
+}
+
+/** Sala dueña del jefe (multi-sala) o `world.bounds` en el modo sala única de los tests. */
+function guardianRoomBounds(world: World, boss: Enemy): AABB {
+  if (boss.roomId === undefined) return world.bounds;
+  return world.roomRuntimes.get(boss.roomId)?.bounds ?? world.bounds;
+}
+
+/** Avanza la patrulla perimetral lenta hacia la esquina objetivo (`patrolTo`), saltando a la siguiente al llegar. */
+function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
+  const dx = boss.patrolTo.x - boss.position.x;
+  const dy = boss.patrolTo.y - boss.position.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.15) {
+    const corners = guardianPatrolCorners(guardianRoomBounds(world, boss));
+    // Encuentra la esquina más cercana al objetivo actual y avanza a la siguiente (recorrido cíclico).
+    let nearestIndex = 0;
+    let nearestDist = Infinity;
+    for (let i = 0; i < corners.length; i++) {
+      const d = Math.hypot(corners[i].x - boss.patrolTo.x, corners[i].y - boss.patrolTo.y);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestIndex = i;
+      }
+    }
+    const next = corners[(nearestIndex + 1) % corners.length];
+    boss.patrolTo.x = next.x;
+    boss.patrolTo.y = next.y;
+    boss.velocity.x = 0;
+    boss.velocity.y = 0;
+    return;
+  }
+  const nx = dx / dist;
+  const ny = dy / dist;
+  boss.velocity.x = nx * GUARDIAN_PATROL_SPEED;
+  boss.velocity.y = ny * GUARDIAN_PATROL_SPEED;
+  boss.position.x += boss.velocity.x * dt;
+  boss.position.y += boss.velocity.y * dt;
+}
+
+/**
+ * true si el círculo del Guardián en (x,y) solapa algún obstáculo sólido de
+ * SU sala o se sale del límite de la sala. Sin mutar nada (solo detección:
+ * `guardianStepPattern` decide qué hacer con el resultado — a diferencia de
+ * `collideCircleAabb`/`collideInnerBounds` de physics.ts, que además
+ * resuelven con reflexión elástica, aquí interesa solo saber SI choca para
+ * detener la carga en seco y aturdir, nunca rebotar).
+ */
+function guardianHitsSolid(world: World, boss: Enemy, x: number, y: number): boolean {
+  const bounds = guardianRoomBounds(world, boss);
+  if (
+    x - boss.radius < bounds.minX ||
+    x + boss.radius > bounds.maxX ||
+    y - boss.radius < bounds.minY ||
+    y + boss.radius > bounds.maxY
+  ) {
+    return true;
+  }
+  const obstacles = world.obstacles;
+  for (let i = 0; i < obstacles.length; i++) {
+    const aabb = obstacles[i].aabb;
+    const nearestX = x < aabb.minX ? aabb.minX : x > aabb.maxX ? aabb.maxX : x;
+    const nearestY = y < aabb.minY ? aabb.minY : y > aabb.maxY ? aabb.maxY : y;
+    const dx = x - nearestX;
+    const dy = y - nearestY;
+    if (dx * dx + dy * dy < boss.radius * boss.radius) return true;
+  }
+  return false;
+}
+
+/** Telegrafía el inicio de una carga (primera de la secuencia o encadenada tras la pausa corta de fase 2/3): mismo aviso en ambos casos. */
+function guardianEnterTelegraph(world: World, boss: Enemy, events: EventQueue): void {
+  boss.bossTelegraphKind = 'guardian-charge';
+  boss.bossTelegraphUntil = world.time + GUARDIAN_TELEGRAPH_DURATION;
+  boss.bossTimer = GUARDIAN_TELEGRAPH_DURATION;
+  boss.bossStage = GUARDIAN_STAGE_TELEGRAPH;
+  boss.velocity.x = 0;
+  boss.velocity.y = 0;
+  pushEvent(events, 'boss-telegraph', boss.position.x, boss.position.y, 1, boss.bossTelegraphKind);
+}
+
+/**
+ * Valor de `bossTelegraphKind` durante una carga que YA golpeó al héroe:
+ * flag de "un solo golpe por carga". Se usa este campo string (libre en
+ * cuanto el telegraph resuelve) y NO `bossCounter`, que debe conservar
+ * INTACTO el nº de cargas completadas de la secuencia encadenada — usarlo
+ * también como flag de golpe lo reseteaba en cada carga y hacía que la fase
+ * 2/3 encadenara cargas para siempre (bug corregido en B1).
+ */
+const GUARDIAN_CHARGE_HIT_FLAG = 'guardian-hit';
+
+function guardianEnterCharge(world: World, boss: Enemy): void {
+  const dx = world.hero.position.x - boss.position.x;
+  const dy = world.hero.position.y - boss.position.y;
+  const len = Math.hypot(dx, dy) || 1;
+  boss.facing.x = dx / len;
+  boss.facing.y = dy / len;
+  boss.bossTelegraphUntil = 0;
+  boss.bossTelegraphKind = ''; // '' = esta carga aún no golpeó al héroe
+  boss.bossStage = GUARDIAN_STAGE_CHARGING;
+  boss.bossTimer = GUARDIAN_CHARGE_MAX_DURATION;
+}
+
+function guardianEnterStunned(boss: Enemy): void {
+  boss.velocity.x = 0;
+  boss.velocity.y = 0;
+  boss.bossVulnerable = true;
+  boss.bossStage = GUARDIAN_STAGE_STUNNED;
+  boss.bossTimer = GUARDIAN_STUN_DURATION;
+}
+
+/** Cuántas cargas encadenadas corresponden a la fase actual (GDD §15.2: fase 2/3 encadenan 2). */
+function guardianChargesForPhase(phase: 1 | 2 | 3): number {
+  return phase >= 2 ? GUARDIAN_PHASE2_CHARGE_COUNT : 1;
+}
+
+/** Campo de esquirlas de fase 3: reutiliza el pool de charcos del Trail (mismo daño de contacto al pisarlo, radio/vida propios de esquirla). */
+function spawnGuardianShardField(world: World, x: number, y: number): void {
+  const pool = world.puddles;
+  for (let i = 0; i < pool.length; i++) {
+    if (!pool[i].active) {
+      pool[i].active = true;
+      pool[i].position.x = x;
+      pool[i].position.y = y;
+      pool[i].radius = GUARDIAN_SHARD_RADIUS;
+      pool[i].ttl = GUARDIAN_SHARD_LIFETIME;
+      return;
+    }
+  }
+}
+
+function guardianStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
+  switch (boss.bossStage) {
+    case GUARDIAN_STAGE_TELEGRAPH: {
+      boss.bossTimer -= dt;
+      if (boss.bossTimer <= 0) {
+        guardianEnterCharge(world, boss);
+      }
+      break;
+    }
+
+    case GUARDIAN_STAGE_CHARGING: {
+      boss.bossTimer -= dt;
+
+      // Rastro de polvo (entregable 3): partículas periódicas mientras carga,
+      // a cadencia fija comparando el "slot" de tiempo antes/después de este
+      // tick (evita un contador propio: bossTimer ya cuenta la carga en sí).
+      if (Math.floor(world.time / GUARDIAN_DUST_INTERVAL) !== Math.floor((world.time - dt) / GUARDIAN_DUST_INTERVAL)) {
+        pushEvent(events, 'boss-charge-dust', boss.position.x, boss.position.y, GUARDIAN_CHARGE_SPEED);
+      }
+
+      const nextX = boss.position.x + boss.facing.x * GUARDIAN_CHARGE_SPEED * dt;
+      const nextY = boss.position.y + boss.facing.y * GUARDIAN_CHARGE_SPEED * dt;
+
+      // Choque contra el héroe: daño (techo compartido de jefes, GDD §15.1
+      // punto 6) + empujón fuerte. La carga NO se detiene por golpear al
+      // héroe (solo por chocar con un sólido, GDD §15.2), así que se aplica
+      // como mucho una vez por carga (bossCounter pasa de -1 a -2, "ya
+      // golpeó"); los i-frames del héroe ya evitarían el doble daño, pero sin
+      // este flag el empujón se repetiría cada tick mientras siga solapado.
+      const hero = world.hero;
+      const rrHero = boss.radius + hero.radius;
+      const dxHero = hero.position.x - nextX;
+      const dyHero = hero.position.y - nextY;
+      if (boss.bossTelegraphKind !== GUARDIAN_CHARGE_HIT_FLAG && dxHero * dxHero + dyHero * dyHero <= rrHero * rrHero) {
+        const rawDamage = boss.bossPhase >= 3 ? GUARDIAN_CHARGE_DAMAGE_PHASE3 : GUARDIAN_CHARGE_DAMAGE_PHASE1;
+        const cap = GUARDIAN_HIT_DAMAGE_CAP_FRACTION[boss.bossPhase - 1] * hero.maxHp;
+        const damage = Math.min(rawDamage, Math.max(1, Math.floor(cap)));
+        const wasHit = applyDamageToHero(world, damage, events);
+        if (!wasHit) {
+          hero.velocity.x = boss.facing.x * GUARDIAN_CHARGE_KNOCKBACK_SPEED;
+          hero.velocity.y = boss.facing.y * GUARDIAN_CHARGE_KNOCKBACK_SPEED;
+        }
+        boss.bossTelegraphKind = GUARDIAN_CHARGE_HIT_FLAG;
+      }
+
+      if (guardianHitsSolid(world, boss, nextX, nextY)) {
+        // Choca contra roca/pared: se detiene en seco donde estaba (sin
+        // penetrar el sólido) y queda aturdido — su ventana de vulnerabilidad.
+        if (boss.bossPhase >= 3) {
+          // Fase 3 (GDD §15.2): la roca/pared golpeada suelta un campo de
+          // esquirlas temporal en el punto de impacto.
+          spawnGuardianShardField(world, boss.position.x, boss.position.y);
+          pushEvent(events, 'boss-shard-burst', boss.position.x, boss.position.y, GUARDIAN_SHARD_RADIUS);
+        }
+        guardianEnterStunned(boss);
+        break;
+      }
+
+      boss.position.x = nextX;
+      boss.position.y = nextY;
+      boss.velocity.x = boss.facing.x * GUARDIAN_CHARGE_SPEED;
+      boss.velocity.y = boss.facing.y * GUARDIAN_CHARGE_SPEED;
+
+      if (boss.bossTimer <= 0) {
+        // Seguridad: si por lo que sea nunca choca (sala mal formada), no se
+        // queda cargando para siempre — se aturde igualmente al agotar el
+        // tiempo máximo de carga.
+        guardianEnterStunned(boss);
+      }
+      break;
+    }
+
+    case GUARDIAN_STAGE_STUNNED: {
+      boss.bossTimer -= dt;
+      if (boss.bossTimer <= 0) {
+        boss.bossVulnerable = false;
+        // bossCounter = cargas COMPLETADAS de la secuencia antes de esta
+        // (puro contador desde la migración del flag de golpe a
+        // bossTelegraphKind; el clamp cubre cualquier resto negativo).
+        const chargesCompleted = Math.max(0, boss.bossCounter) + 1;
+        const targetCharges = guardianChargesForPhase(boss.bossPhase);
+        if (chargesCompleted < targetCharges) {
+          boss.bossCounter = chargesCompleted;
+          boss.bossStage = GUARDIAN_STAGE_CHAIN_PAUSE;
+          boss.bossTimer = GUARDIAN_DOUBLE_CHARGE_PAUSE;
+        } else {
+          boss.bossCounter = 0;
+          boss.bossStage = GUARDIAN_STAGE_PATROL;
+          boss.bossTimer = GUARDIAN_RECOVER_PAUSE;
+        }
+      }
+      break;
+    }
+
+    case GUARDIAN_STAGE_CHAIN_PAUSE: {
+      boss.bossTimer -= dt;
+      if (boss.bossTimer <= 0) {
+        guardianEnterTelegraph(world, boss, events);
+      }
+      break;
+    }
+
+    case GUARDIAN_STAGE_PATROL:
+    default: {
+      if (boss.bossTimer > 0) {
+        boss.bossTimer -= dt;
+        boss.velocity.x = 0;
+        boss.velocity.y = 0;
+        break;
+      }
+      guardianStepPatrolMove(world, boss, dt);
+
+      const dx = world.hero.position.x - boss.position.x;
+      const dy = world.hero.position.y - boss.position.y;
+      if (Math.hypot(dx, dy) <= GUARDIAN_DETECT_RANGE) {
+        boss.bossCounter = 0;
+        guardianEnterTelegraph(world, boss, events);
+      }
+      break;
+    }
+  }
+}
+
+function guardianOnPhaseChanged(): void {
+  // Sin reset de bossStage/timers propios: un cambio de fase a mitad de
+  // patrulla/telegraph/carga no debe interrumpir el gesto en curso (GDD §15.1
+  // punto 3: "intensifica, nunca sustituye a mitad"). El único efecto de
+  // cruzar a fase 2/3 es que la PRÓXIMA vez que el Guardián sale de
+  // STUNNED (guardianChargesForPhase) decide encadenar una segunda carga, y
+  // que el daño de la carga en curso (si golpea al héroe) ya lee
+  // `boss.bossPhase` actualizado (checkPhaseAndDefeat en sim/boss.ts corre
+  // ANTES de que el siguiente tick vuelva a llamar a este patrón).
+}
+
 export const BOSS_DEFS: Record<BossId, BossDef> = {
   'test-boss': {
     id: 'test-boss',
@@ -137,6 +463,16 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     hitDamageCapFraction: [0.6, 0.65, 0.7],
     damageOutsideWindow: 0,
     stepPattern: testBossStepPattern,
+  },
+  guardian: {
+    id: 'guardian',
+    name: 'Guardián de Canto',
+    maxHp: GUARDIAN_MAX_HP,
+    radius: GUARDIAN_RADIUS,
+    hitDamageCapFraction: GUARDIAN_HIT_DAMAGE_CAP_FRACTION,
+    damageOutsideWindow: 0,
+    stepPattern: guardianStepPattern,
+    onPhaseChanged: guardianOnPhaseChanged,
   },
 };
 

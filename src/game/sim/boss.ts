@@ -44,6 +44,9 @@ export function initBossEnemies(world: World): void {
     const def = getBossDef(enemy.bossId);
     enemy.maxHp = def.maxHp;
     enemy.hp = def.maxHp;
+    // Radio real del jefe (colisión Y render escalan con él): sin esto el
+    // Guardián colisionaba y se veía como un enemigo normal de 0.4 (bug B1).
+    if (def.radius !== undefined) enemy.radius = def.radius;
     enemy.bossDamageOutsideWindowFactor = def.damageOutsideWindow;
   }
 }
