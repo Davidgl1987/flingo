@@ -115,6 +115,24 @@ export function capBossHitDamage(heroMaxHp: number, boss: Enemy, rawDamage: numb
 }
 
 /**
+ * Herramienta de playtest (ruta `?boss=b1&phase=2`): coloca a todos los jefes
+ * de la sala directamente en la fase pedida — fija su vida a una fracción
+ * dentro del umbral de esa fase, ajusta `bossPhase` y ejecuta el
+ * `onPhaseChanged` del jefe para inicializar su estado por fase. Saltar de la
+ * 1 a la 3 omite el `onPhaseChanged(2)` intermedio (aceptable para depurar:
+ * los patrones leen `bossPhase` cada tick y se adaptan igual).
+ */
+export function forceBossPhase(world: World, phase: 2 | 3): void {
+  const fraction = phase === 3 ? 0.3 : 0.6;
+  for (const enemy of world.enemies) {
+    if (!isBoss(enemy)) continue;
+    enemy.hp = Math.max(1, Math.floor(enemy.maxHp * fraction));
+    enemy.bossPhase = phase;
+    getBossDef(enemy.bossId).onPhaseChanged?.(world, enemy, phase);
+  }
+}
+
+/**
  * Avanza el patrón de todos los jefes vivos de la sala actual un tick y
  * comprueba fase/derrota de TODO jefe (vivo o recién muerto este tick).
  */

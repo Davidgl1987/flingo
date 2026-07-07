@@ -24,6 +24,7 @@ import { ShockwaveView } from '../juice/ShockwaveView';
 import { TrailView } from '../juice/TrailView';
 import { createDungeonGameSession, createGameSession, restartSession } from '../session';
 import type { GameSession } from '../session';
+import { forceBossPhase } from '../sim/boss';
 import type { RoomData } from '../sim/world';
 import { useUiStore } from '../store';
 import { DamageVignette } from '../ui/DamageVignette';
@@ -81,12 +82,25 @@ function readForcedBossRoom(): RoomData | null {
   return getRoomPool().find((room) => room.boss === bossId) ?? null;
 }
 
+/** Fase forzada del jefe vía `?phase=2|3` (solo con `?boss=`, herramienta de playtest); null si no aplica. */
+function readForcedBossPhase(): 2 | 3 | null {
+  const raw = new URLSearchParams(window.location.search).get('phase');
+  if (raw === '2') return 2;
+  if (raw === '3') return 3;
+  return null;
+}
+
 export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | null }) {
   // useState con inicializador: la sesión se crea una sola vez y nunca causa re-render.
   const [session] = useState(() => {
     if (playtestRoom) return createGameSession(playtestRoom);
     const bossRoom = readForcedBossRoom();
-    if (bossRoom) return createGameSession(bossRoom);
+    if (bossRoom) {
+      const bossSession = createGameSession(bossRoom);
+      const phase = readForcedBossPhase();
+      if (phase) forceBossPhase(bossSession.world, phase);
+      return bossSession;
+    }
     return createDungeonGameSession(getRoomPool(), readForcedSeed());
   });
   // Secuencia de run: cambia solo al reiniciar tras game-over/victoria (remonta el canvas).
