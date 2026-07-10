@@ -745,3 +745,54 @@ describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3
     expect(q.hp / q.maxHp).toBeCloseTo(1 / 3, 2);
   });
 });
+
+// ── TAREA 5 (docs/plans/QUEEN_REDESIGN_PLAN.md): persecución con evasión ───
+// La Reina ya no atraviesa columnas/rocas al perseguir al héroe: reutiliza la
+// misma circunnavegación tangencial del Guardián (moveBossTowardWithAvoidance,
+// generalizada con un parámetro `speed`), a QUEEN_STALK_SPEED_BY_PHASE. Sube
+// el reto (feedback del director: "el jefe va sobrado de fácil") porque ahora
+// SÍ puede acorralar al jugador usando las columnas en vez de colarse a través.
+
+describe('Reina: persigue RODEANDO obstáculos (TAREA 5 rediseño 2026-07-10, "no atraviesa columnas")', () => {
+  it('con una columna entre la Reina y el héroe, su círculo nunca solapa la columna y aun así reduce la distancia al héroe', () => {
+    const world = makeQueenWorldWithColumns();
+    const events = createEventQueue(64);
+    const q = boss(world);
+    const col = world.queenColumns[0]; // column-a en (3,0), medio-lado 0.5 — justo en la línea recta boss→héroe.
+    world.hero.position.x = 6;
+    world.hero.position.y = 0;
+
+    const distStart = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
+
+    for (let i = 0; i < 900; i++) {
+      // 15s: tiempo de sobra para rodear la columna y seguir avanzando.
+      stepBosses(world, FIXED_DT, events);
+      world.time += FIXED_DT;
+
+      // El círculo de la Reina (radio QUEEN_RADIUS) nunca solapa el AABB de
+      // la columna, intacta durante todo el test (nadie la embiste aquí).
+      const nearestX = Math.min(Math.max(q.position.x, col.position.x - col.halfW), col.position.x + col.halfW);
+      const nearestY = Math.min(Math.max(q.position.y, col.position.y - col.halfH), col.position.y + col.halfH);
+      const dx = q.position.x - nearestX;
+      const dy = q.position.y - nearestY;
+      expect(dx * dx + dy * dy).toBeGreaterThanOrEqual(QUEEN_RADIUS * QUEEN_RADIUS - 1e-6);
+    }
+
+    const distEnd = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
+    // La rodea (circunnavegación tangencial), pero sigue progresando hacia el héroe.
+    expect(distEnd).toBeLessThan(distStart);
+  });
+
+  it('sin obstáculos en medio, la Reina sigue acercándose al héroe con la evasión activada (persecución no rota)', () => {
+    const world = makeQueenWorld(); // sin columnas: makeRoom() no añade hazards
+    const events = createEventQueue(64);
+    const q = boss(world);
+    world.hero.position.x = 6;
+    world.hero.position.y = 6;
+
+    const distStart = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
+    advance(world, events, 300); // 5s de sobra en campo abierto
+    const distEnd = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
+    expect(distEnd).toBeLessThan(distStart);
+  });
+});

@@ -49,16 +49,12 @@ import {
   QUEEN_LARVA_RADIUS,
   QUEEN_LARVA_SPEED,
   QUEEN_MAX_HP,
-  QUEEN_MOVE_SPEED_PHASE1,
-  QUEEN_MOVE_SPEED_PHASE2,
-  QUEEN_MOVE_SPEED_PHASE3,
   QUEEN_RADIUS,
   QUEEN_STALK_SPEED_BY_PHASE,
   QUEEN_TRAIL_DROP_INTERVAL,
   QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
   QUEEN_TRAIL_PUDDLE_LIFETIME,
   QUEEN_TRAIL_PUDDLE_RADIUS,
-  QUEEN_WANDER_INTERVAL,
   QUEEN_WAVE_INTERVAL,
 } from '../content/constants';
 import { applyDamageToHero, fireEnemyProjectile } from '../sim/combat';
@@ -250,8 +246,14 @@ function guardianPatrolCorners(bounds: AABB): { x: number; y: number }[] {
   ];
 }
 
-/** Sala dueña del jefe (multi-sala) o `world.bounds` en el modo sala única de los tests. */
-function guardianRoomBounds(world: World, boss: Enemy): AABB {
+/**
+ * Sala dueña del jefe (multi-sala) o `world.bounds` en el modo sala única de
+ * los tests. Compartida por Guardián y Reina (generalizada TAREA 5 del
+ * rediseño de la Reina, docs/plans/QUEEN_REDESIGN_PLAN.md: antes existía una
+ * copia idéntica `queenRoomBounds`, sin razón para duplicarla una vez que
+ * `moveBossTowardWithAvoidance` la reutiliza desde ambos jefes).
+ */
+function bossRoomBounds(world: World, boss: Enemy): AABB {
   if (boss.roomId === undefined) return world.bounds;
   return world.roomRuntimes.get(boss.roomId)?.bounds ?? world.bounds;
 }
@@ -265,7 +267,7 @@ function guardianRoomBounds(world: World, boss: Enemy): AABB {
  * interior, así que el tramo recto patrulla-esquina puede atravesar una roca
  * (el tramo inicial desde el centro, o la recuperación tras una carga que
  * termina a mitad de arena). El movimiento recto de antes no comprobaba
- * `guardianHitsSolid`: la resolución de colisión general (physics.ts) lo
+ * `bossHitsSolid`: la resolución de colisión general (physics.ts) lo
  * empujaba fuera del sólido cada frame, cancelando el avance neto → el boss
  * quedaba clavado contra la roca para siempre (nunca progresa, nunca detecta
  * al héroe). El axis-slide prueba el eje X solo, luego Y solo, y como último
@@ -276,7 +278,7 @@ function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
   const dy = boss.patrolTo.y - boss.position.y;
   const dist = Math.hypot(dx, dy);
   if (dist < 0.15) {
-    const corners = guardianPatrolCorners(guardianRoomBounds(world, boss));
+    const corners = guardianPatrolCorners(bossRoomBounds(world, boss));
     // Encuentra la esquina más cercana al objetivo actual y avanza a la siguiente (recorrido cíclico).
     let nearestIndex = 0;
     let nearestDist = Infinity;
@@ -294,21 +296,30 @@ function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
     boss.velocity.y = 0;
     return;
   }
-  guardianMoveTowardWithAvoidance(world, boss, boss.patrolTo.x, boss.patrolTo.y, dt);
+  moveBossTowardWithAvoidance(world, boss, boss.patrolTo.x, boss.patrolTo.y, dt, GUARDIAN_PATROL_SPEED);
 }
 
 /**
- * Movimiento genérico a velocidad de patrulla hacia un punto (tx,ty) con
- * evitación por circunnavegación tangencial (axis-slide, fix B1.6.1). Extraído
- * de `guardianStepPatrolMove` (que lo aplica a `boss.patrolTo`, las esquinas
- * del perímetro) para que `guardianStepReposition` (GDD §15.2, playtest
+ * Movimiento genérico a una `speed` dada hacia un punto (tx,ty) con evitación
+ * por circunnavegación tangencial (axis-slide, fix B1.6.1). Extraído de
+ * `guardianStepPatrolMove` (que lo aplica a `boss.patrolTo`, las esquinas del
+ * perímetro) para que `guardianStepReposition` (GDD §15.2, playtest
  * 2026-07-06 "no carga si tiene una roca/muro demasiado cerca") pueda
  * reutilizar EXACTAMENTE la misma lógica apuntando a un punto distinto (hacia
  * el centro de la sala, buscando línea despejada) sin pisar `patrolTo` — que
  * debe conservar intacto el ciclo de las 4 esquinas para cuando el Guardián
  * vuelva a patrullar de verdad.
+ *
+ * Generalizada con un parámetro `speed` (TAREA 5 del rediseño de la Reina,
+ * docs/plans/QUEEN_REDESIGN_PLAN.md: "debe perseguir RODEANDO columnas, no
+ * atravesarlas"): antes leía `GUARDIAN_PATROL_SPEED` fijo dentro de la
+ * función, válido solo para el Guardián. Ahora la Reina reutiliza EXACTAMENTE
+ * el mismo algoritmo desde `queenStepMove`, pasando
+ * `QUEEN_STALK_SPEED_BY_PHASE[bossPhase-1]` — sin duplicar la circunnavegación
+ * tangencial. El comportamiento del Guardián no cambia: todas sus llamadas
+ * siguen pasando `GUARDIAN_PATROL_SPEED`.
  */
-function guardianMoveTowardWithAvoidance(world: World, boss: Enemy, tx: number, ty: number, dt: number): void {
+function moveBossTowardWithAvoidance(world: World, boss: Enemy, tx: number, ty: number, dt: number, speed: number): void {
   const dx = tx - boss.position.x;
   const dy = ty - boss.position.y;
   const dist = Math.hypot(dx, dy);
@@ -319,17 +330,17 @@ function guardianMoveTowardWithAvoidance(world: World, boss: Enemy, tx: number, 
   }
   const nx = dx / dist;
   const ny = dy / dist;
-  const stepX = nx * GUARDIAN_PATROL_SPEED * dt;
-  const stepY = ny * GUARDIAN_PATROL_SPEED * dt;
+  const stepX = nx * speed * dt;
+  const stepY = ny * speed * dt;
   const nextX = boss.position.x + stepX;
   const nextY = boss.position.y + stepY;
 
-  if (!guardianHitsSolid(world, boss, nextX, nextY)) {
+  if (!bossHitsSolid(world, boss, nextX, nextY)) {
     // Camino libre: avanza recto, como siempre.
     boss.position.x = nextX;
     boss.position.y = nextY;
-    boss.velocity.x = nx * GUARDIAN_PATROL_SPEED;
-    boss.velocity.y = ny * GUARDIAN_PATROL_SPEED;
+    boss.velocity.x = nx * speed;
+    boss.velocity.y = ny * speed;
     return;
   }
 
@@ -359,7 +370,7 @@ function guardianMoveTowardWithAvoidance(world: World, boss: Enemy, tx: number, 
       normY = ddy * inv;
     }
   }
-  const bounds = guardianRoomBounds(world, boss);
+  const bounds = bossRoomBounds(world, boss);
   // Si ninguna roca está lo bastante cerca, el bloqueo es un muro: normal hacia
   // el centro de la sala (el boss está pegado al perímetro).
   if (bestDist > boss.radius + 0.4 || (normX === 0 && normY === 0)) {
@@ -370,20 +381,20 @@ function guardianMoveTowardWithAvoidance(world: World, boss: Enemy, tx: number, 
     normY = ey / elen;
   }
 
-  const step = GUARDIAN_PATROL_SPEED * dt;
+  const step = speed * dt;
   const push = 0.05;
   // Tangente perpendicular a la normal, orientada hacia el objetivo (la que
   // tiene producto escalar positivo con la dirección deseada). Se prueba
   // primero esa, luego la opuesta, y por último solo el empuje normal
-  // (despegar). Sin asignaciones: el patrón se repite con `guardianTrySlide`
+  // (despegar). Sin asignaciones: el patrón se repite con `bossTrySlide`
   // sobre escalares.
   const tanX = -normY;
   const tanY = normX;
   const sign = tanX * nx + tanY * ny >= 0 ? 1 : -1;
   if (
-    guardianTrySlide(world, boss, sign * tanX, sign * tanY, normX, normY, step, push) ||
-    guardianTrySlide(world, boss, -sign * tanX, -sign * tanY, normX, normY, step, push) ||
-    guardianTrySlide(world, boss, normX, normY, normX, normY, step, push)
+    bossTrySlide(world, boss, sign * tanX, sign * tanY, normX, normY, step, push, speed) ||
+    bossTrySlide(world, boss, -sign * tanX, -sign * tanY, normX, normY, step, push, speed) ||
+    bossTrySlide(world, boss, normX, normY, normX, normY, step, push, speed)
   ) {
     return;
   }
@@ -394,12 +405,14 @@ function guardianMoveTowardWithAvoidance(world: World, boss: Enemy, tx: number, 
 }
 
 /**
- * Intenta mover al Guardián por (vx,vy)·step con un empuje adicional
- * (nX,nY)·push que lo despega del vértice. Si el destino está despejado, aplica
- * el movimiento (posición + velocity para el render) y devuelve true. Solo
- * escalares: cero asignaciones.
+ * Intenta mover al jefe por (vx,vy)·step con un empuje adicional (nX,nY)·push
+ * que lo despega del vértice, a la `speed` dada (para que `boss.velocity`
+ * quede coherente con el movimiento real aplicado, sea Guardián a
+ * GUARDIAN_PATROL_SPEED o Reina a QUEEN_STALK_SPEED_BY_PHASE). Si el destino
+ * está despejado, aplica el movimiento (posición + velocity para el render) y
+ * devuelve true. Solo escalares: cero asignaciones.
  */
-function guardianTrySlide(
+function bossTrySlide(
   world: World,
   boss: Enemy,
   vx: number,
@@ -408,27 +421,30 @@ function guardianTrySlide(
   nY: number,
   step: number,
   push: number,
+  speed: number,
 ): boolean {
   const tryX = boss.position.x + vx * step + nX * push;
   const tryY = boss.position.y + vy * step + nY * push;
-  if (guardianHitsSolid(world, boss, tryX, tryY)) return false;
+  if (bossHitsSolid(world, boss, tryX, tryY)) return false;
   boss.position.x = tryX;
   boss.position.y = tryY;
-  boss.velocity.x = vx * GUARDIAN_PATROL_SPEED;
-  boss.velocity.y = vy * GUARDIAN_PATROL_SPEED;
+  boss.velocity.x = vx * speed;
+  boss.velocity.y = vy * speed;
   return true;
 }
 
 /**
- * true si el círculo del Guardián en (x,y) solapa algún obstáculo sólido de
- * SU sala o se sale del límite de la sala. Sin mutar nada (solo detección:
- * `guardianStepPattern` decide qué hacer con el resultado — a diferencia de
- * `collideCircleAabb`/`collideInnerBounds` de physics.ts, que además
- * resuelven con reflexión elástica, aquí interesa solo saber SI choca para
- * detener la carga en seco y aturdir, nunca rebotar).
+ * true si el círculo del jefe (radio `boss.radius`: GUARDIAN_RADIUS para el
+ * Guardián, QUEEN_RADIUS para la Reina) en (x,y) solapa algún obstáculo
+ * sólido de SU sala o se sale del límite de la sala. Sin mutar nada (solo
+ * detección: cada llamador decide qué hacer con el resultado — a diferencia
+ * de `collideCircleAabb`/`collideInnerBounds` de physics.ts, que además
+ * resuelven con reflexión elástica, aquí interesa solo saber SI choca, para
+ * rodearlo (Guardián en patrulla/reposición, Reina persiguiendo) o, en el
+ * caso del Guardián cargando, detener en seco y aturdir).
  */
-function guardianHitsSolid(world: World, boss: Enemy, x: number, y: number): boolean {
-  const bounds = guardianRoomBounds(world, boss);
+function bossHitsSolid(world: World, boss: Enemy, x: number, y: number): boolean {
+  const bounds = bossRoomBounds(world, boss);
   if (
     x - boss.radius < bounds.minX ||
     x + boss.radius > bounds.maxX ||
@@ -457,7 +473,7 @@ const GUARDIAN_CHARGE_CLEARANCE_SAMPLES = 6;
  * GUARDIAN_MIN_CHARGE_CLEARANCE unidades en la dirección (dirX,dirY) desde su
  * posición actual (GDD §15.2, playtest 2026-07-06 "no carga si tiene una
  * roca/muro demasiado cerca"): sondea varios puntos a lo largo de esa
- * distancia con `guardianHitsSolid` — si CUALQUIERA de ellos solapa un sólido,
+ * distancia con `bossHitsSolid` — si CUALQUIERA de ellos solapa un sólido,
  * el recorrido no está despejado (la carga chocaría casi de inmediato, junto
  * al héroe, dejando al Guardián aturdido a bocajarro donde el jugador le pega
  * gratis). Sin asignaciones: solo escalares en un bucle fijo.
@@ -467,7 +483,7 @@ function guardianChargePathClear(world: World, boss: Enemy, dirX: number, dirY: 
     const d = (GUARDIAN_MIN_CHARGE_CLEARANCE * i) / GUARDIAN_CHARGE_CLEARANCE_SAMPLES;
     const x = boss.position.x + dirX * d;
     const y = boss.position.y + dirY * d;
-    if (guardianHitsSolid(world, boss, x, y)) return false;
+    if (bossHitsSolid(world, boss, x, y)) return false;
   }
   return true;
 }
@@ -532,7 +548,7 @@ export function guardianBarrelSpawnPoints(bounds: AABB): { x: number; y: number 
  * el primero, empate determinista).
  */
 function guardianBarrelSpawnPoint(world: World, boss: Enemy): { x: number; y: number } {
-  const bounds = guardianRoomBounds(world, boss);
+  const bounds = bossRoomBounds(world, boss);
   const points = guardianBarrelSpawnPoints(bounds);
   const barrels = world.barrels;
 
@@ -787,7 +803,7 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
         // sólido (barril pegado a una roca/pared): si no, se queda donde
         // estaba, igual que el choque normal contra sólidos de abajo — nunca
         // se le deja penetrar visualmente un obstáculo.
-        if (!guardianHitsSolid(world, boss, nextX, nextY)) {
+        if (!bossHitsSolid(world, boss, nextX, nextY)) {
           boss.position.x = nextX;
           boss.position.y = nextY;
         }
@@ -802,7 +818,7 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
         break;
       }
 
-      if (guardianHitsSolid(world, boss, nextX, nextY)) {
+      if (bossHitsSolid(world, boss, nextX, nextY)) {
         // Choca contra roca/pared: se detiene en seco donde estaba (sin
         // penetrar el sólido) y queda aturdido — su ventana de vulnerabilidad.
         if (boss.bossPhase >= 3) {
@@ -864,10 +880,10 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
       // línea despejada hacia el héroe (GDD §15.2, playtest 2026-07-06): no
       // toca `patrolTo` (el ciclo de esquinas de la patrulla normal queda
       // intacto para cuando vuelva a patrullar de verdad).
-      const bounds = guardianRoomBounds(world, boss);
+      const bounds = bossRoomBounds(world, boss);
       const centerX = (bounds.minX + bounds.maxX) / 2;
       const centerY = (bounds.minY + bounds.maxY) / 2;
-      guardianMoveTowardWithAvoidance(world, boss, centerX, centerY, dt);
+      moveBossTowardWithAvoidance(world, boss, centerX, centerY, dt, GUARDIAN_PATROL_SPEED);
       guardianTryEnterChargeOrReposition(world, boss, events);
       break;
     }
@@ -914,12 +930,14 @@ function guardianOnPhaseChanged(world: World, boss: Enemy): void {
 //
 // Reuso de campos de `Enemy` (mismo espíritu que el Guardián, ver nota más
 // arriba): la Reina NUNCA pasa por `stepEnemyAi`, así que:
-// - `patrolTo`: punto de deambulación objetivo actual (elegido al azar dentro
-//   de su sala cada QUEEN_WANDER_INTERVAL, o hacia el héroe en fase 3 pánico).
-// - `patrolFrom`: sin uso propio en la Reina (la persecución es libre, sin
-//   correa ni ancla desde playtest 2026-07-10). Se queda en su valor inicial
-//   del pool y no se lee.
-// - `bossTimer`: cuenta atrás hasta el próximo cambio de punto de deambulación.
+// - `patrolTo`/`patrolFrom`/`bossTimer`: sin uso propio en la Reina desde la
+//   TAREA 5 del rediseño (docs/plans/QUEEN_REDESIGN_PLAN.md, "persigue
+//   RODEANDO obstáculos"): la deambulación aleatoria previa (que atravesaba
+//   columnas, sin evasión) se retira — `queenStepMove` persigue al héroe
+//   directamente con `moveBossTowardWithAvoidance` (misma circunnavegación
+//   tangencial del Guardián, generalizada en esta tarea), que YA rodea
+//   columnas/rocas; sumar un wander sin evadir solo reintroducía el problema
+//   que esta tarea corrige. Quedan en su valor inicial del pool y no se leen.
 // - `bossCounter`: cuenta atrás (en segundos, no ticks) hasta soltar el
 //   próximo charco de rastro — comparte "reloj" con `trailDropTimer` del Trail
 //   normal en espíritu, pero como campo genérico de jefe.
@@ -939,12 +957,6 @@ function guardianOnPhaseChanged(world: World, boss: Enemy): void {
 
 function isQueenLarva(enemy: Enemy): boolean {
   return enemy.id.startsWith(QUEEN_LARVA_ID_PREFIX);
-}
-
-/** Sala dueña de la Reina (multi-sala) o `world.bounds` en el modo sala única de los tests. */
-function queenRoomBounds(world: World, boss: Enemy): AABB {
-  if (boss.roomId === undefined) return world.bounds;
-  return world.roomRuntimes.get(boss.roomId)?.bounds ?? world.bounds;
 }
 
 /**
@@ -995,13 +1007,11 @@ function queenOnInit(world: World, boss: Enemy): void {
       bossCounter: 0,
     });
   }
-  // Deambulación: primer objetivo válido de inmediato (evita un tick con
-  // patrolTo en su propia posición, que leería dist=0 y elegiría uno nuevo
-  // igualmente, pero así queda determinista desde el primer frame).
-  boss.bossTimer = QUEEN_WANDER_INTERVAL;
-  queenPickWanderTarget(world, boss);
-  // (Ya no se fija ningún ancla de correa: la Reina persigue libremente al
-  // héroe, sin volver a un centro — playtest 2026-07-10 "quitar la correa".)
+  // (Ya no hay setup de deambulación que hacer aquí: TAREA 5 del rediseño
+  // retira el wander aleatorio — `queenStepMove` persigue directamente al
+  // héroe con evasión, sin punto objetivo propio que inicializar. Tampoco se
+  // fija ningún ancla de correa: la Reina persigue libremente al héroe, sin
+  // volver a un centro — playtest 2026-07-10 "quitar la correa".)
 
   // Rediseño 2026-07-10 (GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md §1): el
   // cuerpo del jefe ya NO es vulnerable (ni de forma permanente ni por
@@ -1044,107 +1054,39 @@ function queenLarvaMaxForPhase(phase: 1 | 2 | 3): number {
   return QUEEN_LARVA_MAX_BY_PHASE[phase - 1];
 }
 
-/** Elige un nuevo punto de deambulación dentro de la sala de la Reina (determinista vía world.rng). */
-function queenPickWanderTarget(world: World, boss: Enemy): void {
-  const bounds = queenRoomBounds(world, boss);
-  const margin = QUEEN_RADIUS + 0.6;
-  const minX = bounds.minX + margin;
-  const maxX = bounds.maxX - margin;
-  const minY = bounds.minY + margin;
-  const maxY = bounds.maxY - margin;
-  boss.patrolTo.x = maxX > minX ? minX + world.rng() * (maxX - minX) : (bounds.minX + bounds.maxX) / 2;
-  boss.patrolTo.y = maxY > minY ? minY + world.rng() * (maxY - minY) : (bounds.minY + bounds.maxY) / 2;
-}
-
-/** Velocidad de desplazamiento de la Reina según fase (GDD §15.3: lenta en fase 1, más movimiento en 2/3). */
-function queenMoveSpeedForPhase(phase: 1 | 2 | 3): number {
-  if (phase >= 3) return QUEEN_MOVE_SPEED_PHASE3;
-  if (phase === 2) return QUEEN_MOVE_SPEED_PHASE2;
-  return QUEEN_MOVE_SPEED_PHASE1;
-}
-
 /** Cadencia de rastro según fase (GDD §15.3: "en fase 2 el rastro se genera más rápido"). */
 function queenTrailIntervalForPhase(phase: 1 | 2 | 3): number {
   return phase >= 2 ? QUEEN_TRAIL_DROP_INTERVAL_PHASE2 : QUEEN_TRAIL_DROP_INTERVAL;
 }
 
 /**
- * Deambulación lenta (GDD §15.3: "se mueve poco, no es persecución, es
- * gestión de terreno"). Fase 3 pánico: en vez de deambular al azar, el punto
- * objetivo se re-orienta periódicamente hacia una posición que tiende a
- * rodear al héroe (offset perpendicular a la línea Reina-héroe), leyéndose
- * como "traza un rastro que busca envolver al jugador" sin necesitar un
- * sistema de rastro-dirigido aparte.
+ * Persecución hacia el héroe RODEANDO obstáculos (TAREA 5 del rediseño de la
+ * Reina, docs/plans/QUEEN_REDESIGN_PLAN.md: "atraviesa las columnas... debe
+ * perseguir RODEÁNDOLAS" — sube el reto, GDD §15.3, playtest 2026-07-06 "la
+ * Reina te acecha"; playtest 2026-07-10 "que llegue a tocar al jugador" +
+ * "incrementaría la velocidad con la que persigue conforme pasan las fases" +
+ * "quitar la correa, que persiga libremente"): plantarse en un punto fijo a
+ * disparar deja de ser seguro. La Reina se dirige SIEMPRE hacia el héroe —sin
+ * correa ni ancla central de vuelta— y persigue por toda la arena a
+ * `QUEEN_STALK_SPEED_BY_PHASE[bossPhase-1]`, reutilizando EXACTAMENTE la
+ * circunnavegación tangencial del Guardián (`moveBossTowardWithAvoidance`,
+ * generalizada en esta tarea con un parámetro `speed`) en vez de escribir
+ * `boss.position` sin comprobar sólidos: ya NO atraviesa columnas/rocas, las
+ * rodea — con el efecto de diseño buscado de que la Reina usa las columnas
+ * para acorralar en vez de dejarlas de lado.
+ *
+ * La deambulación aleatoria previa (wander independiente sumado al acecho,
+ * con "envolvente" propia en fase 3) se retira: al rodear obstáculos, la
+ * persecución directa YA se lee como gestión de terreno (se desvía, traza
+ * rastro alrededor de las columnas) sin necesitar un segundo vector sin
+ * evadir — que además volvería a atravesar obstáculos y rompería la garantía
+ * de esta tarea. `queenStepTrail` (rastro) y el escalado de velocidad por
+ * fase quedan intactos; solo cambia CÓMO se traduce la intención de
+ * movimiento en posición real.
  */
 function queenStepMove(world: World, boss: Enemy, dt: number): void {
-  boss.bossTimer -= dt;
-  if (boss.bossTimer <= 0) {
-    boss.bossTimer = QUEEN_WANDER_INTERVAL;
-    if (boss.bossPhase >= 3) {
-      const dx = boss.position.x - world.hero.position.x;
-      const dy = boss.position.y - world.hero.position.y;
-      const len = Math.hypot(dx, dy) || 1;
-      // Perpendicular a la línea héroe→Reina: tiende a rodear en vez de
-      // acercarse/alejarse en línea recta, leyéndose como "envolvente".
-      const perpX = -dy / len;
-      const perpY = dx / len;
-      const bounds = queenRoomBounds(world, boss);
-      const spread = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.35;
-      const sign = world.rng() < 0.5 ? 1 : -1;
-      boss.patrolTo.x = boss.position.x + perpX * spread * sign;
-      boss.patrolTo.y = boss.position.y + perpY * spread * sign;
-      // Clampa dentro de bounds con margen (mismo margen que queenPickWanderTarget).
-      const margin = QUEEN_RADIUS + 0.6;
-      boss.patrolTo.x = Math.min(Math.max(boss.patrolTo.x, bounds.minX + margin), bounds.maxX - margin);
-      boss.patrolTo.y = Math.min(Math.max(boss.patrolTo.y, bounds.minY + margin), bounds.maxY - margin);
-    } else {
-      queenPickWanderTarget(world, boss);
-    }
-  }
-
-  const speed = queenMoveSpeedForPhase(boss.bossPhase);
-  const dx = boss.patrolTo.x - boss.position.x;
-  const dy = boss.patrolTo.y - boss.position.y;
-  const dist = Math.hypot(dx, dy);
-  let wanderVx = 0;
-  let wanderVy = 0;
-  if (dist >= 0.2) {
-    const nx = dx / dist;
-    const ny = dy / dist;
-    boss.position.x += nx * speed * dt;
-    boss.position.y += ny * speed * dt;
-    wanderVx = nx * speed;
-    wanderVy = ny * speed;
-  }
-
-  queenStepStalk(world, boss, dt, wanderVx, wanderVy);
-}
-
-/**
- * Persecución libre hacia el héroe, superpuesta a la deambulación normal (GDD
- * §15.3, playtest 2026-07-06 "la Reina te acecha"; playtest 2026-07-10 "no
- * llega al jugador... haz que llegue a tocar al jugador" + "incrementaría la
- * velocidad con la que persigue conforme pasan las fases" + "quitar la correa,
- * que persiga libremente"): plantarse en un punto fijo a disparar deja de ser
- * seguro. La Reina se dirige SIEMPRE hacia el héroe —ya no hay correa ni ancla
- * central de vuelta— y persigue por toda la arena; solo la velocidad de este
- * empuje escala por fase (`QUEEN_STALK_SPEED_BY_PHASE`, índice `bossPhase -
- * 1`). No esquiva obstáculos (atraviesa las columnas igual que en la
- * deambulación; evitación queda para otra tarea). Escribe `boss.velocity`
- * sumando su propio vector al de deambulación ya calculado
- * (`wanderVx`/`wanderVy`) — cero asignaciones de objetos, solo escalares.
- */
-function queenStepStalk(world: World, boss: Enemy, dt: number, wanderVx: number, wanderVy: number): void {
-  const dx = world.hero.position.x - boss.position.x;
-  const dy = world.hero.position.y - boss.position.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const dirX = dx / len;
-  const dirY = dy / len;
   const stalkSpeed = QUEEN_STALK_SPEED_BY_PHASE[boss.bossPhase - 1];
-  boss.position.x += dirX * stalkSpeed * dt;
-  boss.position.y += dirY * stalkSpeed * dt;
-  boss.velocity.x = wanderVx + dirX * stalkSpeed;
-  boss.velocity.y = wanderVy + dirY * stalkSpeed;
+  moveBossTowardWithAvoidance(world, boss, world.hero.position.x, world.hero.position.y, dt, stalkSpeed);
 }
 
 /**
