@@ -3,21 +3,25 @@
  * 2026-07-10, GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md).
  *
  * `world.queenColumns` (sim, `src/game/sim/world.ts`) es la fuente de verdad
- * de su vida: cada columna vale 2 hp (intacta) → 1 (agrietada, tras el 1.er
- * golpe de embestida) → 0 con `broken=true` (rota, tras el 2.º). El
- * `Obstacle` sólido correspondiente se retira de `world.obstacles` al
- * romperse (`stepQueenColumns`, combat.ts) — por eso `RoomView.tsx` EXCLUYE
- * del pintado genérico de rocas cualquier obstáculo cuyo id local empiece
- * por `column` (mismo criterio que `bosses.ts::onInit` usa para poblar
- * `world.queenColumns`, ver `QUEEN_COLUMN_ID_PREFIX`): este fichero es el
- * ÚNICO que pinta las columnas, en sus 3 estados, evitando el doble-render.
+ * de su vida: cada columna vale `QUEEN_COLUMN_HP` (3, playtest 2026-07-10)
+ * hp intacta → 2 (leve) → 1 (grave, cada golpe de embestida resta 1) → 0 con
+ * `broken=true` (rota, restos). El `Obstacle` sólido correspondiente se
+ * retira de `world.obstacles` al romperse (`stepQueenColumns`, combat.ts) —
+ * por eso `RoomView.tsx` EXCLUYE del pintado genérico de rocas cualquier
+ * obstáculo cuyo id local empiece por `column` (mismo criterio que
+ * `bosses.ts::onInit` usa para poblar `world.queenColumns`, ver
+ * `QUEEN_COLUMN_ID_PREFIX`): este fichero es el ÚNICO que pinta las
+ * columnas, en sus 4 estados (intacta/leve/grave/restos), evitando el
+ * doble-render.
  *
  * Patrón: igual que `PuddleView.tsx` — pool de InstancedMesh preasignado
  * (uno POR ESTADO, ya que un InstancedMesh solo admite un material), leído
  * cada frame en `useFrame` y mutado vía matrices; nunca `setState` por
  * frame, nunca se crean/destruyen meshes. Solo el estado que aplica a cada
  * columna queda con escala > 0 en su mesh; el resto se oculta (escala 0,
- * mismo truco que los charcos inactivos).
+ * mismo truco que los charcos inactivos). Los 3 niveles de daño (hp=3/2/1)
+ * degradan progresivamente inclinación + oscurecimiento + grieta, para que
+ * se lea de un vistazo cuántos golpes le quedan a cada columna.
  *
  * `QueenTethersView` pinta la "cuerda" (GDD §15.3, feedback de playtest
  * 2026-07-10) que une a la Reina con cada columna AÚN EN PIE (intacta o
@@ -30,8 +34,10 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import * as THREE from 'three';
+import { QUEEN_COLUMN_HP } from '../content/constants';
 import type { GameSession } from '../session';
 import {
+  queenColumnCrackedLightMaterial,
   queenColumnCrackedMaterial,
   queenColumnCrackStripeMaterial,
   queenColumnDebrisMaterial,
@@ -47,10 +53,14 @@ const COLUMN_HEIGHT = 0.8;
 const DEBRIS_HEIGHT = 0.18;
 /** Los escombros se extienden un poco más allá de la huella original de la columna (efecto "se desparramó"). */
 const DEBRIS_FOOTPRINT_SCALE = 1.2;
-/** Inclinación de una columna agrietada (feedback de director 2026-07-10: "debe leerse que le queda un golpe"). Alterna de lado por índice para que no se vean clonadas. */
+/** Inclinación de una columna hp=1 (grave, feedback de director 2026-07-10: "debe leerse que le queda un golpe"). Alterna de lado por índice para que no se vean clonadas. */
 const CRACKED_TILT = 0.11;
-/** La columna agrietada se hunde/acorta ligeramente (parece parcialmente partida, no solo repintada). */
+/** La columna hp=1 se hunde/acorta ligeramente (parece parcialmente partida, no solo repintada). */
 const CRACKED_HEIGHT_SCALE = 0.92;
+/** Inclinación de una columna hp=2 (leve): mitad que la de hp=1, primer aviso sutil de daño. */
+const CRACKED_LIGHT_TILT = CRACKED_TILT * 0.5;
+/** La columna hp=2 apenas se hunde (bastante menos que hp=1): daño incipiente, no crítico todavía. */
+const CRACKED_LIGHT_HEIGHT_SCALE = 0.97;
 /** Altura del centro del cordón sobre el suelo (ni al ras ni a la altura de la corona: lee como "atadura", no como aro). */
 const TETHER_HEIGHT = 0.55;
 /** Duración del latigazo de retracción al romper una columna: la cuerda encoge rápido hacia la Reina en vez de cortarse en seco. */
@@ -69,6 +79,7 @@ function hideInstance(mesh: THREE.InstancedMesh, i: number): void {
 
 export function QueenColumnsView({ session }: { session: GameSession }) {
   const intactRef = useRef<THREE.InstancedMesh>(null);
+  const crackedLightRef = useRef<THREE.InstancedMesh>(null);
   const crackedRef = useRef<THREE.InstancedMesh>(null);
   const crackStripeRef = useRef<THREE.InstancedMesh>(null);
   const debrisRef = useRef<THREE.InstancedMesh>(null);
@@ -76,10 +87,11 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
 
   useFrame(() => {
     const intact = intactRef.current;
+    const crackedLight = crackedLightRef.current;
     const cracked = crackedRef.current;
     const crackStripe = crackStripeRef.current;
     const debris = debrisRef.current;
-    if (!intact || !cracked || !crackStripe || !debris) return;
+    if (!intact || !crackedLight || !cracked || !crackStripe || !debris) return;
 
     const columns = session.world.queenColumns;
     for (let i = 0; i < columns.length; i++) {
@@ -89,6 +101,7 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
 
       if (col.broken) {
         hideInstance(intact, i);
+        hideInstance(crackedLight, i);
         hideInstance(cracked, i);
         hideInstance(crackStripe, i);
         scratch.position.set(col.position.x, DEBRIS_HEIGHT / 2, col.position.y);
@@ -99,8 +112,11 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
         continue;
       }
 
-      if (col.hp === 1) {
+      if (col.hp <= QUEEN_COLUMN_HP - 2) {
+        // Grave (le queda 1 golpe): máxima inclinación/oscurecimiento y
+        // grieta larga — el aspecto más dañado antes de romperse del todo.
         hideInstance(intact, i);
+        hideInstance(crackedLight, i);
         hideInstance(debris, i);
         const tilt = (i % 2 === 0 ? 1 : -1) * CRACKED_TILT;
         const height = COLUMN_HEIGHT * CRACKED_HEIGHT_SCALE;
@@ -119,6 +135,31 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
         continue;
       }
 
+      if (col.hp === QUEEN_COLUMN_HP - 1) {
+        // Leve (le quedan 2 golpes): inclinación/oscurecimiento y grieta a
+        // medias respecto al nivel grave — primer aviso, todavía sutil.
+        hideInstance(intact, i);
+        hideInstance(cracked, i);
+        hideInstance(debris, i);
+        const tilt = (i % 2 === 0 ? 1 : -1) * CRACKED_LIGHT_TILT;
+        const height = COLUMN_HEIGHT * CRACKED_LIGHT_HEIGHT_SCALE;
+        scratch.position.set(col.position.x, height / 2, col.position.y);
+        scratch.rotation.set(0, 0, tilt);
+        scratch.scale.set(width, height, depth);
+        scratch.updateMatrix();
+        crackedLight.setMatrixAt(i, scratch.matrix);
+        // Grieta más corta/fina que la de hp=1: daño incipiente, aún se lee
+        // como "le quedan golpes" sin confundirse con el estado grave.
+        scratch.position.set(col.position.x, height * 0.55, col.position.y + depth / 2 + 0.01);
+        scratch.rotation.set(0, 0, tilt + Math.PI / 4);
+        scratch.scale.set(width * 0.7, 0.035, 0.035);
+        scratch.updateMatrix();
+        crackStripe.setMatrixAt(i, scratch.matrix);
+        continue;
+      }
+
+      // Intacta (col.hp >= QUEEN_COLUMN_HP, único nivel sin agrietar): sin daño visible, misma silueta que cualquier roca.
+      hideInstance(crackedLight, i);
       hideInstance(cracked, i);
       hideInstance(crackStripe, i);
       hideInstance(debris, i);
@@ -129,6 +170,7 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
       intact.setMatrixAt(i, scratch.matrix);
     }
     intact.instanceMatrix.needsUpdate = true;
+    crackedLight.instanceMatrix.needsUpdate = true;
     cracked.instanceMatrix.needsUpdate = true;
     crackStripe.instanceMatrix.needsUpdate = true;
     debris.instanceMatrix.needsUpdate = true;
@@ -139,6 +181,11 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
   return (
     <>
       <instancedMesh ref={intactRef} args={[unitBox, rockMaterial, count]} frustumCulled={false} />
+      <instancedMesh
+        ref={crackedLightRef}
+        args={[unitBox, queenColumnCrackedLightMaterial, count]}
+        frustumCulled={false}
+      />
       <instancedMesh ref={crackedRef} args={[unitBox, queenColumnCrackedMaterial, count]} frustumCulled={false} />
       <instancedMesh
         ref={crackStripeRef}

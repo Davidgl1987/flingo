@@ -197,9 +197,16 @@ export const queenCrownSpikeGeometry = new THREE.ConeGeometry(0.14, 0.5, 6);
 // que se agrieta); agrietada/escombros son variantes propias. Ver
 // QueenColumnsView.tsx.
 
-/** Columna agrietada (1.er golpe de embestida): mismo tono base que la roca pero bastante más oscuro — "le queda un golpe". */
+/**
+ * Columna dañada, 3 niveles de hp (QUEEN_COLUMN_HP=3, playtest 2026-07-10:
+ * "debe leerse de un vistazo cuántos golpes le quedan"): cuanto más baja el
+ * hp, más oscuro el tono — degradado desde `rockMaterial` (intacta, hp=3).
+ */
+/** hp=2 (leve, tras el 1.er golpe): tono intermedio entre la roca intacta y la agrietada grave — "le quedan 2 golpes". */
+export const queenColumnCrackedLightMaterial = new THREE.MeshLambertMaterial({ color: '#63667f' });
+/** hp=1 (grave, tras el 2.º golpe): mismo tono base que la roca pero bastante más oscuro — "le queda un golpe". */
 export const queenColumnCrackedMaterial = new THREE.MeshLambertMaterial({ color: '#4a4a56' });
-/** Grieta visible sobre la cara de una columna agrietada: franja casi negra, fina, cruzando en diagonal. */
+/** Grieta visible sobre la cara de una columna agrietada: franja casi negra, fina, cruzando en diagonal (se reutiliza para hp=2 y hp=1, con escala más corta/fina en hp=2). */
 export const queenColumnCrackStripeMaterial = new THREE.MeshBasicMaterial({ color: '#111116' });
 /** Restos/escombros tras romperse del todo: mancha baja y muy oscura en el suelo, marca que ahí hubo una columna. */
 export const queenColumnDebrisMaterial = new THREE.MeshLambertMaterial({ color: '#2e2e38' });
@@ -220,6 +227,19 @@ export const queenTetherMaterial = new THREE.MeshBasicMaterial({
   opacity: 0.55,
   depthWrite: false,
 });
+
+/**
+ * Guardianas de la Reina (larvas embistiendo, GDD §15.3, rediseño 2026-07-10,
+ * `enemy.bossStage`: 0=orbita, 1=telegrafía, 2=carga): aviso visual de que
+ * van a embestir, mismo lenguaje ámbar=aviso ya usado por el resto de jefes
+ * (`bossTelegraphMaterial`), sobre el cuerpo (que en reposo es el rojo
+ * genérico de larva/Dummy) en vez de un anillo aparte, para que sea
+ * inconfundible incluso entre el resto de larvas atacantes.
+ */
+/** Telegraph (bossStage=1): parpadea alternando con el rojo base — intercambiado por EnemyView, nunca mutado. */
+export const queenGuardianTelegraphMaterial = new THREE.MeshBasicMaterial({ color: '#ffe083' });
+/** Carga (bossStage=2, opcional): tono rojo más intenso y saturado que el reposo — "ya viene, esquiva". */
+export const queenGuardianChargeMaterial = new THREE.MeshBasicMaterial({ color: '#ff2d2d' });
 
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la

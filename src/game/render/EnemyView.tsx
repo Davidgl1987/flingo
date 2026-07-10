@@ -36,6 +36,11 @@
  *   doradas orbitando sobre la cabeza — todo con geometrías/materiales
  *   compartidos de assets.ts, encima (no en sustitución) de los anillos
  *   genéricos de telegraph/vulnerabilidad ya heredados.
+ * - Guardianas de la Reina (larvas `chasing===false`, GDD §15.3, rediseño
+ *   2026-07-10): aviso de embestida sobre `enemy.bossStage` (0=orbita,
+ *   1=TELEGRAFÍA, 2=carga) — parpadeo ámbar + hinchazón pulsante durante la
+ *   telegrafía, tono rojo intenso y constante mientras carga; el flash de
+ *   golpe (hitFlash, ya existente) tiene prioridad y nunca se pisan.
  *
  * Todo con geometrías/materiales compartidos de assets.ts; cero asignaciones
  * en useFrame (solo escalares y mutación de refs ya existentes).
@@ -68,6 +73,8 @@ import {
   queenBodyMaterial,
   queenCrownMaterial,
   queenCrownSpikeGeometry,
+  queenGuardianChargeMaterial,
+  queenGuardianTelegraphMaterial,
   queenSummonPulseMaterial,
   shooterEyeChargeMaterial,
   shooterEyeMaterial,
@@ -229,6 +236,34 @@ function EnemyMesh({
       const body = bodyRef.current;
       if (body) {
         body.material = flashing ? enemyHitFlashMaterial : restingBodyMaterial(kind, bossId);
+      }
+    }
+
+    // Guardiana de la Reina (larva `chasing===false`, GDD §15.3, máquina de
+    // embestida en `bossStage`: 0=orbita, 1=TELEGRAFÍA, 2=carga): aviso
+    // legible de que va a embestir — parpadeo ámbar + hinchazón pulsante
+    // durante la telegrafía, tono rojo intenso y constante mientras carga.
+    // El flash de golpe (arriba) tiene prioridad: nunca se pisan.
+    if (isLarva && !flashing) {
+      // Cubre también la perseguidora (`chasing===true`) y la guardiana en
+      // reposo (`bossStage===0`) para restaurar el aspecto normal: una larva
+      // es un objeto reciclado por la sim (pool por `hp<=0`, ver
+      // `queenActivateGuardian`/`queenSpawnChasers`), así que puede renacer
+      // con otro rol tras morir a mitad de carga — sin este `else` quedaría
+      // con el material rojo intenso de carga pegado indefinidamente.
+      const body = bodyRef.current;
+      if (body) {
+        if (!enemy.chasing && enemy.bossStage === 1) {
+          const blink = Math.sin(world.time * 22) > 0;
+          body.material = blink ? queenGuardianTelegraphMaterial : restingBodyMaterial(kind, bossId);
+          body.scale.setScalar(bodyRadius * (1 + 0.15 * (0.5 + 0.5 * Math.sin(world.time * 22))));
+        } else if (!enemy.chasing && enemy.bossStage === 2) {
+          body.material = queenGuardianChargeMaterial;
+          body.scale.setScalar(bodyRadius * 1.12);
+        } else {
+          body.material = restingBodyMaterial(kind, bossId);
+          body.scale.setScalar(bodyRadius);
+        }
       }
     }
 
