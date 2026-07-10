@@ -42,6 +42,7 @@ import { HeroView } from './HeroView';
 import { ItemViews } from './ItemView';
 import { ProjectileViews } from './ProjectileView';
 import { PuddleViews } from './PuddleView';
+import { QueenColumnsView, QueenTethersView } from './QueenColumnsView';
 import { RoomView } from './RoomView';
 import { useGameLoop } from './useGameLoop';
 
@@ -132,6 +133,10 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
         <ambientLight intensity={0.75} />
         <directionalLight position={[4, 8, 3]} intensity={1.15} />
         <RoomView world={session.world} />
+        {/* Columnas de la Reina del Enjambre + sus cuerdas (GDD §15.3): no-op
+            (return null) fuera de su sala, ver QueenColumnsView.tsx. */}
+        <QueenColumnsView session={session} />
+        <QueenTethersView session={session} />
         <HazardViews world={session.world} />
         <BarrelViews session={session} />
         <PuddleViews session={session} />

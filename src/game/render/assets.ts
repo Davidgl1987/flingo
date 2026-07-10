@@ -192,6 +192,35 @@ export const queenSummonPulseMaterial = new THREE.MeshBasicMaterial({
 /** Púa de la corona: cono fino y alargado (silueta de insecto/enjambre), distinto del cuerno romo del Guardián. */
 export const queenCrownSpikeGeometry = new THREE.ConeGeometry(0.14, 0.5, 6);
 
+// ── Columnas de la Reina (T2 render, rediseño 2026-07-10, GDD §15.3): la
+// intacta reutiliza `rockMaterial` (misma silueta que cualquier roca hasta
+// que se agrieta); agrietada/escombros son variantes propias. Ver
+// QueenColumnsView.tsx.
+
+/** Columna agrietada (1.er golpe de embestida): mismo tono base que la roca pero bastante más oscuro — "le queda un golpe". */
+export const queenColumnCrackedMaterial = new THREE.MeshLambertMaterial({ color: '#4a4a56' });
+/** Grieta visible sobre la cara de una columna agrietada: franja casi negra, fina, cruzando en diagonal. */
+export const queenColumnCrackStripeMaterial = new THREE.MeshBasicMaterial({ color: '#111116' });
+/** Restos/escombros tras romperse del todo: mancha baja y muy oscura en el suelo, marca que ahí hubo una columna. */
+export const queenColumnDebrisMaterial = new THREE.MeshLambertMaterial({ color: '#2e2e38' });
+
+/**
+ * Cuerda/cordón que une a la Reina con cada columna aún en pie: cilindro
+ * fino orgánico, PRE-ROTADO en la propia geometría (una vez, a nivel de
+ * módulo) para que su eje largo sea +Z local en vez de +Y — mismo patrón que
+ * `spellBoltSegmentGeometry` (ProjectileView): el componente solo necesita
+ * `rotation.y = atan2(dx, dy)` + `scale.z = longitud` cada frame, sin tocar
+ * la geometría base.
+ */
+export const queenTetherGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 6).rotateX(Math.PI / 2);
+/** Color orgánico rosa-enjambre (mismo tono que el burst de `boss-columns-cleared`): semitransparente, fino, inconfundible con las rocas/muros. */
+export const queenTetherMaterial = new THREE.MeshBasicMaterial({
+  color: '#ff6bcb',
+  transparent: true,
+  opacity: 0.55,
+  depthWrite: false,
+});
+
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
 // silueta/color de contrato del GDD. ──────────────────────────────────────

@@ -297,6 +297,16 @@ export const QUEEN_DAMAGE_OUTSIDE_WINDOW = 0.15;
 /** Golpes de embestida que aguanta una columna de la Reina (rediseño 2026-07-10): 2 → el 1.º la agrieta, el 2.º la rompe. */
 export const QUEEN_COLUMN_HP = 2;
 /**
+ * Prefijo del id LOCAL (tras el `roomId:` opcional) de las rocas que son
+ * columnas de la Reina (T2 render, GDD §15.3): boss-queen.json las nombra
+ * `column-nw-1..4`/`column-ne-1..4`. Mismo criterio que ya usa
+ * `bosses.ts::onInit` (ahí inline, sin importar este fichero para no tocar
+ * la sim) para poblar `world.queenColumns`; el render lo reutiliza para
+ * excluir esas rocas del pintado genérico de `RoomView` (las pinta
+ * `QueenColumnsView` con su propio estado intacta/agrietada/escombros).
+ */
+export const QUEEN_COLUMN_ID_PREFIX = 'column';
+/**
  * Vida que pierde la Reina al romperse UNA columna, como fracción de su vida
  * máxima (playtest 2026-07-10): las 8 columnas suman 2/3 de su vida; el 1/3
  * restante se remata a golpes normales, ya con la Reina siempre vulnerable.

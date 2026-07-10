@@ -15,7 +15,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { DOOR_WIDTH, WALL_THICKNESS } from '../content/constants';
+import { DOOR_WIDTH, QUEEN_COLUMN_ID_PREFIX, WALL_THICKNESS } from '../content/constants';
 import { DOOR_GATE_ID_PREFIX } from '../sim/dungeon-world';
 import type { Obstacle, World } from '../sim/world';
 import {
@@ -38,6 +38,21 @@ function isWallObstacle(o: Obstacle): boolean {
 
 function isGateObstacle(o: Obstacle): boolean {
   return o.id.startsWith(DOOR_GATE_ID_PREFIX);
+}
+
+/**
+ * true si este `Obstacle` es una columna destructible de la Reina del
+ * Enjambre (T2 render, GDD §15.3): su id LOCAL (tras el `roomId:` opcional)
+ * empieza por `column` — mismo criterio que `bosses.ts::onInit` usa para
+ * poblar `world.queenColumns`. Se excluyen del pintado genérico de rocas
+ * para que NO se dibujen dos veces: `QueenColumnsView` (montado desde
+ * GameRoot) es el único que las pinta, en sus 3 estados (intacta/agrietada/
+ * escombros) leyendo directamente `world.queenColumns`, que sigue siendo la
+ * fuente de verdad incluso tras romperse (cuando ya no queda `Obstacle`).
+ */
+function isQueenColumnObstacle(o: Obstacle): boolean {
+  const local = o.id.includes(':') ? o.id.slice(o.id.lastIndexOf(':') + 1) : o.id;
+  return local.startsWith(QUEEN_COLUMN_ID_PREFIX);
 }
 
 /** Malla instanciada de cajas estáticas a partir de una lista de AABBs (muros/rocas). */
@@ -107,7 +122,7 @@ function DungeonStructureView({ world }: { world: World }) {
   const staticBoxes = useMemo(() => {
     return {
       walls: world.obstacles.filter(isWallObstacle),
-      rocks: world.obstacles.filter((o) => !isWallObstacle(o) && !isGateObstacle(o)),
+      rocks: world.obstacles.filter((o) => !isWallObstacle(o) && !isGateObstacle(o) && !isQueenColumnObstacle(o)),
     };
   }, [world]);
 
@@ -191,8 +206,10 @@ function SingleRoomView({ world }: { world: World }) {
         position={[halfW + t / 2, WALL_HEIGHT / 2, 0]}
         scale={[t, WALL_HEIGHT, height]}
       />
-      {/* Rocas (obstáculos AABB). */}
-      {world.obstacles.map((obstacle) => {
+      {/* Rocas (obstáculos AABB). Las columnas de la Reina (`isQueenColumnObstacle`)
+          se excluyen aquí: las pinta QueenColumnsView desde world.queenColumns,
+          con estado intacta/agrietada/escombros — ver comentario de cabecera. */}
+      {world.obstacles.filter((o) => !isQueenColumnObstacle(o)).map((obstacle) => {
         const { minX, minY, maxX, maxY } = obstacle.aabb;
         return (
           <mesh
