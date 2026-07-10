@@ -39,8 +39,13 @@ import {
   QUEEN_COLUMN_HP,
   QUEEN_CHASER_PER_WAVE_BY_PHASE,
   QUEEN_DAMAGE_OUTSIDE_WINDOW,
+  QUEEN_GUARDIAN_CHARGE_COOLDOWN,
+  QUEEN_GUARDIAN_CHARGE_DURATION,
+  QUEEN_GUARDIAN_CHARGE_RANGE,
+  QUEEN_GUARDIAN_CHARGE_SPEED,
   QUEEN_GUARDIAN_MAX,
   QUEEN_GUARDIAN_ORBIT_RADIUS,
+  QUEEN_GUARDIAN_TELEGRAPH,
   QUEEN_GUARDIAN_SPAWN_INTERVAL,
   QUEEN_GUARDIAN_SPEED,
   QUEEN_HIT_DAMAGE_CAP_FRACTION,
@@ -53,7 +58,8 @@ import {
   QUEEN_LARVA_SPEED,
   QUEEN_MAX_HP,
   QUEEN_RADIUS,
-  QUEEN_STALK_SPEED_BY_PHASE,
+  QUEEN_STALK_SPEED_BASE,
+  QUEEN_STALK_SPEED_PER_COLUMN,
   QUEEN_TRAIL_DROP_INTERVAL,
   QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
   QUEEN_TRAIL_PUDDLE_LIFETIME,
@@ -1039,6 +1045,15 @@ function queenOnInit(world: World, boss: Enemy): void {
       roomId: o.roomId,
     });
   }
+
+  // A1 (playtest 2026-07-10): cada columna nace YA con su guardiana (hasta el
+  // cupo QUEEN_GUARDIAN_MAX), para que no haya ventana libre en la que arrasar
+  // las columnas seguidas. El resto lo repone `queenStepGuardians`.
+  let placedGuardians = 0;
+  for (const col of world.queenColumns) {
+    if (placedGuardians >= QUEEN_GUARDIAN_MAX) break;
+    if (queenActivateGuardian(world, boss, col, null)) placedGuardians++;
+  }
 }
 
 /** Nº de larvas vivas (hp>0) de ESTA Reina (cap de rendimiento, GDD §15.3/§15.6). */
@@ -1082,8 +1097,21 @@ function queenTrailIntervalForPhase(phase: 1 | 2 | 3): number {
  * fase quedan intactos; solo cambia CÓMO se traduce la intención de
  * movimiento en posición real.
  */
+/** Nº de columnas ROTAS de la sala de la Reina (playtest 2026-07-10: su persecución acelera con esto). */
+function queenBrokenColumnCount(world: World, boss: Enemy): number {
+  const columns = world.queenColumns;
+  let count = 0;
+  for (let i = 0; i < columns.length; i++) {
+    const c = columns[i];
+    if (c.broken && (c.roomId === undefined || c.roomId === boss.roomId)) count++;
+  }
+  return count;
+}
+
 function queenStepMove(world: World, boss: Enemy, dt: number): void {
-  const stalkSpeed = QUEEN_STALK_SPEED_BY_PHASE[boss.bossPhase - 1];
+  // Acelera con cada columna ROTA (playtest 2026-07-10: rompérselas la enfurece
+  // → el remate deja de ser un tiro tranquilo). Sustituye el escalado por fase.
+  const stalkSpeed = QUEEN_STALK_SPEED_BASE + queenBrokenColumnCount(world, boss) * QUEEN_STALK_SPEED_PER_COLUMN;
   moveBossTowardWithAvoidance(world, boss, world.hero.position.x, world.hero.position.y, dt, stalkSpeed);
 }
 
@@ -1186,11 +1214,46 @@ function queenColumnHasGuardian(world: World, boss: Enemy, cx: number, cy: numbe
 }
 
 /**
- * Guardianas: defienden las columnas (rediseño 2026-07-10). Cada
- * `QUEEN_GUARDIAN_SPAWN_INTERVAL`, si hay una columna INTACTA sin defensora y
- * queda cupo (`QUEEN_GUARDIAN_MAX` guardianas, `QUEEN_LARVA_MAX` total), nace
- * UNA guardiana (de 1 en 1) en el borde de la órbita de esa columna, con
- * `chasing=false` y su `patrolFrom` anclado al centro de la columna que orbita.
+ * Activa un slot de larva libre como GUARDIANA de la columna `col` (playtest
+ * 2026-07-10): nace en el borde de su órbita, con `chasing=false`, `patrolFrom`
+ * anclado a la columna y su máquina de embestida en reposo (`bossStage=0` +
+ * cooldown inicial en `bossTimer`, para que no cargue nada más nacer). Devuelve
+ * true si había un slot libre.
+ */
+function queenActivateGuardian(
+  world: World,
+  boss: Enemy,
+  col: { position: { x: number; y: number } },
+  events: EventQueue | null,
+): boolean {
+  const enemies = world.enemies;
+  for (let i = 0; i < enemies.length; i++) {
+    const larva = enemies[i];
+    if (!isQueenLarva(larva) || larva.roomId !== boss.roomId || larva.hp > 0) continue;
+    larva.hp = QUEEN_LARVA_HP;
+    larva.maxHp = QUEEN_LARVA_HP;
+    larva.position.x = col.position.x + QUEEN_GUARDIAN_ORBIT_RADIUS;
+    larva.position.y = col.position.y;
+    larva.velocity.x = 0;
+    larva.velocity.y = 0;
+    larva.hitFlashUntil = 0;
+    larva.knockbackUntil = 0;
+    larva.chasing = false; // rol: guardiana
+    larva.patrolFrom.x = col.position.x; // ancla = su columna
+    larva.patrolFrom.y = col.position.y;
+    larva.bossStage = 0; // máquina de embestida: 0=orbita
+    larva.bossTimer = QUEEN_GUARDIAN_CHARGE_COOLDOWN; // no carga nada más nacer
+    if (events) pushEvent(events, 'boss-wave-spawn', col.position.x, col.position.y, 1);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Guardianas: defienden las columnas (playtest 2026-07-10). El grueso nace ya
+ * en `queenOnInit` (A1: cada columna con defensora desde el segundo 1); este
+ * paso solo REPONE, cada `QUEEN_GUARDIAN_SPAWN_INTERVAL`, una guardiana (de 1 en
+ * 1) a una columna intacta que se quedó sin defensora, dentro del cupo.
  */
 function queenStepGuardians(world: World, boss: Enemy, dt: number, events: EventQueue): void {
   boss.bossTimer -= dt;
@@ -1206,27 +1269,8 @@ function queenStepGuardians(world: World, boss: Enemy, dt: number, events: Event
     if (col.broken) continue;
     if (col.roomId !== undefined && col.roomId !== boss.roomId) continue;
     if (queenColumnHasGuardian(world, boss, col.position.x, col.position.y)) continue;
-
-    const enemies = world.enemies;
-    for (let i = 0; i < enemies.length; i++) {
-      const larva = enemies[i];
-      if (!isQueenLarva(larva) || larva.roomId !== boss.roomId || larva.hp > 0) continue;
-      larva.hp = QUEEN_LARVA_HP;
-      larva.maxHp = QUEEN_LARVA_HP;
-      // Nace en el borde de su órbita (no en el centro exacto, o no orbitaría).
-      larva.position.x = col.position.x + QUEEN_GUARDIAN_ORBIT_RADIUS;
-      larva.position.y = col.position.y;
-      larva.velocity.x = 0;
-      larva.velocity.y = 0;
-      larva.hitFlashUntil = 0;
-      larva.knockbackUntil = 0;
-      larva.chasing = false; // rol: guardiana
-      larva.patrolFrom.x = col.position.x; // ancla = su columna
-      larva.patrolFrom.y = col.position.y;
-      pushEvent(events, 'boss-wave-spawn', col.position.x, col.position.y, 1);
-      return; // una guardiana por tick de cadencia
-    }
-    return; // no había slot libre; se reintenta al próximo intervalo
+    queenActivateGuardian(world, boss, col, events);
+    return; // una por tick de cadencia (o no había slot libre)
   }
 }
 
@@ -1237,7 +1281,7 @@ function queenStepGuardians(world: World, boss: Enemy, dt: number, events: Event
  * a velocidad lenta y radio `QUEEN_GUARDIAN_ORBIT_RADIUS` — ronda su columna en
  * vez de perseguir. No pasan por `stepEnemyAi` (sin detección ni correa).
  */
-function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
+function queenStepLarvae(world: World, boss: Enemy, dt: number, events: EventQueue): void {
   const chaseSpeed =
     boss.bossPhase >= 3 ? QUEEN_LARVA_CHASE_SPEED_PHASE3 : boss.bossPhase === 2 ? QUEEN_LARVA_CHASE_SPEED_PHASE2 : QUEEN_LARVA_SPEED;
 
@@ -1256,9 +1300,36 @@ function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
       dirX = dx / len;
       dirY = dy / len;
       speed = chaseSpeed;
+    } else if (larva.bossStage === 2) {
+      // GUARDIANA cargando: avanza recto en el rumbo fijado al telegrafiar
+      // (esquivable). El daño al héroe lo resuelve el contacto genérico.
+      larva.bossTimer -= dt;
+      dirX = larva.facing.x;
+      dirY = larva.facing.y;
+      speed = QUEEN_GUARDIAN_CHARGE_SPEED;
+      if (larva.bossTimer <= 0) {
+        larva.bossStage = 0;
+        larva.bossTimer = QUEEN_GUARDIAN_CHARGE_COOLDOWN; // descanso antes de otra carga
+      }
+    } else if (larva.bossStage === 1) {
+      // GUARDIANA telegrafiando: encara al héroe pero NO se mueve (aviso).
+      larva.bossTimer -= dt;
+      const dxh = world.hero.position.x - larva.position.x;
+      const dyh = world.hero.position.y - larva.position.y;
+      const lenh = Math.hypot(dxh, dyh) || 1;
+      dirX = dxh / lenh;
+      dirY = dyh / lenh;
+      speed = 0;
+      if (larva.bossTimer <= 0) {
+        larva.facing.x = dirX; // fija el rumbo de carga hacia el héroe (ahora)
+        larva.facing.y = dirY;
+        larva.bossStage = 2;
+        larva.bossTimer = QUEEN_GUARDIAN_CHARGE_DURATION;
+      }
     } else {
-      // Guardiana: mantén el radio de órbita respecto al ancla; si estás lejos,
-      // acércate (radial); si estás en el radio, gira tangencialmente.
+      // GUARDIANA en reposo: orbita su ancla; si el héroe se acerca y el cooldown
+      // venció, telegrafía una embestida (playtest 2026-07-10).
+      larva.bossTimer -= dt;
       const ax = larva.position.x - larva.patrolFrom.x;
       const ay = larva.position.y - larva.patrolFrom.y;
       const dist = Math.hypot(ax, ay);
@@ -1271,6 +1342,13 @@ function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
         dirY = ax * inv;
       }
       speed = QUEEN_GUARDIAN_SPEED;
+      const dxh = world.hero.position.x - larva.position.x;
+      const dyh = world.hero.position.y - larva.position.y;
+      if (larva.bossTimer <= 0 && dxh * dxh + dyh * dyh <= QUEEN_GUARDIAN_CHARGE_RANGE * QUEEN_GUARDIAN_CHARGE_RANGE) {
+        larva.bossStage = 1;
+        larva.bossTimer = QUEEN_GUARDIAN_TELEGRAPH;
+        pushEvent(events, 'boss-guardian-charge', larva.position.x, larva.position.y, 1);
+      }
     }
 
     larva.facing.x = dirX;
@@ -1296,7 +1374,7 @@ function queenStepPattern(world: World, boss: Enemy, dt: number, events: EventQu
   queenStepTrail(world, boss, dt);
   queenStepWaves(world, boss, dt, events);
   queenStepGuardians(world, boss, dt, events);
-  queenStepLarvae(world, boss, dt);
+  queenStepLarvae(world, boss, dt, events);
 }
 
 function queenOnPhaseChanged(world: World, boss: Enemy): void {

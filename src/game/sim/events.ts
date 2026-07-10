@@ -100,7 +100,13 @@ export type GameEventType =
    * — el jefe queda "desconectado" y pasa a vulnerable PERMANENTE (daño
    * completo) para rematar el último 1/3 de su vida a golpes normales.
    */
-  | 'boss-columns-cleared';
+  | 'boss-columns-cleared'
+  /**
+   * Reina del Enjambre (playtest 2026-07-10): una larva GUARDIANA telegrafía una
+   * embestida contra el héroe (aviso ~0.45 s antes de cargar). El render lo usa
+   * para el destello/hinchazón de aviso.
+   */
+  | 'boss-guardian-charge';
 
 export interface GameEvent {
   type: GameEventType;

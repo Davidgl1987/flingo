@@ -294,8 +294,8 @@ export const QUEEN_HIT_DAMAGE_CAP_FRACTION: [number, number, number] = [0.6, 0.6
  */
 export const QUEEN_DAMAGE_OUTSIDE_WINDOW = 0.15;
 
-/** Golpes de embestida que aguanta una columna de la Reina (rediseño 2026-07-10): 2 → el 1.º la agrieta, el 2.º la rompe. */
-export const QUEEN_COLUMN_HP = 2;
+/** Golpes de embestida que aguanta una columna de la Reina (playtest 2026-07-10: subido a 3 para que romperla sea un forcejeo bajo el fuego de su guardiana). */
+export const QUEEN_COLUMN_HP = 3;
 /**
  * Prefijo del id LOCAL (tras el `roomId:` opcional) de las rocas que son
  * columnas de la Reina (T2 render, GDD §15.3): boss-queen.json las nombra
@@ -384,6 +384,16 @@ export const QUEEN_GUARDIAN_SPAWN_INTERVAL = 2;
 export const QUEEN_GUARDIAN_SPEED = 0.8;
 /** Radio de órbita de la guardiana respecto al centro de su columna. */
 export const QUEEN_GUARDIAN_ORBIT_RADIUS = 1.0;
+/** Distancia (u) del héroe a la que una guardiana decide EMBESTIRLE (playtest 2026-07-10: dejan de ser pasivas). */
+export const QUEEN_GUARDIAN_CHARGE_RANGE = 2.4;
+/** Aviso (s) antes de que la guardiana cargue (telegrafía: se hincha/retrocede; la carga es esquivable). */
+export const QUEEN_GUARDIAN_TELEGRAPH = 0.45;
+/** Duración (s) de la carga de la guardiana. */
+export const QUEEN_GUARDIAN_CHARGE_DURATION = 0.4;
+/** Velocidad (u/s) de la carga de la guardiana. */
+export const QUEEN_GUARDIAN_CHARGE_SPEED = 4.5;
+/** Descanso (s) entre cargas de una guardiana (vuelve a orbitar mientras tanto). */
+export const QUEEN_GUARDIAN_CHARGE_COOLDOWN = 2.5;
 export const QUEEN_LARVA_HP = 1;
 export const QUEEN_LARVA_RADIUS = 0.26;
 /** Velocidad de una PERSEGUIDORA hacia el héroe (fase 1). */
@@ -403,8 +413,15 @@ export const QUEEN_LARVA_ID_PREFIX = 'queen-larva-';
  * hacia el héroe aplicado sobre ese movimiento). Sin correa: la Reina persigue
  * libremente por toda la arena (playtest 2026-07-10 "quitar la correa").
  */
-/** Velocidad de acecho de la Reina hacia el héroe, ESCALADA POR FASE (playtest 2026-07-10: "que me persiga más rápido conforme pasan las fases" + "que llegue a tocar al jugador"). Índice 0/1/2 = fase 1/2/3. Se superpone a la deambulación normal (queenStepMove). */
-export const QUEEN_STALK_SPEED_BY_PHASE: [number, number, number] = [1.0, 1.6, 2.3];
+/**
+ * Velocidad de persecución de la Reina ESCALADA POR COLUMNAS ROTAS (playtest
+ * 2026-07-10: "cada columna rota la enfurece y te persigue más rápido"). Con 8
+ * columnas: 1.2 (0 rotas) → ~4.2 (8 rotas), así el remate deja de ser un tiro
+ * tranquilo — al final casi te alcanza aunque te muevas. Sustituye el escalado
+ * por fase anterior.
+ */
+export const QUEEN_STALK_SPEED_BASE = 1.2;
+export const QUEEN_STALK_SPEED_PER_COLUMN = 0.38;
 
 // ── Mundo y run ───────────────────────────────────────────────────────────
 

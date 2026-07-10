@@ -23,10 +23,11 @@ import {
   QUEEN_HIT_DAMAGE_CAP_FRACTION,
   QUEEN_LARVA_HP,
   QUEEN_LARVA_MAX,
+  QUEEN_GUARDIAN_CHARGE_COOLDOWN,
   QUEEN_MAX_HP,
-  QUEEN_MOVE_SPEED_PHASE1,
   QUEEN_RADIUS,
-  QUEEN_STALK_SPEED_BY_PHASE,
+  QUEEN_STALK_SPEED_BASE,
+  QUEEN_STALK_SPEED_PER_COLUMN,
   QUEEN_TRAIL_DROP_INTERVAL,
   QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
   QUEEN_TRAIL_PUDDLE_LIFETIME,
@@ -377,8 +378,8 @@ describe('Reina: poción de recompensa al cambiar de fase (mismo criterio que el
 });
 
 describe('Reina: movimiento lento, gestión de terreno (GDD §15.3: "no es persecución, se mueve poco")', () => {
-  it('en fase 1 nunca supera QUEEN_MOVE_SPEED_PHASE1 + QUEEN_STALK_SPEED_BY_PHASE[0] de velocidad neta (deambulación + acecho combinados)', () => {
-    const world = makeQueenWorld();
+  it('sin columnas rotas, su velocidad de persecución es QUEEN_STALK_SPEED_BASE (playtest 2026-07-10: acelera al romperle columnas)', () => {
+    const world = makeQueenWorld(); // sin columnas → 0 rotas
     const events = createEventQueue(64);
     world.hero.position.x = 100;
     world.hero.position.y = 100;
@@ -390,11 +391,7 @@ describe('Reina: movimiento lento, gestión de terreno (GDD §15.3: "no es perse
       const speed = Math.hypot(boss(world).velocity.x, boss(world).velocity.y);
       maxSpeed = Math.max(maxSpeed, speed);
     }
-    // El acecho (GDD §15.3, playtest 2026-07-06 "la Reina te acecha") se suma
-    // a la deambulación normal: el tope pasa de QUEEN_MOVE_SPEED_PHASE1 solo a
-    // la suma de ambas velocidades (peor caso: mismo rumbo). Fase 1 usa el
-    // primer valor de la tabla escalada por fase (playtest 2026-07-10).
-    expect(maxSpeed).toBeLessThanOrEqual(QUEEN_MOVE_SPEED_PHASE1 + QUEEN_STALK_SPEED_BY_PHASE[0] + 0.02);
+    expect(maxSpeed).toBeLessThanOrEqual(QUEEN_STALK_SPEED_BASE + 0.02);
   });
 });
 
@@ -419,10 +416,26 @@ describe('Reina: acecho hacia el héroe (GDD §15.3, playtest 2026-07-06 "la Rei
     expect(distAfter).toBeLessThan(distAtStart);
   });
 
-  it('QUEEN_STALK_SPEED_BY_PHASE escala: fase 3 persigue más rápido que fase 1 (playtest 2026-07-10 "incrementaría la velocidad... conforme pasan las fases")', () => {
-    expect(QUEEN_STALK_SPEED_BY_PHASE[0]).toBeGreaterThan(0);
-    expect(QUEEN_STALK_SPEED_BY_PHASE[1]).toBeGreaterThan(QUEEN_STALK_SPEED_BY_PHASE[0]);
-    expect(QUEEN_STALK_SPEED_BY_PHASE[2]).toBeGreaterThan(QUEEN_STALK_SPEED_BY_PHASE[1]);
+  it('la velocidad de persecución CRECE con cada columna ROTA (playtest 2026-07-10: rompérselas la enfurece)', () => {
+    expect(QUEEN_STALK_SPEED_BASE).toBeGreaterThan(0);
+    expect(QUEEN_STALK_SPEED_PER_COLUMN).toBeGreaterThan(0);
+
+    // Funcional: con columnas marcadas como rotas, su velocidad neta sube.
+    const maxSpeedWith = (broken: number) => {
+      const world = makeQueenWorldWithColumns();
+      const events = createEventQueue(64);
+      world.hero.position.x = 100; // lejos: persigue a tope
+      world.hero.position.y = 100;
+      for (let i = 0; i < broken && i < world.queenColumns.length; i++) world.queenColumns[i].broken = true;
+      let m = 0;
+      for (let i = 0; i < 120; i++) {
+        stepBosses(world, FIXED_DT, events);
+        world.time += FIXED_DT;
+        m = Math.max(m, Math.hypot(boss(world).velocity.x, boss(world).velocity.y));
+      }
+      return m;
+    };
+    expect(maxSpeedWith(2)).toBeGreaterThan(maxSpeedWith(0));
   });
 
   it('en la sala real (boss-queen.json), con el héroe en su playerStart, la Reina llega a TOCARLO (fix playtest 2026-07-10: antes se daba la vuelta por la correa sin llegar; ahora persigue libremente)', () => {
@@ -584,21 +597,21 @@ describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3
     expect(world.queenColumns.every((c) => c.hp === QUEEN_COLUMN_HP && !c.broken)).toBe(true);
   });
 
-  it('romper una columna (2 embestidas) baja la vida del jefe un QUEEN_COLUMN_DAMAGE_FRACTION; la 1.ª solo agrieta', () => {
+  it('romper una columna (QUEEN_COLUMN_HP embestidas) baja la vida del jefe; los golpes previos solo la dañan', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue();
     const q = boss(world);
     const col = world.queenColumns[0];
     const before = q.hp;
 
-    // 1.er golpe: agrieta (hp 2→1), sin bajar aún la vida del jefe.
-    ramColumn(world, events, col, 1);
+    // Golpes previos (QUEEN_COLUMN_HP - 1): dañan la columna, no bajan la vida del jefe.
+    ramColumn(world, events, col, QUEEN_COLUMN_HP - 1);
     expect(col.hp).toBe(1);
     expect(col.broken).toBe(false);
     expect(q.hp).toBe(before);
     expect(collectTypes(events)).toContain('boss-column-cracked');
 
-    // 2.º golpe: rompe (hp→0) y baja el 12% de la vida del jefe.
+    // Golpe final: rompe (hp→0) y baja el daño por columna.
     ramColumn(world, events, col, 1);
     expect(col.broken).toBe(true);
     expect(q.hp).toBeCloseTo(before - QUEEN_MAX_HP * QUEEN_COLUMN_DAMAGE_FRACTION, 5);
@@ -802,5 +815,41 @@ describe('Reina: guardianas de columna (T4, rediseño 2026-07-10)', () => {
     ramColumn(world, events, col, QUEEN_COLUMN_HP);
     expect(col.broken).toBe(true);
     expect(guardiansOfCol().length).toBe(0);
+  });
+});
+
+// ── Subida de dificultad (playtest 2026-07-10) ──────────────────────────────
+
+describe('Reina: guardianas presentes que embisten (playtest 2026-07-10)', () => {
+  it('A1: cada columna nace ya con guardiana desde el tick 0 (queenOnInit, sin avanzar)', () => {
+    const world = makeQueenWorldWithColumns(); // 2 columnas
+    const guardians = liveLarvae(world).filter((l) => !l.chasing);
+    expect(guardians.length).toBe(Math.min(2, QUEEN_GUARDIAN_MAX));
+    for (const g of guardians) {
+      const col = world.queenColumns.find(
+        (c) => Math.abs(c.position.x - g.patrolFrom.x) < 0.01 && Math.abs(c.position.y - g.patrolFrom.y) < 0.01,
+      );
+      expect(col).toBeDefined(); // anclada a una columna
+    }
+  });
+
+  it('una guardiana no carga nada más nacer (cooldown inicial)', () => {
+    const world = makeQueenWorldWithColumns();
+    const events = createEventQueue(64);
+    const col = world.queenColumns[0];
+    world.hero.position.x = col.position.x; // héroe pegado a la columna
+    world.hero.position.y = col.position.y + 0.5;
+    advance(world, events, 3); // pocos ticks, muy por debajo del cooldown inicial
+    expect(collectTypes(events)).not.toContain('boss-guardian-charge');
+  });
+
+  it('con el héroe cerca y pasado el cooldown, la guardiana telegrafía una embestida (evento boss-guardian-charge)', () => {
+    const world = makeQueenWorldWithColumns();
+    const events = createEventQueue(64);
+    const col = world.queenColumns[0];
+    world.hero.position.x = col.position.x;
+    world.hero.position.y = col.position.y + 0.5;
+    advance(world, events, Math.round(QUEEN_GUARDIAN_CHARGE_COOLDOWN / FIXED_DT) + 4);
+    expect(collectTypes(events)).toContain('boss-guardian-charge');
   });
 });

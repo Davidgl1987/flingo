@@ -496,7 +496,9 @@ export function stepQueenColumns(world: World, cooldowns: Map<string, number>, e
     cooldowns.set(col.id, world.time);
 
     col.hp -= 1;
-    if (col.hp === 1) {
+    if (col.hp > 0) {
+      // Cada golpe que NO rompe avisa (hp 2 y 1 con QUEEN_COLUMN_HP=3): el
+      // render deriva el aspecto de daño de `col.hp`.
       pushEvent(events, 'boss-column-cracked', col.position.x, col.position.y, 1);
     }
     if (col.hp <= 0) {
