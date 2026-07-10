@@ -54,6 +54,7 @@ export function initBossEnemies(world: World): void {
     if (def.radius !== undefined) enemy.radius = def.radius;
     enemy.bossDamageOutsideWindowFactor = def.damageOutsideWindow;
     enemy.bossBarrelDamage = def.barrelDamageFraction !== undefined ? def.barrelDamageFraction * def.maxHp : 0;
+    enemy.bossRamBodyDamage = def.ramBodyDamageFraction !== undefined ? def.ramBodyDamageFraction * def.maxHp : 0;
   }
   for (const enemy of bosses) {
     getBossDef(enemy.bossId).onInit?.(world, enemy);

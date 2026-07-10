@@ -82,7 +82,19 @@ export type GameEventType =
    * nº de larvas invocadas en esta oleada (puede ser menor que
    * QUEEN_LARVA_PER_WAVE si el cap de vivas ya estaba casi lleno).
    */
-  | 'boss-wave-spawn';
+  | 'boss-wave-spawn'
+  /**
+   * Reina del Enjambre (rediseño 2026-07-10, GDD §15.3): una columna de su
+   * sala recibe el 1.º golpe de embestida y se AGRIETA (le queda 1 golpe más
+   * antes de romperse). Telegrafía la rotura inminente.
+   */
+  | 'boss-column-cracked'
+  /**
+   * Reina del Enjambre (rediseño 2026-07-10, GDD §15.3): una columna recibe
+   * el 2.º golpe de embestida y se ROMPE — se retira su Obstacle sólido y el
+   * jefe pierde QUEEN_COLUMN_DAMAGE_FRACTION de su vida máxima.
+   */
+  | 'boss-column-broken';
 
 export interface GameEvent {
   type: GameEventType;

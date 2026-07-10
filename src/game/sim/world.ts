@@ -269,6 +269,8 @@ export interface Enemy {
   bossDamageOutsideWindowFactor: number;
   /** Guardián: daño al jefe por explosión de barril en su radio (HP absoluto, bypass de ventana). 0 = usar BARREL_DAMAGE normal (resto de enemigos/jefes). */
   bossBarrelDamage: number;
+  /** Reina (rediseño 2026-07-10): daño al CUERPO del jefe por embestida directa del héroe (HP absoluto, bypass de ventana). 0 = usar el daño de embestida normal (resto de jefes, p.ej. Guardián). */
+  bossRamBodyDamage: number;
   /** world.time hasta el que dura el telegraph en curso (0 = no telegrafiando). */
   bossTelegraphUntil: number;
   /** Etiqueta libre del telegraph/ataque en curso (para render + patrón), '' si no aplica. */
@@ -348,6 +350,22 @@ export interface HazardRuntime extends HazardSpawn {
   roomId?: string;
 }
 
+/**
+ * Columna destructible de la sala de la Reina (GDD §15.3 rediseño 2026-07-10):
+ * su vida ESTÁ en estas columnas. Se rompe solo a embestidas (2 golpes; hp
+ * 2→1 agrietada→0 rota). Al romperse se retira su Obstacle sólido de
+ * world.obstacles y baja la vida del jefe.
+ */
+export interface QueenColumn {
+  id: string; // mismo id que su Obstacle en world.obstacles
+  position: Vec2; // centro
+  halfW: number;
+  halfH: number;
+  hp: number; // QUEEN_COLUMN_HP → 1 (agrietada) → 0 (rota)
+  broken: boolean;
+  roomId?: string;
+}
+
 export type GamePhase = 'playing' | 'paused' | 'room-cleared' | 'game-over' | 'victory';
 
 export interface RunStats {
@@ -368,6 +386,8 @@ export interface World {
   puddles: Puddle[];
   items: Item[];
   barrels: Barrel[];
+  /** Columnas destructibles de la sala de la Reina (GDD §15.3 rediseño 2026-07-10); vacío para el resto de salas. */
+  queenColumns: QueenColumn[];
   /** Hazards no-roca, no-barril (pit/spikes/slow/boost), estáticos durante la sala. */
   hazards: HazardRuntime[];
   /** Última posición firme (fuera de fosos) del héroe, para respawn tras caer. */
@@ -521,6 +541,7 @@ function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng, origin: Vec2, ro
     bossVulnerable: false,
     bossDamageOutsideWindowFactor: 0,
     bossBarrelDamage: 0,
+    bossRamBodyDamage: 0,
     bossTelegraphUntil: 0,
     bossTelegraphKind: '',
     bossTimer: 0,
@@ -637,6 +658,7 @@ export function createWorld(room: RoomData, seed = 1): World {
     puddles: createPuddlePool(),
     items,
     barrels,
+    queenColumns: [],
     hazards,
     safePosition: { x: playerStart.x, y: playerStart.y },
     fallingUntil: 0,

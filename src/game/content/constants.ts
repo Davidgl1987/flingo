@@ -284,12 +284,33 @@ export const QUEEN_RADIUS = 0.58;
 /** Techo de daño de un golpe de la Reina al héroe, por fase (GDD §15.1 punto 6): no tiene ataque directo, solo contacto de cuerpo si se le encima el jugador. */
 export const QUEEN_HIT_DAMAGE_CAP_FRACTION: [number, number, number] = [0.6, 0.65, 0.7];
 /**
- * Vulnerable SIEMPRE (GDD §15.3: "no tiene fase de aturdimiento clásica...
- * es golpeable en todo momento"): `damageOutsideWindow=1` en su BossDef, y
- * `bossVulnerable` se fija a `true` de forma permanente al inicializarse
- * (ver content/bosses.ts::queenStepPattern) — nunca hay ventana que abrir.
+ * Rediseño 2026-07-10 (GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md §1): la
+ * vida de la Reina ya NO está en su cuerpo, está en sus 8 columnas. Los
+ * proyectiles/armas NO le afectan (0 = inmune fuera de ventana); solo la
+ * embestida directa al cuerpo (bossRamBodyDamage, bypass de ventana) y la
+ * rotura de columnas (QUEEN_COLUMN_DAMAGE_FRACTION) le quitan vida. Ya no es
+ * vulnerable de forma permanente (ver `queenOnInit`: no fija `bossVulnerable`).
  */
-export const QUEEN_DAMAGE_OUTSIDE_WINDOW = 1;
+export const QUEEN_DAMAGE_OUTSIDE_WINDOW = 0;
+
+/** Golpes de embestida que aguanta una columna de la Reina (rediseño 2026-07-10): 2 → el 1.º la agrieta, el 2.º la rompe. */
+export const QUEEN_COLUMN_HP = 2;
+/** Vida que pierde la Reina al romperse UNA columna, como fracción de su vida máxima (8 columnas × 12% = 96%; el 4% restante y el remate se hacen a embestidas al cuerpo). */
+export const QUEEN_COLUMN_DAMAGE_FRACTION = 0.12;
+/** Daño al CUERPO de la Reina por una embestida directa del héroe, como fracción de su vida máxima (~1%: apenas, la vía real son las columnas; pero un jugador paciente puede matarla así, costándole mucho bajo persecución). */
+export const QUEEN_BODY_RAM_DAMAGE_FRACTION = 0.01;
+/** Cooldown (s) por columna entre golpes de embestida contados, para que un mismo choque (varios ticks solapado) reste 1 hp y no varios. */
+export const QUEEN_COLUMN_HIT_COOLDOWN = 0.4;
+/**
+ * Margen extra (u) sumado al radio del héroe al comprobar si toca una
+ * columna (rediseño 2026-07-10): `stepHeroPhysics` ya resuelve la colisión
+ * física héroe↔columna (es un Obstacle sólido) ANTES de `stepQueenColumns`
+ * en el mismo tick — al llegar aquí el héroe queda exactamente tangente al
+ * borde de la columna (push-out), no solapado. Sin este margen, el test de
+ * solapamiento fallaría por el margen de error de punto flotante justo en el
+ * tick del impacto, que es el único tick en que puede detectarse.
+ */
+export const QUEEN_COLUMN_TOUCH_SKIN = 0.05;
 
 /** Velocidad de desplazamiento fase 1: lenta, gestión de terreno, no persecución agresiva (GDD §15.3). */
 export const QUEEN_MOVE_SPEED_PHASE1 = 0.65;

@@ -81,6 +81,12 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // que el Trail, trailMaterial) en el punto de invocación, sin trauma de
   // cámara (no es un golpe, es un aviso ambiental de "ruido nuevo en la sala").
   'boss-wave-spawn': { color: '#4dd68a', size: 0.09, count: 10, life: 0.35, speed: 2.0, trauma: 0 },
+  // Reina del Enjambre, rediseño 2026-07-10 (GDD §15.3): columnas de piedra
+  // (mismo lenguaje visual pétreo que los eventos del Guardián, 'boss-shard-burst'/
+  // 'boss-barrel-land'). Agrietarse: astillas pequeñas, trauma leve (aviso, aún
+  // no rompe nada). Romperse: burst mayor + trauma notorio (−12% de vida del jefe).
+  'boss-column-cracked': { color: '#c9c2a8', size: 0.08, count: 10, life: 0.35, speed: 2.0, trauma: 0.12 },
+  'boss-column-broken': { color: '#c9c2a8', size: 0.14, count: 26, life: 0.5, speed: 3.2, trauma: 0.3 },
 };
 
 /** Color de burst específico por tipo de objeto recogido (label del evento 'item-pickup'), GDD §12: dorado/rosa/azul. */

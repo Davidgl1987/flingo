@@ -36,6 +36,8 @@ import {
   GUARDIAN_SHARD_RADIUS,
   GUARDIAN_STUN_DURATION,
   GUARDIAN_TELEGRAPH_DURATION,
+  QUEEN_BODY_RAM_DAMAGE_FRACTION,
+  QUEEN_COLUMN_HP,
   QUEEN_DAMAGE_OUTSIDE_WINDOW,
   QUEEN_HIT_DAMAGE_CAP_FRACTION,
   QUEEN_LARVA_CHASE_SPEED_PHASE2,
@@ -102,6 +104,8 @@ export interface BossDef {
   damageOutsideWindow: number;
   /** Daño por explosión de barril en su radio, como fracción de maxHp (bypass de ventana, en cualquier momento). */
   barrelDamageFraction?: number;
+  /** Reina: daño al cuerpo del jefe por embestida directa del héroe, como fracción de maxHp. Si se define, la embestida al cuerpo usa este valor fijo (ignora ventana) en vez del daño de embestida normal. */
+  ramBodyDamageFraction?: number;
   /** Avance de un tick del patrón de ataque de este jefe. */
   stepPattern: BossPatternStep;
   /** Se llama una vez al cruzar a fase 2 o 3 (para resetear bossStage/timers propios del patrón). */
@@ -982,6 +986,7 @@ function queenOnInit(world: World, boss: Enemy): void {
       bossVulnerable: false,
       bossDamageOutsideWindowFactor: 0,
       bossBarrelDamage: 0,
+      bossRamBodyDamage: 0,
       bossTelegraphUntil: 0,
       bossTelegraphKind: '',
       bossTimer: 0,
@@ -994,11 +999,32 @@ function queenOnInit(world: World, boss: Enemy): void {
   // igualmente, pero así queda determinista desde el primer frame).
   boss.bossTimer = QUEEN_WANDER_INTERVAL;
   queenPickWanderTarget(world, boss);
-  // Vulnerable SIEMPRE (GDD §15.3: sin ventana de aturdimiento clásica) —
-  // se fija una única vez aquí, no hay ningún stage que la desactive nunca.
-  boss.bossVulnerable = true;
   // (Ya no se fija ningún ancla de correa: la Reina persigue libremente al
   // héroe, sin volver a un centro — playtest 2026-07-10 "quitar la correa".)
+
+  // Rediseño 2026-07-10 (GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md §1): el
+  // cuerpo del jefe ya NO es vulnerable (ni de forma permanente ni por
+  // ventana) — su vida está en las columnas de su sala. Puebla
+  // `world.queenColumns` a partir de los `Obstacle` ya construidos por los
+  // hazards 'rock' de su propia sala (ver world.ts::buildRoomEntities), cuyo
+  // id local empieza por "column" (boss-queen.json: column-nw-1..4/
+  // column-ne-1..4). En integración multi-sala futura habría que poblar esto
+  // al ENTRAR en la sala del jefe en vez de aquí; por ahora `onInit` basta
+  // para el modo sala única de los tests y la ruta de playtest `?boss=b2`.
+  for (const o of world.obstacles) {
+    if (o.roomId !== boss.roomId) continue;
+    const local = o.id.includes(':') ? o.id.slice(o.id.lastIndexOf(':') + 1) : o.id;
+    if (!local.startsWith('column')) continue;
+    world.queenColumns.push({
+      id: o.id,
+      position: { x: (o.aabb.minX + o.aabb.maxX) / 2, y: (o.aabb.minY + o.aabb.maxY) / 2 },
+      halfW: (o.aabb.maxX - o.aabb.minX) / 2,
+      halfH: (o.aabb.maxY - o.aabb.minY) / 2,
+      hp: QUEEN_COLUMN_HP,
+      broken: false,
+      roomId: o.roomId,
+    });
+  }
 }
 
 /** Nº de larvas vivas (hp>0) de ESTA Reina (cap de rendimiento, GDD §15.3/§15.6). */
@@ -1222,10 +1248,12 @@ function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
 }
 
 function queenStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
-  // Vulnerable SIEMPRE (GDD §15.3): no hay stage que lo desactive nunca, pero
-  // se reafirma cada tick por si algún día un stepPattern futuro lo tocara.
-  boss.bossVulnerable = true;
-
+  // Rediseño 2026-07-10 (GDD §15.3): el cuerpo ya NO es vulnerable (ni
+  // permanente ni por ventana) — `bossVulnerable` se queda en su default
+  // `false` de por vida. Solo dañan el cuerpo la embestida directa
+  // (`bossRamBodyDamage`, ver combat.ts) y la rotura de columnas
+  // (`stepQueenColumns`); los proyectiles/armas normales no le afectan
+  // (`damageOutsideWindow=0`).
   queenStepMove(world, boss, dt);
   queenStepTrail(world, boss, dt);
   queenStepWaves(world, boss, dt, events);
@@ -1264,11 +1292,14 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     maxHp: QUEEN_MAX_HP,
     radius: QUEEN_RADIUS,
     hitDamageCapFraction: QUEEN_HIT_DAMAGE_CAP_FRACTION,
-    // Vulnerable SIEMPRE (GDD §15.3/§15.6: "permanente, sin aturdimiento"):
-    // factor 1 = daño normal en todo momento; `queenOnInit` además fija
-    // `bossVulnerable=true` de una vez, así que este factor es en la práctica
-    // un cinturón de seguridad (combat.ts solo lo consulta si !bossVulnerable).
+    // Rediseño 2026-07-10 (GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md §1):
+    // su vida ya NO está en el cuerpo — proyectiles/armas normales no le
+    // afectan (0 = inmune fuera de ventana; nunca hay ventana que abrir,
+    // `bossVulnerable` se queda en `false` de por vida). Solo dañan el cuerpo
+    // la embestida directa (ramBodyDamageFraction, bypass de ventana) y la
+    // rotura de columnas (QUEEN_COLUMN_DAMAGE_FRACTION, ver combat.ts).
     damageOutsideWindow: QUEEN_DAMAGE_OUTSIDE_WINDOW,
+    ramBodyDamageFraction: QUEEN_BODY_RAM_DAMAGE_FRACTION,
     stepPattern: queenStepPattern,
     onPhaseChanged: queenOnPhaseChanged,
     onInit: queenOnInit,

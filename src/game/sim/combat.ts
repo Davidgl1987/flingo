@@ -25,6 +25,9 @@ import {
   PROJECTILE_LIFETIME,
   PROJECTILE_RADIUS,
   PROJECTILE_RECOIL,
+  QUEEN_COLUMN_DAMAGE_FRACTION,
+  QUEEN_COLUMN_HIT_COOLDOWN,
+  QUEEN_COLUMN_TOUCH_SKIN,
   RAM_DAMAGE_BASE,
   RAM_DAMAGE_PER_SPEED,
   RAM_SPEED_THRESHOLD,
@@ -426,7 +429,16 @@ export function stepHeroEnemyContacts(
     }
 
     if (dmg > 0) {
-      applyDamageToEnemy(world, enemy, dmg, dx, dy, events);
+      // Reina (rediseño 2026-07-10, GDD §15.3): el cuerpo del jefe recibe un
+      // daño FIJO por embestida (bypass de ventana) en vez del daño de
+      // embestida normal escalado por velocidad — su vida real está en las
+      // columnas de su sala (ver stepQueenColumns más abajo). El resto de
+      // jefes (bossRamBodyDamage=0, p.ej. Guardián) sigue igual que antes.
+      if (enemy.kind === 'boss' && enemy.bossRamBodyDamage > 0) {
+        applyDamageToEnemy(world, enemy, enemy.bossRamBodyDamage, dx, dy, events, true);
+      } else {
+        applyDamageToEnemy(world, enemy, dmg, dx, dy, events);
+      }
       if (hero.modifiers.explosiveRam) {
         applyExplosiveRam(world, enemy.position.x, enemy.position.y, enemy.id, events);
       }
@@ -446,6 +458,66 @@ export function stepHeroEnemyContacts(
         contactCooldowns.set(enemy.id, world.time);
         applyDamageToHero(world, CONTACT_DAMAGE, events);
       }
+    }
+  }
+}
+
+/**
+ * Embestidas del héroe contra las columnas de la Reina (GDD §15.3 rediseño
+ * 2026-07-10): solo la embestida (velocidad ≥ RAM_SPEED_THRESHOLD) resta vida
+ * a una columna; 2 golpes la rompen (el 1.º la agrieta). Al romperse se retira
+ * su Obstacle sólido y el jefe pierde QUEEN_COLUMN_DAMAGE_FRACTION de su vida.
+ * Cooldown por columna (mismo mapa de contacto) para que un choque cuente 1 vez.
+ */
+export function stepQueenColumns(world: World, cooldowns: Map<string, number>, events: EventQueue): void {
+  if (world.queenColumns.length === 0) return;
+
+  const hero = world.hero;
+  const speed = Math.hypot(hero.velocity.x, hero.velocity.y);
+  const ramming = speed >= RAM_SPEED_THRESHOLD;
+
+  for (let i = 0; i < world.queenColumns.length; i++) {
+    const col = world.queenColumns[i];
+    if (col.broken) continue;
+    if (col.roomId !== undefined && col.roomId !== world.currentRoomId) continue;
+
+    // Solapamiento círculo(héroe)-vs-AABB(columna). `stepHeroPhysics` ya
+    // resuelve esta colisión (la columna sigue siendo un Obstacle sólido
+    // mientras no está rota) ANTES de este paso en el mismo tick: al llegar
+    // aquí el héroe queda exactamente tangente al borde (push-out), no
+    // solapado — de ahí el margen QUEEN_COLUMN_TOUCH_SKIN (ver constants.ts).
+    const minX = col.position.x - col.halfW;
+    const maxX = col.position.x + col.halfW;
+    const minY = col.position.y - col.halfH;
+    const maxY = col.position.y + col.halfH;
+    const nearestX = hero.position.x < minX ? minX : hero.position.x > maxX ? maxX : hero.position.x;
+    const nearestY = hero.position.y < minY ? minY : hero.position.y > maxY ? maxY : hero.position.y;
+    const dx = hero.position.x - nearestX;
+    const dy = hero.position.y - nearestY;
+    const rr = hero.radius + QUEEN_COLUMN_TOUCH_SKIN;
+    if (dx * dx + dy * dy > rr * rr) continue;
+    if (!ramming) continue;
+
+    const lastHit = cooldowns.get(col.id) ?? -Infinity;
+    if (world.time - lastHit < QUEEN_COLUMN_HIT_COOLDOWN) continue;
+    cooldowns.set(col.id, world.time);
+
+    col.hp -= 1;
+    if (col.hp === 1) {
+      pushEvent(events, 'boss-column-cracked', col.position.x, col.position.y, 1);
+    }
+    if (col.hp <= 0) {
+      col.broken = true;
+      const idx = world.obstacles.findIndex((o) => o.id === col.id);
+      if (idx >= 0) world.obstacles.splice(idx, 1);
+
+      const boss = world.enemies.find(
+        (e) => e.kind === 'boss' && e.bossId === 'queen' && (e.roomId === undefined || e.roomId === col.roomId),
+      );
+      if (boss && boss.hp > 0) {
+        applyDamageToEnemy(world, boss, boss.maxHp * QUEEN_COLUMN_DAMAGE_FRACTION, 0, 0, events, true);
+      }
+      pushEvent(events, 'boss-column-broken', col.position.x, col.position.y, 1);
     }
   }
 }

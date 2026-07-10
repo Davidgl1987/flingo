@@ -248,6 +248,7 @@ export function createDungeonWorld(dungeon: DungeonMap, seed: number = dungeon.s
     puddles: createPuddlePool(),
     items,
     barrels,
+    queenColumns: [],
     hazards,
     safePosition: { x: playerStart.x, y: playerStart.y },
     fallingUntil: 0,
