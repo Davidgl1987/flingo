@@ -11,16 +11,18 @@ import { describe, expect, it } from 'vitest';
 import bossQueenJson from '../../levels/boss-queen.json';
 import {
   HERO_RADIUS,
+  QUEEN_CHASER_PER_WAVE_BY_PHASE,
   QUEEN_COLUMN_DAMAGE_FRACTION,
   QUEEN_COLUMN_HIT_COOLDOWN,
   QUEEN_COLUMN_HP,
   QUEEN_COLUMN_STUN_DURATION,
   QUEEN_DAMAGE_OUTSIDE_WINDOW,
+  QUEEN_GUARDIAN_MAX,
+  QUEEN_GUARDIAN_ORBIT_RADIUS,
+  QUEEN_GUARDIAN_SPAWN_INTERVAL,
   QUEEN_HIT_DAMAGE_CAP_FRACTION,
   QUEEN_LARVA_HP,
   QUEEN_LARVA_MAX,
-  QUEEN_LARVA_MAX_BY_PHASE,
-  QUEEN_LARVA_PER_WAVE,
   QUEEN_MAX_HP,
   QUEEN_MOVE_SPEED_PHASE1,
   QUEEN_RADIUS,
@@ -166,7 +168,9 @@ describe('Reina: cadencia de oleadas de larvas (GDD §15.6: "oleada cada ~3s")',
 
     const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
     advance(world, events, ticksPerWave + 1);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_PER_WAVE);
+    const larvae = liveLarvae(world);
+    expect(larvae.length).toBeGreaterThanOrEqual(1);
+    expect(larvae.every((l) => l.chasing)).toBe(true); // perseguidoras (nacen del boss)
     expect(collectTypes(events)).toContain('boss-wave-spawn');
   });
 
@@ -186,62 +190,41 @@ describe('Reina: cadencia de oleadas de larvas (GDD §15.6: "oleada cada ~3s")',
     }
   });
 
-  it('en fase 1 el cap de larvas vivas simultáneas es 2 (GDD §15.3, playtest 2026-07-06: escalada 2/4/6 por fase), tras muchas oleadas', () => {
-    const world = makeQueenWorld();
+  it('las perseguidoras se acumulan hasta el cap TOTAL (QUEEN_LARVA_MAX) y no lo superan (rediseño 2026-07-10)', () => {
+    const world = makeQueenWorld(); // sin columnas → solo perseguidoras
     const events = createEventQueue(64);
     world.hero.position.x = 100;
     world.hero.position.y = 100;
-    expect(boss(world).bossPhase).toBe(1);
-
-    // 10 oleadas de sobra para saturar el cap si no lo respetara.
     const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
-    advance(world, events, ticksPerWave * 10);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[0]);
-    expect(liveLarvae(world).length).toBe(2);
-    // El pool preasignado sigue siendo del tamaño del máximo (fase 3 = 6),
-    // aunque el cap ACTIVO en fase 1 sea menor (slots reutilizados, sin
-    // `.push` en runtime).
+
+    // Muchas oleadas de sobra para saturar el cap total.
+    advance(world, events, ticksPerWave * (QUEEN_LARVA_MAX + 4));
+    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX);
+    // El pool preasignado es del tamaño del cap total.
     const larvaSlotCount = world.enemies.filter((e) => e.id.startsWith('queen-larva-')).length;
     expect(larvaSlotCount).toBe(QUEEN_LARVA_MAX);
-  });
-
-  it('no invoca larvas nuevas mientras el cap de la fase actual ya está lleno (las oleadas de más quedan sin efecto)', () => {
-    const world = makeQueenWorld();
-    const events = createEventQueue(64);
-    world.hero.position.x = 100;
-    world.hero.position.y = 100;
-    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
-
-    // Satura el cap de fase 1 (2).
-    advance(world, events, ticksPerWave * 10);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[0]);
 
     // Una oleada más: sigue en el cap (no lo sobrepasa).
     advance(world, events, ticksPerWave);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[0]);
+    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX);
   });
 
-  it('en fase 2 el cap sube a 4 y en fase 3 a 6 (GDD §15.3)', () => {
+  it('el nº de perseguidoras por oleada escala con la fase (1/2/3, rediseño 2026-07-10)', () => {
+    expect(QUEEN_CHASER_PER_WAVE_BY_PHASE).toEqual([1, 2, 3]);
+
+    // Fase 3 con vida baja (para que checkPhaseAndDefeat la mantenga): una
+    // oleada suelta 3 perseguidoras de golpe (cupo total de sobra).
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     world.hero.position.x = 100;
     world.hero.position.y = 100;
     const q = boss(world);
-    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
-
-    q.hp = Math.floor(q.maxHp * 0.6); // fuerza fase 2
-    advance(world, events, 1);
-    expect(q.bossPhase).toBe(2);
-    advance(world, events, ticksPerWave * 10);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[1]);
-    expect(liveLarvae(world).length).toBe(4);
-
-    q.hp = Math.floor(q.maxHp * 0.2); // fuerza fase 3
-    advance(world, events, 1);
-    expect(q.bossPhase).toBe(3);
-    advance(world, events, ticksPerWave * 10);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[2]);
-    expect(liveLarvae(world).length).toBe(6);
+    q.hp = Math.floor(q.maxHp * 0.2);
+    q.bossPhase = 3;
+    advance(world, events, 2); // el reloj arranca en 0: la 1.ª oleada cae en el tick 1
+    const larvae = liveLarvae(world);
+    expect(larvae.length).toBe(QUEEN_CHASER_PER_WAVE_BY_PHASE[2]); // 3
+    expect(larvae.every((l) => l.chasing)).toBe(true);
   });
 });
 
@@ -299,58 +282,25 @@ describe('Reina: comportamiento de larvas por fase (GDD §15.3, playtest 2026-07
   });
 });
 
-describe('Reina: cap de larvas nunca superior al de la fase actual (GDD §15.3, playtest 2026-07-06)', () => {
-  it('en fase 1 nunca hay más de 2 larvas vivas, aunque se fuercen muchas oleadas', () => {
-    const world = makeQueenWorld();
-    const events = createEventQueue(64);
-    world.hero.position.x = 100;
-    world.hero.position.y = 100;
-    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
+describe('Reina: el cap TOTAL de larvas vivas nunca se supera (rediseño 2026-07-10)', () => {
+  it('en cualquier fase, forzando muchas oleadas, nunca hay más de QUEEN_LARVA_MAX larvas vivas', () => {
+    for (const frac of [1.0, 0.6, 0.2]) {
+      const world = makeQueenWorld();
+      const events = createEventQueue(64);
+      world.hero.position.x = 100;
+      world.hero.position.y = 100;
+      const q = boss(world);
+      q.hp = Math.floor(q.maxHp * frac);
+      advance(world, events, 1);
 
-    let maxLive = 0;
-    for (let wave = 0; wave < 15; wave++) {
-      advance(world, events, ticksPerWave);
-      maxLive = Math.max(maxLive, liveLarvae(world).length);
+      const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
+      let maxLive = 0;
+      for (let wave = 0; wave < 20; wave++) {
+        advance(world, events, ticksPerWave);
+        maxLive = Math.max(maxLive, liveLarvae(world).length);
+      }
+      expect(maxLive).toBeLessThanOrEqual(QUEEN_LARVA_MAX);
     }
-    expect(maxLive).toBeLessThanOrEqual(2);
-  });
-
-  it('en fase 2 nunca hay más de 4 larvas vivas', () => {
-    const world = makeQueenWorld();
-    const events = createEventQueue(64);
-    world.hero.position.x = 100;
-    world.hero.position.y = 100;
-    const q = boss(world);
-    q.hp = Math.floor(q.maxHp * 0.6);
-    advance(world, events, 1);
-    expect(q.bossPhase).toBe(2);
-
-    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
-    let maxLive = 0;
-    for (let wave = 0; wave < 15; wave++) {
-      advance(world, events, ticksPerWave);
-      maxLive = Math.max(maxLive, liveLarvae(world).length);
-    }
-    expect(maxLive).toBeLessThanOrEqual(4);
-  });
-
-  it('en fase 3 nunca hay más de 6 larvas vivas', () => {
-    const world = makeQueenWorld();
-    const events = createEventQueue(64);
-    world.hero.position.x = 100;
-    world.hero.position.y = 100;
-    const q = boss(world);
-    q.hp = Math.floor(q.maxHp * 0.2);
-    advance(world, events, 1);
-    expect(q.bossPhase).toBe(3);
-
-    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
-    let maxLive = 0;
-    for (let wave = 0; wave < 15; wave++) {
-      advance(world, events, ticksPerWave);
-      maxLive = Math.max(maxLive, liveLarvae(world).length);
-    }
-    expect(maxLive).toBeLessThanOrEqual(6);
   });
 });
 
@@ -794,5 +744,63 @@ describe('Reina: persigue RODEANDO obstáculos (TAREA 5 rediseño 2026-07-10, "n
     advance(world, events, 300); // 5s de sobra en campo abierto
     const distEnd = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
     expect(distEnd).toBeLessThan(distStart);
+  });
+});
+
+// ── T4 (rediseño 2026-07-10): larvas guardiana (de columna) vs perseguidora ──
+
+describe('Reina: guardianas de columna (T4, rediseño 2026-07-10)', () => {
+  const guardianSpawnTicks = Math.round(QUEEN_GUARDIAN_SPAWN_INTERVAL / FIXED_DT);
+
+  it('aparece una guardiana (chasing=false) anclada a una columna y ORBITA su columna (no persigue al héroe lejano)', () => {
+    const world = makeQueenWorldWithColumns(); // 2 columnas en (±3,0)
+    const events = createEventQueue(64);
+    world.hero.position.x = 100; // héroe lejísimos: una perseguidora se iría, una guardiana no
+    world.hero.position.y = 100;
+    advance(world, events, guardianSpawnTicks * 3 + 5);
+
+    const guardians = liveLarvae(world).filter((l) => !l.chasing);
+    expect(guardians.length).toBeGreaterThanOrEqual(1);
+    for (const g of guardians) {
+      const col = world.queenColumns.find(
+        (c) => Math.abs(c.position.x - g.patrolFrom.x) < 0.01 && Math.abs(c.position.y - g.patrolFrom.y) < 0.01,
+      );
+      expect(col).toBeDefined(); // anclada al centro de una columna
+      const dist = Math.hypot(g.position.x - g.patrolFrom.x, g.position.y - g.patrolFrom.y);
+      expect(dist).toBeLessThan(QUEEN_GUARDIAN_ORBIT_RADIUS + 1); // ronda su columna, no se va a por el héroe
+    }
+  });
+
+  it('nunca hay más de QUEEN_GUARDIAN_MAX guardianas vivas (sala real, 8 columnas)', () => {
+    const room = parseRoomData(bossQueenJson).room!;
+    const world = createWorld(room);
+    initBossEnemies(world);
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+    advance(world, events, guardianSpawnTicks * 12 + 5);
+
+    const guardians = liveLarvae(world).filter((l) => !l.chasing);
+    expect(guardians.length).toBeGreaterThanOrEqual(1);
+    expect(guardians.length).toBeLessThanOrEqual(QUEEN_GUARDIAN_MAX);
+  });
+
+  it('al romper una columna, su(s) guardiana(s) mueren con ella', () => {
+    const world = makeQueenWorldWithColumns();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+    advance(world, events, guardianSpawnTicks * 3 + 5);
+
+    const col = world.queenColumns[0];
+    const guardiansOfCol = () =>
+      liveLarvae(world).filter(
+        (l) => !l.chasing && Math.abs(l.patrolFrom.x - col.position.x) < 0.01 && Math.abs(l.patrolFrom.y - col.position.y) < 0.01,
+      );
+    expect(guardiansOfCol().length).toBeGreaterThanOrEqual(1);
+
+    ramColumn(world, events, col, QUEEN_COLUMN_HP);
+    expect(col.broken).toBe(true);
+    expect(guardiansOfCol().length).toBe(0);
   });
 });

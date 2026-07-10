@@ -368,28 +368,27 @@ export const QUEEN_TRAIL_DOT_GRACE = 0.4;
  */
 export const QUEEN_WAVE_INTERVAL = 3;
 /**
- * Cap de larvas vivas simultáneas, ESCALADO POR FASE (GDD §15.3, playtest
- * 2026-07-06 "escalada de larvas por fase"): 2 en fase 1, 4 en fase 2, 6 en
- * fase 3 — la presión del enjambre crece con el combate en vez de ser un
- * techo fijo desde el principio. El pool preasignado en `world.enemies`
- * sigue reservando el MÁXIMO de los tres (índice 2 = fase 3 = 6 slots), igual
- * que antes de escalar el cap (`queenOnInit` no cambia).
+ * Cap TOTAL de larvas vivas de la Reina (pool preasignado en `queenOnInit`).
+ * Rediseño 2026-07-10 (GDD §15.3): conviven dos roles — PERSEGUIDORAS (nacen
+ * del boss, persiguen al héroe) y GUARDIANAS (nacen de una columna, la
+ * orbitan). El pool reserva este máximo para ambas.
  */
-export const QUEEN_LARVA_MAX_BY_PHASE: [number, number, number] = [2, 4, 6];
-/** Tamaño del pool preasignado de slots de larva: el máximo de QUEEN_LARVA_MAX_BY_PHASE (fase 3). */
-export const QUEEN_LARVA_MAX = QUEEN_LARVA_MAX_BY_PHASE[2];
-/** Nº de larvas invocadas por oleada (dentro del cap de vivas de la fase actual). */
-export const QUEEN_LARVA_PER_WAVE = 2;
+export const QUEEN_LARVA_MAX = 10;
+/** Perseguidoras invocadas por oleada según la fase (rediseño 2026-07-10: 1/2/3): nacen del boss y persiguen al héroe. */
+export const QUEEN_CHASER_PER_WAVE_BY_PHASE: [number, number, number] = [1, 2, 3];
+/** Cap de guardianas vivas simultáneas (rediseño 2026-07-10): defienden columnas sin ahogar el cupo de perseguidoras. */
+export const QUEEN_GUARDIAN_MAX = 5;
+/** Cadencia (s) con la que aparece una guardiana nueva en una columna intacta sin defensora (de 1 en 1). */
+export const QUEEN_GUARDIAN_SPAWN_INTERVAL = 2;
+/** Velocidad de órbita de una guardiana alrededor de su columna (lenta: ronda, no persigue al héroe). */
+export const QUEEN_GUARDIAN_SPEED = 0.8;
+/** Radio de órbita de la guardiana respecto al centro de su columna. */
+export const QUEEN_GUARDIAN_ORBIT_RADIUS = 1.0;
 export const QUEEN_LARVA_HP = 1;
 export const QUEEN_LARVA_RADIUS = 0.26;
-/**
- * Velocidad de avance de una larva hacia el héroe. Persiguen desde la FASE 1
- * (GDD §15.3, playtest 2026-07-06: "en línea recta no amenazaban; el reto
- * llegaba tarde") — ya no hay modo "línea recta fija"; solo cambia la
- * velocidad por fase.
- */
+/** Velocidad de una PERSEGUIDORA hacia el héroe (fase 1). */
 export const QUEEN_LARVA_SPEED = 1.1;
-/** Fase 2/3 (GDD §15.3): las larvas persiguen más rápido y son más agresivas. */
+/** Perseguidoras más rápidas y agresivas en fase 2/3 (GDD §15.3). */
 export const QUEEN_LARVA_CHASE_SPEED_PHASE2 = 1.35;
 export const QUEEN_LARVA_CHASE_SPEED_PHASE3 = 1.7;
 /** Prefijo de id de los slots de larva de la Reina (para distinguirlos del resto de `world.enemies`, ver `isQueenLarva`). */

@@ -29,6 +29,7 @@ import {
   QUEEN_COLUMN_HIT_COOLDOWN,
   QUEEN_COLUMN_STUN_DURATION,
   QUEEN_COLUMN_TOUCH_SKIN,
+  QUEEN_LARVA_ID_PREFIX,
   RAM_DAMAGE_BASE,
   RAM_DAMAGE_PER_SPEED,
   RAM_SPEED_THRESHOLD,
@@ -502,6 +503,17 @@ export function stepQueenColumns(world: World, cooldowns: Map<string, number>, e
       col.broken = true;
       const idx = world.obstacles.findIndex((o) => o.id === col.id);
       if (idx >= 0) world.obstacles.splice(idx, 1);
+
+      // Sus guardianas caen con ella (rediseño 2026-07-10): las larvas
+      // guardianas (chasing=false) ancladas (patrolFrom) al centro de esta
+      // columna mueren al romperla — "la columna cae y su defensora con ella".
+      for (let g = 0; g < world.enemies.length; g++) {
+        const e = world.enemies[g];
+        if (e.hp <= 0 || e.chasing || !e.id.startsWith(QUEEN_LARVA_ID_PREFIX)) continue;
+        if (Math.abs(e.patrolFrom.x - col.position.x) < 0.01 && Math.abs(e.patrolFrom.y - col.position.y) < 0.01) {
+          e.hp = 0;
+        }
+      }
 
       const boss = world.enemies.find(
         (e) => e.kind === 'boss' && e.bossId === 'queen' && (e.roomId === undefined || e.roomId === col.roomId),
