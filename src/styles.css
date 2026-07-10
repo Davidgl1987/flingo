@@ -336,24 +336,6 @@ canvas {
   transform: scaleX(1);
 }
 
-/* Barra de 8 columnas de la Reina (rediseño 2026-07-10, GDD §15.3): marcas
-   estáticas a 12/24/.../96% que separan cada tramo de −12% (una columna); el
-   4% final sin marca es el remate a embestidas al cuerpo. El drenado animado
-   por cuerda hacia cada columna rota es de una tarea posterior. */
-.boss-health-segments {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.boss-health-segment-mark {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: rgba(18, 21, 34, 0.55);
-}
-
 /* ── Selector de armas (GDD §3/§12) ── */
 
 .weapon-bar {

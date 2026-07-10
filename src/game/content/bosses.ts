@@ -36,7 +36,6 @@ import {
   GUARDIAN_SHARD_RADIUS,
   GUARDIAN_STUN_DURATION,
   GUARDIAN_TELEGRAPH_DURATION,
-  QUEEN_BODY_RAM_DAMAGE_FRACTION,
   QUEEN_COLUMN_HP,
   QUEEN_DAMAGE_OUTSIDE_WINDOW,
   QUEEN_HIT_DAMAGE_CAP_FRACTION,
@@ -104,8 +103,6 @@ export interface BossDef {
   damageOutsideWindow: number;
   /** Daño por explosión de barril en su radio, como fracción de maxHp (bypass de ventana, en cualquier momento). */
   barrelDamageFraction?: number;
-  /** Reina: daño al cuerpo del jefe por embestida directa del héroe, como fracción de maxHp. Si se define, la embestida al cuerpo usa este valor fijo (ignora ventana) en vez del daño de embestida normal. */
-  ramBodyDamageFraction?: number;
   /** Avance de un tick del patrón de ataque de este jefe. */
   stepPattern: BossPatternStep;
   /** Se llama una vez al cruzar a fase 2 o 3 (para resetear bossStage/timers propios del patrón). */
@@ -986,7 +983,7 @@ function queenOnInit(world: World, boss: Enemy): void {
       bossVulnerable: false,
       bossDamageOutsideWindowFactor: 0,
       bossBarrelDamage: 0,
-      bossRamBodyDamage: 0,
+      bossVulnerableUntil: 0,
       bossTelegraphUntil: 0,
       bossTelegraphKind: '',
       bossTimer: 0,
@@ -1248,12 +1245,15 @@ function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
 }
 
 function queenStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
-  // Rediseño 2026-07-10 (GDD §15.3): el cuerpo ya NO es vulnerable (ni
-  // permanente ni por ventana) — `bossVulnerable` se queda en su default
-  // `false` de por vida. Solo dañan el cuerpo la embestida directa
-  // (`bossRamBodyDamage`, ver combat.ts) y la rotura de columnas
-  // (`stepQueenColumns`); los proyectiles/armas normales no le afectan
-  // (`damageOutsideWindow=0`).
+  // Vulnerabilidad del cuerpo (rediseño 2026-07-10, GDD §15.3): al cuerpo
+  // SIEMPRE le entra daño (cualquier ataque), pero reducido salvo cuando está
+  // ATURDIDA. `stepQueenColumns` fija `bossVulnerableUntil` al romper una
+  // columna (aturdimiento temporal) o a Infinity con TODAS rotas (vulnerable
+  // permanente para rematar el último 1/3). Aquí se deriva `bossVulnerable` de
+  // ese reloj cada tick: dentro de ventana → daño completo; fuera → el gate de
+  // combat.ts escala por `damageOutsideWindow` (0.15, "apenas si no aturdida").
+  boss.bossVulnerable = world.time < boss.bossVulnerableUntil;
+
   queenStepMove(world, boss, dt);
   queenStepTrail(world, boss, dt);
   queenStepWaves(world, boss, dt, events);
@@ -1292,14 +1292,12 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     maxHp: QUEEN_MAX_HP,
     radius: QUEEN_RADIUS,
     hitDamageCapFraction: QUEEN_HIT_DAMAGE_CAP_FRACTION,
-    // Rediseño 2026-07-10 (GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md §1):
-    // su vida ya NO está en el cuerpo — proyectiles/armas normales no le
-    // afectan (0 = inmune fuera de ventana; nunca hay ventana que abrir,
-    // `bossVulnerable` se queda en `false` de por vida). Solo dañan el cuerpo
-    // la embestida directa (ramBodyDamageFraction, bypass de ventana) y la
-    // rotura de columnas (QUEEN_COLUMN_DAMAGE_FRACTION, ver combat.ts).
+    // Rediseño 2026-07-10 (GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md): su
+    // vida está en las columnas, pero al cuerpo SIEMPRE le entra daño (cualquier
+    // ataque): reducido por `damageOutsideWindow` (0.15) fuera de aturdimiento,
+    // completo mientras está ATURDIDA (al romper columna, o permanente con todas
+    // rotas — ver `queenStepPattern`/`stepQueenColumns`).
     damageOutsideWindow: QUEEN_DAMAGE_OUTSIDE_WINDOW,
-    ramBodyDamageFraction: QUEEN_BODY_RAM_DAMAGE_FRACTION,
     stepPattern: queenStepPattern,
     onPhaseChanged: queenOnPhaseChanged,
     onInit: queenOnInit,

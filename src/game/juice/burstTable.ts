@@ -87,6 +87,7 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // no rompe nada). Romperse: burst mayor + trauma notorio (−12% de vida del jefe).
   'boss-column-cracked': { color: '#c9c2a8', size: 0.08, count: 10, life: 0.35, speed: 2.0, trauma: 0.12 },
   'boss-column-broken': { color: '#c9c2a8', size: 0.14, count: 26, life: 0.5, speed: 3.2, trauma: 0.3 },
+  'boss-columns-cleared': { color: '#ff6bcb', size: 0.16, count: 34, life: 0.7, speed: 3.6, trauma: 0.5 },
 };
 
 /** Color de burst específico por tipo de objeto recogido (label del evento 'item-pickup'), GDD §12: dorado/rosa/azul. */

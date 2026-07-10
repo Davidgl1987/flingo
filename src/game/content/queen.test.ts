@@ -11,10 +11,11 @@ import { describe, expect, it } from 'vitest';
 import bossQueenJson from '../../levels/boss-queen.json';
 import {
   HERO_RADIUS,
-  QUEEN_BODY_RAM_DAMAGE_FRACTION,
   QUEEN_COLUMN_DAMAGE_FRACTION,
   QUEEN_COLUMN_HIT_COOLDOWN,
   QUEEN_COLUMN_HP,
+  QUEEN_COLUMN_STUN_DURATION,
+  QUEEN_DAMAGE_OUTSIDE_WINDOW,
   QUEEN_HIT_DAMAGE_CAP_FRACTION,
   QUEEN_LARVA_HP,
   QUEEN_LARVA_MAX,
@@ -95,16 +96,17 @@ function liveLarvae(world: ReturnType<typeof createWorld>) {
 }
 
 describe('Reina del Enjambre: definición', () => {
-  it('tiene 55 HP, techo de daño 60/65/70% e inmune a proyectiles/armas normales (rediseño 2026-07-10), GDD §15.6', () => {
+  it('tiene 55 HP, techo de daño 60/65/70%, y al cuerpo le entra daño REDUCIDO fuera de aturdimiento (rediseño 2026-07-10), GDD §15.6', () => {
     const def = getBossDef('queen');
     expect(def.maxHp).toBe(QUEEN_MAX_HP);
     expect(def.maxHp).toBe(55);
     expect(def.hitDamageCapFraction).toEqual(QUEEN_HIT_DAMAGE_CAP_FRACTION);
-    // Rediseño 2026-07-10 (GDD §15.3): su vida está en las columnas, no en el
-    // cuerpo — proyectiles/armas normales no le afectan (0 = inmune fuera de
-    // ventana; nunca hay ventana que abrir, ver describe de abajo).
-    expect(def.damageOutsideWindow).toBe(0);
-    expect(def.ramBodyDamageFraction).toBe(QUEEN_BODY_RAM_DAMAGE_FRACTION);
+    // Rediseño 2026-07-10 (GDD §15.3): su vida está en las columnas, pero al
+    // cuerpo SIEMPRE le entra daño; fuera de aturdimiento se escala por este
+    // factor pequeño (no es inmune, ver describe de abajo).
+    expect(def.damageOutsideWindow).toBe(QUEEN_DAMAGE_OUTSIDE_WINDOW);
+    expect(QUEEN_DAMAGE_OUTSIDE_WINDOW).toBeGreaterThan(0);
+    expect(QUEEN_DAMAGE_OUTSIDE_WINDOW).toBeLessThan(1);
   });
 });
 
@@ -123,28 +125,24 @@ describe('Reina: reserva de slots de larva al inicializarse (onInit)', () => {
   });
 });
 
-describe('Reina: el cuerpo NUNCA es vulnerable a proyectiles/armas normales (rediseño 2026-07-10, GDD §15.3: su vida está en las columnas)', () => {
-  it('bossVulnerable es false desde el primer tick y se mantiene tras avanzar la sim', () => {
+describe('Reina: al cuerpo le entra daño REDUCIDO salvo aturdida (rediseño 2026-07-10, GDD §15.3: la vía real son las columnas)', () => {
+  it('bossVulnerable es false mientras no rompas columnas (y se mantiene al avanzar la sim)', () => {
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     expect(boss(world).bossVulnerable).toBe(false);
-    advance(world, events, 600); // 10s
+    advance(world, events, 600); // 10s, sin columnas que romper
     expect(boss(world).bossVulnerable).toBe(false);
   });
 
-  it('un proyectil/arma normal (sin bypass de ventana) no le hace NADA de daño: rebota', () => {
+  it('un proyectil/arma normal (sin bypass) le hace daño REDUCIDO por QUEEN_DAMAGE_OUTSIDE_WINDOW: algo, ni cero ni completo', () => {
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     const q = boss(world);
     const hpBefore = q.hp;
     applyDamageToEnemy(world, q, 10, 1, 0, events);
-    expect(q.hp).toBe(hpBefore);
-
-    // Tras avanzar la sim (movimiento/oleadas en curso) sigue siendo inmune.
-    advance(world, events, 30);
-    const hpBefore2 = q.hp;
-    applyDamageToEnemy(world, q, 7, 1, 0, events);
-    expect(q.hp).toBe(hpBefore2);
+    expect(q.hp).toBeCloseTo(hpBefore - 10 * QUEEN_DAMAGE_OUTSIDE_WINDOW, 5);
+    expect(q.hp).toBeLessThan(hpBefore); // le entra algo
+    expect(q.hp).toBeGreaterThan(hpBefore - 10); // pero reducido, no completo
   });
 
   it('con bypass de ventana explícito (embestida/columna) SÍ recibe el daño pasado', () => {
@@ -679,26 +677,71 @@ describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3
     expect(col.hp).toBe(QUEEN_COLUMN_HP);
   });
 
-  it('al cuerpo del jefe los proyectiles/armas normales no le hacen daño (inmune fuera de columnas)', () => {
+  it('al cuerpo del jefe un proyectil/arma normal le hace daño REDUCIDO (no aturdida), no cero', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue();
     const q = boss(world);
     const before = q.hp;
     applyDamageToEnemy(world, q, 10, 0, 0, events); // sin ignore-window: como un proyectil
-    expect(q.hp).toBe(before);
+    expect(q.hp).toBeCloseTo(before - 10 * QUEEN_DAMAGE_OUTSIDE_WINDOW, 5);
+    expect(q.hp).toBeLessThan(before);
   });
 
-  it('una embestida directa al CUERPO del jefe le hace QUEEN_BODY_RAM_DAMAGE_FRACTION de su vida', () => {
+  it('una embestida directa al CUERPO sin aturdir le hace daño reducido (>0, ya no un valor fijo)', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue();
     const q = boss(world);
     const before = q.hp;
-    // Héroe sobre el cuerpo del jefe (0,0), embistiendo.
     world.hero.position.x = q.position.x;
     world.hero.position.y = q.position.y;
     world.hero.velocity.x = RAM_SPEED_THRESHOLD + 1;
     world.hero.velocity.y = 0;
     stepHeroEnemyContacts(world, world.contactDamageCooldowns, events);
-    expect(q.hp).toBeCloseTo(before - QUEEN_MAX_HP * QUEEN_BODY_RAM_DAMAGE_FRACTION, 5);
+    expect(q.hp).toBeLessThan(before); // le entra algo
+    expect(before - q.hp).toBeLessThan(3); // reducido (embestida × 0.15), pequeño
+  });
+
+  it('al romper una columna la Reina queda ATURDIDA (vulnerable) unos segundos y luego vuelve a no-aturdida', () => {
+    const world = makeQueenWorldWithColumns();
+    const events = createEventQueue();
+    const q = boss(world);
+    const col = world.queenColumns[0];
+    // Quedan 2 columnas: romper UNA deja otra en pie → aturdimiento TEMPORAL.
+    ramColumn(world, events, col, QUEEN_COLUMN_HP);
+    expect(q.bossVulnerableUntil).toBeGreaterThan(world.time);
+    advance(world, events, 1); // queenStepPattern deriva bossVulnerable del reloj
+    expect(q.bossVulnerable).toBe(true);
+    // Pasado el aturdimiento vuelve a no-vulnerable (aún queda una columna).
+    world.time += QUEEN_COLUMN_STUN_DURATION;
+    advance(world, events, 1);
+    expect(q.bossVulnerable).toBe(false);
+  });
+
+  it('estando ATURDIDA, un ataque normal le hace MÁS daño que sin aturdir (daño completo)', () => {
+    const world = makeQueenWorldWithColumns();
+    const events = createEventQueue();
+    const q = boss(world);
+    q.bossVulnerable = true; // simula la ventana de aturdimiento
+    const before = q.hp;
+    applyDamageToEnemy(world, q, 10, 0, 0, events);
+    expect(q.hp).toBeCloseTo(before - 10, 5); // completo, no ×0.15
+  });
+
+  it('rotas TODAS las columnas (sala real), la Reina queda vulnerable de forma PERMANENTE y le queda ~1/3 de vida para rematar', () => {
+    const room = parseRoomData(bossQueenJson).room!;
+    const world = createWorld(room);
+    initBossEnemies(world);
+    const events = createEventQueue(64);
+    const q = boss(world);
+    expect(world.queenColumns.length).toBe(8);
+    for (const col of [...world.queenColumns]) {
+      ramColumn(world, events, col, QUEEN_COLUMN_HP);
+    }
+    expect(world.queenColumns.every((c) => c.broken)).toBe(true);
+    expect(q.bossVulnerableUntil).toBe(Infinity);
+    advance(world, events, 1);
+    expect(q.bossVulnerable).toBe(true);
+    // 8 × QUEEN_COLUMN_DAMAGE_FRACTION = 2/3 → le queda ~1/3 para el remate.
+    expect(q.hp / q.maxHp).toBeCloseTo(1 / 3, 2);
   });
 });

@@ -269,8 +269,8 @@ export interface Enemy {
   bossDamageOutsideWindowFactor: number;
   /** Guardián: daño al jefe por explosión de barril en su radio (HP absoluto, bypass de ventana). 0 = usar BARREL_DAMAGE normal (resto de enemigos/jefes). */
   bossBarrelDamage: number;
-  /** Reina (rediseño 2026-07-10): daño al CUERPO del jefe por embestida directa del héroe (HP absoluto, bypass de ventana). 0 = usar el daño de embestida normal (resto de jefes, p.ej. Guardián). */
-  bossRamBodyDamage: number;
+  /** Reina (rediseño 2026-07-10): world.time hasta el que el cuerpo del jefe está ATURDIDO (vulnerable, daño completo). 0 = no aturdida (daño reducido); Infinity = vulnerable permanente (todas las columnas rotas). Lo consume `queenStepPattern` para fijar `bossVulnerable`. */
+  bossVulnerableUntil: number;
   /** world.time hasta el que dura el telegraph en curso (0 = no telegrafiando). */
   bossTelegraphUntil: number;
   /** Etiqueta libre del telegraph/ataque en curso (para render + patrón), '' si no aplica. */
@@ -541,7 +541,7 @@ function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng, origin: Vec2, ro
     bossVulnerable: false,
     bossDamageOutsideWindowFactor: 0,
     bossBarrelDamage: 0,
-    bossRamBodyDamage: 0,
+    bossVulnerableUntil: 0,
     bossTelegraphUntil: 0,
     bossTelegraphKind: '',
     bossTimer: 0,

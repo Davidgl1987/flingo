@@ -27,6 +27,7 @@ import {
   PROJECTILE_RECOIL,
   QUEEN_COLUMN_DAMAGE_FRACTION,
   QUEEN_COLUMN_HIT_COOLDOWN,
+  QUEEN_COLUMN_STUN_DURATION,
   QUEEN_COLUMN_TOUCH_SKIN,
   RAM_DAMAGE_BASE,
   RAM_DAMAGE_PER_SPEED,
@@ -429,16 +430,7 @@ export function stepHeroEnemyContacts(
     }
 
     if (dmg > 0) {
-      // Reina (rediseño 2026-07-10, GDD §15.3): el cuerpo del jefe recibe un
-      // daño FIJO por embestida (bypass de ventana) en vez del daño de
-      // embestida normal escalado por velocidad — su vida real está en las
-      // columnas de su sala (ver stepQueenColumns más abajo). El resto de
-      // jefes (bossRamBodyDamage=0, p.ej. Guardián) sigue igual que antes.
-      if (enemy.kind === 'boss' && enemy.bossRamBodyDamage > 0) {
-        applyDamageToEnemy(world, enemy, enemy.bossRamBodyDamage, dx, dy, events, true);
-      } else {
-        applyDamageToEnemy(world, enemy, dmg, dx, dy, events);
-      }
+      applyDamageToEnemy(world, enemy, dmg, dx, dy, events);
       if (hero.modifiers.explosiveRam) {
         applyExplosiveRam(world, enemy.position.x, enemy.position.y, enemy.id, events);
       }
@@ -516,6 +508,16 @@ export function stepQueenColumns(world: World, cooldowns: Map<string, number>, e
       );
       if (boss && boss.hp > 0) {
         applyDamageToEnemy(world, boss, boss.maxHp * QUEEN_COLUMN_DAMAGE_FRACTION, 0, 0, events, true);
+        // La Reina queda ATURDIDA (vulnerable, daño completo) un rato tras
+        // romperle una columna (playtest 2026-07-10: "si le atacas justo al
+        // romper una columna, ahí sí le haces más daño"). Si con ESTA rotura ya
+        // no le queda ninguna columna en pie, pasa a vulnerable PERMANENTE
+        // (Infinity): el último 1/3 de vida se remata a golpes normales.
+        const anyLeft = world.queenColumns.some(
+          (c) => !c.broken && (c.roomId === undefined || c.roomId === col.roomId),
+        );
+        boss.bossVulnerableUntil = anyLeft ? world.time + QUEEN_COLUMN_STUN_DURATION : Infinity;
+        if (!anyLeft) pushEvent(events, 'boss-columns-cleared', boss.position.x, boss.position.y, 1);
       }
       pushEvent(events, 'boss-column-broken', col.position.x, col.position.y, 1);
     }

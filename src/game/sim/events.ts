@@ -94,7 +94,13 @@ export type GameEventType =
    * el 2.º golpe de embestida y se ROMPE — se retira su Obstacle sólido y el
    * jefe pierde QUEEN_COLUMN_DAMAGE_FRACTION de su vida máxima.
    */
-  | 'boss-column-broken';
+  | 'boss-column-broken'
+  /**
+   * Reina del Enjambre (rediseño 2026-07-10, GDD §15.3): cae la ÚLTIMA columna
+   * — el jefe queda "desconectado" y pasa a vulnerable PERMANENTE (daño
+   * completo) para rematar el último 1/3 de su vida a golpes normales.
+   */
+  | 'boss-columns-cleared';
 
 export interface GameEvent {
   type: GameEventType;

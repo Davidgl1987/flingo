@@ -8,7 +8,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getBossDef } from '../content/bosses';
-import { QUEEN_COLUMN_DAMAGE_FRACTION } from '../content/constants';
 import type { GameSession } from '../session';
 import { isBoss } from '../sim/boss';
 import type { Enemy } from '../sim/world';
@@ -16,24 +15,7 @@ import type { Enemy } from '../sim/world';
 interface VisibleBoss {
   id: string;
   name: string;
-  /** true si esta barra debe leerse como "8 columnas" (Reina, rediseño 2026-07-10, GDD §15.3). */
-  segmented: boolean;
 }
-
-/**
- * Marcas de segmento (rediseño 2026-07-10, GDD §15.3 §7 punto 2: "barra
- * segmentada en 8 chunks conectados a sus cuerdas"): 8 columnas × 12% cada
- * una = 96%; una marca al final de CADA columna (12%, 24%, … 96% del ancho).
- * El 4% final tras la última marca queda SIN separador: es el remate a
- * embestidas al cuerpo (QUEEN_BODY_RAM_DAMAGE_FRACTION), no otra columna.
- * Estáticas por ahora: el drenado animado por cuerda hacia cada columna es
- * de una tarea posterior (T2/T6 del plan de rediseño).
- */
-const QUEEN_COLUMN_COUNT = 8;
-const SEGMENT_MARK_PERCENTS = Array.from(
-  { length: QUEEN_COLUMN_COUNT },
-  (_, i) => (i + 1) * QUEEN_COLUMN_DAMAGE_FRACTION * 100,
-);
 
 /**
  * Busca el primer jefe vivo o muerto de la sala actual del héroe (una sola
@@ -63,11 +45,7 @@ export function BossHealthBar({ session }: { session: GameSession }) {
 
       if (boss?.id !== lastId) {
         lastId = boss?.id ?? null;
-        setVisible(
-          boss && boss.bossId
-            ? { id: boss.id, name: getBossDef(boss.bossId).name, segmented: boss.bossId === 'queen' }
-            : null,
-        );
+        setVisible(boss && boss.bossId ? { id: boss.id, name: getBossDef(boss.bossId).name } : null);
       }
 
       if (boss) {
@@ -96,13 +74,6 @@ export function BossHealthBar({ session }: { session: GameSession }) {
       </div>
       <div className="boss-health-track">
         <div ref={fillRef} className="boss-health-fill" />
-        {visible.segmented && (
-          <div className="boss-health-segments">
-            {SEGMENT_MARK_PERCENTS.map((pct) => (
-              <span key={pct} className="boss-health-segment-mark" style={{ left: `${pct}%` }} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
