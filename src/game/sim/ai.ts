@@ -345,6 +345,10 @@ function stepTrail(world: World, enemy: Enemy, dt: number): void {
       puddle.position.y = enemy.position.y;
       puddle.radius = TRAIL_PUDDLE_RADIUS;
       puddle.ttl = TRAIL_PUDDLE_LIFETIME;
+      // Slot reciclado del pool compartido: puede venir de un charco de la
+      // Reina (slows=true, rediseño 2026-07-10). El Trail normal solo hace
+      // daño de contacto — resetea explícitamente.
+      puddle.slows = false;
     }
   }
 }

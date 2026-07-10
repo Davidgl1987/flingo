@@ -15,6 +15,9 @@ import {
   PIT_DAMAGE,
   PIT_FALL_DURATION,
   PIT_FORGIVENESS_MARGIN,
+  QUEEN_TRAIL_CROSS_SPEED,
+  QUEEN_TRAIL_DOT_GRACE,
+  QUEEN_TRAIL_SLOW_FACTOR,
   SPIKES_ENEMY_DAMAGE_INTERVAL,
   SPIKES_DAMAGE,
   SPIKES_PUSH_SPEED,
@@ -182,12 +185,31 @@ export function stepEnemyHazards(
   }
 }
 
-// ── Charcos del Trail ──────────────────────────────────────────────────────
+// ── Charcos del Trail / rastro de la Reina ─────────────────────────────────
 
-/** Consume la vida de los charcos activos y daña al héroe que pise uno (sin cooldown propio: el hazard desaparece antes de repetir por i-frames del héroe). */
+/**
+ * Consume la vida de los charcos activos y resuelve su efecto sobre el héroe.
+ * Dos comportamientos según `puddle.slows` (mismo pool, ver `Puddle` en
+ * world.ts):
+ *
+ * - `slows === false` (Trail normal / esquirlas del Guardián): daño de
+ *   contacto simple al solapar (sin cooldown propio: el hazard desaparece
+ *   antes de repetir por los i-frames del héroe). Comportamiento INTACTO.
+ * - `slows === true` (rastro de la Reina, rediseño 2026-07-10, GDD §15.3):
+ *   "molesta de verdad" — si el héroe lo pisa yendo lento (velocidad ≤
+ *   QUEEN_TRAIL_CROSS_SPEED) lo frena (QUEEN_TRAIL_SLOW_FACTOR/tick); una
+ *   embestida por encima de esa velocidad lo cruza limpio, sin penalización
+ *   (válvula: castiga quedarte parado, no pasar de largo). Mientras el héroe
+ *   sigue lento y frenado, `hero.trailDwell` acumula tiempo continuo; pasada
+ *   la gracia QUEEN_TRAIL_DOT_GRACE empieza el DoT (`applyDamageToHero`, 1
+ *   punto — los i-frames de 0.7s espacian los ticks solos). Salir del rastro
+ *   (o cruzarlo a embestida) resetea `trailDwell` a 0.
+ */
 export function stepPuddles(world: World, dt: number, events: EventQueue): void {
   const puddles = world.puddles;
   const hero = world.hero;
+  let onSlowTrail = false;
+
   for (let i = 0; i < puddles.length; i++) {
     const puddle = puddles[i];
     if (!puddle.active) continue;
@@ -199,9 +221,27 @@ export function stepPuddles(world: World, dt: number, events: EventQueue): void 
     const dx = hero.position.x - puddle.position.x;
     const dy = hero.position.y - puddle.position.y;
     const rr = hero.radius + puddle.radius;
-    if (dx * dx + dy * dy <= rr * rr) {
+    if (dx * dx + dy * dy > rr * rr) continue;
+
+    if (!puddle.slows) {
+      applyDamageToHero(world, 1, events);
+      continue;
+    }
+
+    const speed = Math.hypot(hero.velocity.x, hero.velocity.y);
+    if (speed > QUEEN_TRAIL_CROSS_SPEED) continue; // embestida: cruza limpio, sin frenado ni DoT
+    hero.velocity.x *= QUEEN_TRAIL_SLOW_FACTOR;
+    hero.velocity.y *= QUEEN_TRAIL_SLOW_FACTOR;
+    onSlowTrail = true;
+  }
+
+  if (onSlowTrail) {
+    hero.trailDwell += dt;
+    if (hero.trailDwell >= QUEEN_TRAIL_DOT_GRACE) {
       applyDamageToHero(world, 1, events);
     }
+  } else {
+    hero.trailDwell = 0;
   }
 }
 

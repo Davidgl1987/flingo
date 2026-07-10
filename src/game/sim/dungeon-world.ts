@@ -242,6 +242,7 @@ export function createDungeonWorld(dungeon: DungeonMap, seed: number = dungeon.s
       lastSpellTime: -10,
       hasKey: false,
       modifiers: createDefaultModifiers(),
+      trailDwell: 0,
     },
     enemies,
     projectiles: createProjectilePool(),

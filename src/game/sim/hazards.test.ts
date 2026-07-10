@@ -7,9 +7,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   BARREL_DAMAGE,
+  HERO_IFRAME_DURATION,
   MUD_SLOW_FACTOR_PER_TICK,
   PIT_FALL_DURATION,
   PIT_FORGIVENESS_MARGIN,
+  QUEEN_TRAIL_CROSS_SPEED,
+  QUEEN_TRAIL_DOT_GRACE,
+  QUEEN_TRAIL_SLOW_FACTOR,
   SPIKES_ENEMY_DAMAGE_INTERVAL,
   SPIKES_PUSH_SPEED,
 } from '../content/constants';
@@ -247,6 +251,102 @@ describe('charcos del Trail', () => {
     puddle.ttl = 0.01;
     stepPuddles(world, FIXED_DT, events);
     expect(puddle.active).toBe(false);
+  });
+});
+
+describe('rastro de la Reina (charcos con slows=true, rediseño 2026-07-10)', () => {
+  function makeQueenPuddle(world: World): World['puddles'][number] {
+    const puddle = world.puddles[0];
+    puddle.active = true;
+    puddle.slows = true;
+    puddle.position.x = 0;
+    puddle.position.y = 0;
+    puddle.radius = 0.85;
+    puddle.ttl = 6.5;
+    return puddle;
+  }
+
+  it('ralentiza al héroe LENTO que se queda encima', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    makeQueenPuddle(world);
+    world.hero.position.x = 0;
+    world.hero.position.y = 0;
+    world.hero.velocity.x = 1; // por debajo de QUEEN_TRAIL_CROSS_SPEED
+    world.hero.velocity.y = 0;
+    stepPuddles(world, FIXED_DT, events);
+    expect(world.hero.velocity.x).toBeCloseTo(1 * QUEEN_TRAIL_SLOW_FACTOR, 9);
+  });
+
+  it('un héroe RÁPIDO (embestida, velocidad > QUEEN_TRAIL_CROSS_SPEED) cruza sin frenar', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    makeQueenPuddle(world);
+    world.hero.position.x = 0;
+    world.hero.position.y = 0;
+    world.hero.velocity.x = QUEEN_TRAIL_CROSS_SPEED + 1;
+    world.hero.velocity.y = 0;
+    stepPuddles(world, FIXED_DT, events);
+    expect(world.hero.velocity.x).toBeCloseTo(QUEEN_TRAIL_CROSS_SPEED + 1, 9);
+    expect(world.hero.trailDwell).toBe(0);
+  });
+
+  it('DoT con gracia: no hace daño antes de QUEEN_TRAIL_DOT_GRACE; pasada la gracia, sí', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    makeQueenPuddle(world);
+    world.hero.position.x = 0;
+    world.hero.position.y = 0;
+    world.hero.velocity.x = 1;
+    world.hero.velocity.y = 0;
+
+    // Avanza claramente por debajo de la gracia (2 ticks de margen anti-flakiness
+    // por redondeo de coma flotante): sin daño todavía.
+    const ticksSafelyBeforeGrace = Math.floor(QUEEN_TRAIL_DOT_GRACE / FIXED_DT) - 2;
+    for (let i = 0; i < ticksSafelyBeforeGrace; i++) {
+      world.time += FIXED_DT;
+      stepPuddles(world, FIXED_DT, events);
+    }
+    expect(world.hero.hp).toBe(world.hero.maxHp);
+    expect(world.hero.trailDwell).toBeLessThan(QUEEN_TRAIL_DOT_GRACE);
+
+    // Sigue avanzando hasta cruzar claramente la gracia (mismo margen): DoT.
+    for (let i = 0; i < 4; i++) {
+      world.time += FIXED_DT;
+      stepPuddles(world, FIXED_DT, events);
+    }
+    expect(world.hero.trailDwell).toBeGreaterThanOrEqual(QUEEN_TRAIL_DOT_GRACE);
+    expect(world.hero.hp).toBe(world.hero.maxHp - 1);
+
+    // Los i-frames (0.7s) espacian el siguiente tick de daño: sigue igual hasta que expiren.
+    world.time += FIXED_DT;
+    stepPuddles(world, FIXED_DT, events);
+    expect(world.hero.hp).toBe(world.hero.maxHp - 1);
+
+    // Avanza más allá de los i-frames: vuelve a hacer daño mientras siga sobre el rastro.
+    world.time += HERO_IFRAME_DURATION + FIXED_DT;
+    stepPuddles(world, FIXED_DT, events);
+    expect(world.hero.hp).toBe(world.hero.maxHp - 2);
+  });
+
+  it('al salir del rastro, trailDwell se resetea a 0', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    makeQueenPuddle(world);
+    world.hero.position.x = 0;
+    world.hero.position.y = 0;
+    world.hero.velocity.x = 1;
+    world.hero.velocity.y = 0;
+
+    world.time += FIXED_DT;
+    stepPuddles(world, FIXED_DT, events);
+    expect(world.hero.trailDwell).toBeGreaterThan(0);
+
+    // Se aleja del charco.
+    world.hero.position.x = 50;
+    world.time += FIXED_DT;
+    stepPuddles(world, FIXED_DT, events);
+    expect(world.hero.trailDwell).toBe(0);
   });
 });
 

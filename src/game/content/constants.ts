@@ -348,6 +348,13 @@ export const QUEEN_TRAIL_DROP_INTERVAL_PHASE2 = 0.45;
 export const QUEEN_TRAIL_PUDDLE_RADIUS = 0.85;
 export const QUEEN_TRAIL_PUDDLE_LIFETIME = 6.5;
 
+/** Factor de frenado por tick del héroe LENTO sobre el rastro de la Reina (rediseño 2026-07-10): más agresivo que el barro para que quedarse en el rastro sea un error real. */
+export const QUEEN_TRAIL_SLOW_FACTOR = 0.8;
+/** Velocidad (u/s) por encima de la cual una EMBESTIDA cruza el rastro sin penalización (válvula: el rastro castiga pararte, no pasar lanzado). */
+export const QUEEN_TRAIL_CROSS_SPEED = 4.5;
+/** Gracia (s) sobre el rastro antes de que empiece el DoT (válvula: cruzar es gratis; quedarse, no). */
+export const QUEEN_TRAIL_DOT_GRACE = 0.4;
+
 /**
  * Larvas (GDD §15.3/§15.6): oleada cada ~3s, Dummy débil de 1 HP, avanzan
  * hacia el héroe (línea recta en fase 1, persiguen de verdad en fase 2/3).

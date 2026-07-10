@@ -688,6 +688,10 @@ function spawnGuardianShardField(world: World, x: number, y: number): void {
       pool[i].position.y = y;
       pool[i].radius = GUARDIAN_SHARD_RADIUS;
       pool[i].ttl = GUARDIAN_SHARD_LIFETIME;
+      // Slot reciclado del pool compartido: puede venir de un charco de la
+      // Reina (slows=true, rediseño 2026-07-10). La esquirla solo hace daño
+      // de contacto — resetea explícitamente.
+      pool[i].slows = false;
       return;
     }
   }
@@ -1150,6 +1154,12 @@ function queenStepStalk(world: World, boss: Enemy, dt: number, wanderVx: number,
  * PROPIOS (QUEEN_TRAIL_PUDDLE_RADIUS/QUEEN_TRAIL_PUDDLE_LIFETIME): si el pool
  * está lleno, no suelta charco este tick (degradación silenciosa, igual
  * criterio que `acquirePuddle` de ai.ts) en vez de crecer el array.
+ *
+ * `slows = true` (rediseño 2026-07-10, GDD §15.3): marca el charco como
+ * rastro de la Reina para que `stepPuddles` (sim/hazards.ts) le aplique
+ * ralentización + DoT por permanencia en vez del daño de contacto simple del
+ * Trail normal — el daño directo YA NO se aplica aquí, lo gestiona
+ * `stepPuddles` con sus válvulas (gracia + velocidad de cruce).
  */
 function queenStepTrail(world: World, boss: Enemy, dt: number): void {
   boss.bossCounter -= dt;
@@ -1163,6 +1173,7 @@ function queenStepTrail(world: World, boss: Enemy, dt: number): void {
       pool[i].position.y = boss.position.y;
       pool[i].radius = QUEEN_TRAIL_PUDDLE_RADIUS;
       pool[i].ttl = QUEEN_TRAIL_PUDDLE_LIFETIME;
+      pool[i].slows = true;
       return;
     }
   }

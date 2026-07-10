@@ -179,6 +179,15 @@ export interface Hero {
   lastSpellTime: number;
   hasKey: boolean;
   modifiers: HeroModifiers;
+  /**
+   * Reina (rediseño 2026-07-10, GDD §15.3): acumulador de tiempo continuo que
+   * el héroe lleva LENTO sobre el rastro de la Reina (charco con `slows`).
+   * `stepPuddles` lo suma mientras dure el frenado y lo resetea a 0 en cuanto
+   * sale del rastro (o cruza a velocidad de embestida sin ser frenado); pasado
+   * `QUEEN_TRAIL_DOT_GRACE` empieza a aplicar el DoT. No confundir con los
+   * i-frames (`invulnerableUntil`): son mecanismos independientes.
+   */
+  trailDwell: number;
 }
 
 /** Obstáculo sólido derivado de los hazards 'rock' de la sala o de un segmento de muro/puerta cerrada. */
@@ -297,12 +306,19 @@ export interface Enemy {
  * el punto de patrulla perimetral objetivo. Ver comentario en bosses.ts.
  */
 
-/** Charco dejado por el Trail: pool preasignado, activar/desactivar. */
+/** Charco dejado por el Trail (o por la Reina/esquirlas del Guardián): pool preasignado, activar/desactivar. */
 export interface Puddle {
   active: boolean;
   position: Vec2;
   radius: number;
   ttl: number;
+  /**
+   * Reina (rediseño 2026-07-10, GDD §15.3): true en los charcos de su rastro
+   * — ralentizan + DoT por permanencia (ver `stepPuddles`) en vez del daño de
+   * contacto simple del Trail normal/esquirlas del Guardián, que dejan este
+   * campo en `false`.
+   */
+  slows: boolean;
 }
 
 /** Moneda/poción/llave viva en el mundo (recogible). */
@@ -456,7 +472,7 @@ export function createProjectilePool(): Projectile[] {
 export function createPuddlePool(): Puddle[] {
   const pool: Puddle[] = [];
   for (let i = 0; i < PUDDLE_POOL_SIZE; i++) {
-    pool.push({ active: false, position: { x: 0, y: 0 }, radius: 0, ttl: 0 });
+    pool.push({ active: false, position: { x: 0, y: 0 }, radius: 0, ttl: 0, slows: false });
   }
   return pool;
 }
@@ -652,6 +668,7 @@ export function createWorld(room: RoomData, seed = 1): World {
       lastSpellTime: -10,
       hasKey: false,
       modifiers: createDefaultModifiers(),
+      trailDwell: 0,
     },
     enemies,
     projectiles: createProjectilePool(),
