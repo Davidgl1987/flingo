@@ -31,7 +31,10 @@ const NONE: BurstSpec = { color: '#ffffff', size: 0, count: 0, life: 0, speed: 0
 export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   launch: { color: '#54c7ff', size: 0.09, count: 10, life: 0.3, speed: 2.2, trauma: 0.06 },
   'wall-bounce': { color: '#c7ccdf', size: 0.06, count: 5, life: 0.22, speed: 1.6, trauma: 0.08 },
-  'enemy-hit': { color: '#ffffff', size: 0.08, count: 8, life: 0.25, speed: 2.6, trauma: 0.14 },
+  'enemy-hit': { color: '#ffffff', size: 0.08, count: 8, life: 0.25, speed: 2.6, trauma: 0.06 },
+  // Golpe a un JEFE (playtest 2026-07-10): shake grande, escalado por daño en
+  // reactToEvent.ts — mucho más notorio que un enemigo pequeño (enemy-hit).
+  'boss-hit': { color: '#ffffff', size: 0.1, count: 10, life: 0.28, speed: 2.8, trauma: 0.35 },
   'enemy-died': { color: '#ff6bcb', size: 0.12, count: 22, life: 0.5, speed: 3.4, trauma: 0.22 },
   'player-damaged': { color: '#ff3b3b', size: 0.1, count: 14, life: 0.35, speed: 2.8, trauma: 0.32 },
   'player-died': { color: '#ff3b3b', size: 0.14, count: 26, life: 0.6, speed: 3.2, trauma: 0.5 },

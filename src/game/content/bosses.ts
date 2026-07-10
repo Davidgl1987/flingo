@@ -10,22 +10,24 @@
  */
 
 import {
+  GUARDIAN_BARREL_DAMAGE_FRACTION,
   GUARDIAN_BARREL_FALL_DURATION,
   GUARDIAN_BARREL_MAX_ACTIVE,
   GUARDIAN_BARREL_RADIUS,
   GUARDIAN_BARREL_SPAWN_INTERVAL,
   GUARDIAN_BARREL_STUN_DURATION,
-  GUARDIAN_BARREL_WALL_MARGIN,
   GUARDIAN_CHARGE_DAMAGE_PHASE1,
   GUARDIAN_CHARGE_DAMAGE_PHASE3,
   GUARDIAN_CHARGE_KNOCKBACK_SPEED,
   GUARDIAN_CHARGE_MAX_DURATION,
   GUARDIAN_CHARGE_SPEED,
+  GUARDIAN_DAMAGE_OUTSIDE_WINDOW,
   GUARDIAN_DETECT_RANGE,
   GUARDIAN_DOUBLE_CHARGE_PAUSE,
   GUARDIAN_DUST_INTERVAL,
   GUARDIAN_HIT_DAMAGE_CAP_FRACTION,
   GUARDIAN_MAX_HP,
+  GUARDIAN_MIN_CHARGE_CLEARANCE,
   GUARDIAN_PATROL_SPEED,
   GUARDIAN_PHASE2_CHARGE_COUNT,
   GUARDIAN_RADIUS,
@@ -41,6 +43,7 @@ import {
   QUEEN_LARVA_HP,
   QUEEN_LARVA_ID_PREFIX,
   QUEEN_LARVA_MAX,
+  QUEEN_LARVA_MAX_BY_PHASE,
   QUEEN_LARVA_PER_WAVE,
   QUEEN_LARVA_RADIUS,
   QUEEN_LARVA_SPEED,
@@ -49,6 +52,7 @@ import {
   QUEEN_MOVE_SPEED_PHASE2,
   QUEEN_MOVE_SPEED_PHASE3,
   QUEEN_RADIUS,
+  QUEEN_STALK_SPEED_BY_PHASE,
   QUEEN_TRAIL_DROP_INTERVAL,
   QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
   QUEEN_TRAIL_PUDDLE_LIFETIME,
@@ -96,6 +100,8 @@ export interface BossDef {
    * valor >0 dejaría pasar daño reducido si algún jefe futuro lo necesitara.
    */
   damageOutsideWindow: number;
+  /** Daño por explosión de barril en su radio, como fracción de maxHp (bypass de ventana, en cualquier momento). */
+  barrelDamageFraction?: number;
   /** Avance de un tick del patrón de ataque de este jefe. */
   stepPattern: BossPatternStep;
   /** Se llama una vez al cruzar a fase 2 o 3 (para resetear bossStage/timers propios del patrón). */
@@ -221,6 +227,16 @@ const GUARDIAN_STAGE_CHARGING = 2;
 const GUARDIAN_STAGE_STUNNED = 3;
 /** Pausa corta entre cargas encadenadas (fase 2/3, GDD §15.2). */
 const GUARDIAN_STAGE_CHAIN_PAUSE = 4;
+/**
+ * Reposicionamiento antes de cargar (GDD §15.2, playtest 2026-07-06 "no carga
+ * si tiene una roca/muro demasiado cerca"): el héroe ya está detectado pero el
+ * recorrido de carga hacia él está bloqueado a corta distancia — en vez de
+ * telegrafiar, el Guardián se mueve (a velocidad de patrulla) hacia el centro
+ * de su sala buscando línea despejada, y reintenta la comprobación cada tick.
+ * Evita el exploit de estrellarlo una y otra vez contra una roca pegada
+ * mientras el héroe le pega gratis al lado.
+ */
+const GUARDIAN_STAGE_REPOSITION = 5;
 
 /** Las 4 esquinas del rectángulo de patrulla perimetral, en orden cíclico (con margen respecto a la pared). */
 function guardianPatrolCorners(bounds: AABB): { x: number; y: number }[] {
@@ -277,6 +293,29 @@ function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
     boss.velocity.y = 0;
     return;
   }
+  guardianMoveTowardWithAvoidance(world, boss, boss.patrolTo.x, boss.patrolTo.y, dt);
+}
+
+/**
+ * Movimiento genérico a velocidad de patrulla hacia un punto (tx,ty) con
+ * evitación por circunnavegación tangencial (axis-slide, fix B1.6.1). Extraído
+ * de `guardianStepPatrolMove` (que lo aplica a `boss.patrolTo`, las esquinas
+ * del perímetro) para que `guardianStepReposition` (GDD §15.2, playtest
+ * 2026-07-06 "no carga si tiene una roca/muro demasiado cerca") pueda
+ * reutilizar EXACTAMENTE la misma lógica apuntando a un punto distinto (hacia
+ * el centro de la sala, buscando línea despejada) sin pisar `patrolTo` — que
+ * debe conservar intacto el ciclo de las 4 esquinas para cuando el Guardián
+ * vuelva a patrullar de verdad.
+ */
+function guardianMoveTowardWithAvoidance(world: World, boss: Enemy, tx: number, ty: number, dt: number): void {
+  const dx = tx - boss.position.x;
+  const dy = ty - boss.position.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.15) {
+    boss.velocity.x = 0;
+    boss.velocity.y = 0;
+    return;
+  }
   const nx = dx / dist;
   const ny = dy / dist;
   const stepX = nx * GUARDIAN_PATROL_SPEED * dt;
@@ -299,7 +338,7 @@ function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
   // el objetivo lo acerca aún más al vértice y sigue chocando (era la causa
   // del atasco permanente del playtest). Se calcula la normal "hacia fuera"
   // del sólido más cercano (rock interior o muro) y se avanza por la tangente
-  // que más progresa hacia patrolTo, con un pequeño empuje normal para
+  // que más progresa hacia el objetivo, con un pequeño empuje normal para
   // despegar del vértice; así el boss rodea la roca hasta el corredor libre.
   let normX = 0;
   let normY = 0;
@@ -332,10 +371,11 @@ function guardianStepPatrolMove(world: World, boss: Enemy, dt: number): void {
 
   const step = GUARDIAN_PATROL_SPEED * dt;
   const push = 0.05;
-  // Tangente perpendicular a la normal, orientada hacia patrolTo (la que tiene
-  // producto escalar positivo con la dirección deseada). Se prueba primero esa,
-  // luego la opuesta, y por último solo el empuje normal (despegar). Sin
-  // asignaciones: el patrón se repite con `guardianTrySlide` sobre escalares.
+  // Tangente perpendicular a la normal, orientada hacia el objetivo (la que
+  // tiene producto escalar positivo con la dirección deseada). Se prueba
+  // primero esa, luego la opuesta, y por último solo el empuje normal
+  // (despegar). Sin asignaciones: el patrón se repite con `guardianTrySlide`
+  // sobre escalares.
   const tanX = -normY;
   const tanY = normX;
   const sign = tanX * nx + tanY * ny >= 0 ? 1 : -1;
@@ -408,6 +448,29 @@ function guardianHitsSolid(world: World, boss: Enemy, x: number, y: number): boo
   return false;
 }
 
+/** Nº de puntos de muestreo a lo largo de GUARDIAN_MIN_CHARGE_CLEARANCE al comprobar recorrido de carga despejado. */
+const GUARDIAN_CHARGE_CLEARANCE_SAMPLES = 6;
+
+/**
+ * true si el Guardián tiene recorrido despejado de al menos
+ * GUARDIAN_MIN_CHARGE_CLEARANCE unidades en la dirección (dirX,dirY) desde su
+ * posición actual (GDD §15.2, playtest 2026-07-06 "no carga si tiene una
+ * roca/muro demasiado cerca"): sondea varios puntos a lo largo de esa
+ * distancia con `guardianHitsSolid` — si CUALQUIERA de ellos solapa un sólido,
+ * el recorrido no está despejado (la carga chocaría casi de inmediato, junto
+ * al héroe, dejando al Guardián aturdido a bocajarro donde el jugador le pega
+ * gratis). Sin asignaciones: solo escalares en un bucle fijo.
+ */
+function guardianChargePathClear(world: World, boss: Enemy, dirX: number, dirY: number): boolean {
+  for (let i = 1; i <= GUARDIAN_CHARGE_CLEARANCE_SAMPLES; i++) {
+    const d = (GUARDIAN_MIN_CHARGE_CLEARANCE * i) / GUARDIAN_CHARGE_CLEARANCE_SAMPLES;
+    const x = boss.position.x + dirX * d;
+    const y = boss.position.y + dirY * d;
+    if (guardianHitsSolid(world, boss, x, y)) return false;
+  }
+  return true;
+}
+
 /** Nº de barriles rodantes vivos (sin explotar) de la sala del Guardián (GDD §15.2: cap `GUARDIAN_BARREL_MAX_ACTIVE`). */
 function guardianLiveBarrelCount(world: World, boss: Enemy): number {
   const barrels = world.barrels;
@@ -419,29 +482,41 @@ function guardianLiveBarrelCount(world: World, boss: Enemy): number {
 }
 
 /**
+ * Separación del centro de la sala a la que están los 4 huecos entre rocas
+ * (mismo valor que la posición de las rocas en boss-guardian.json: ±3.2 en
+ * cada eje). Las rocas miden 1.8×1.8 (medio lado 0.9), así que ocupan
+ * |offset| ∈ [2.3, 4.1] en el eje perpendicular al hueco — estos puntos, con
+ * 0 en ese eje, quedan siempre despejados.
+ */
+const GUARDIAN_BARREL_GAP_OFFSET = 3.2;
+/** Separación del centro a la que están los 4 puntos interiores, hacia el centro desde cada hueco (mitad de GUARDIAN_BARREL_GAP_OFFSET). */
+const GUARDIAN_BARREL_INNER_OFFSET = 1.6;
+
+/**
  * Los 8 puntos fijos de aparición de barriles rodantes (GDD §15.2, fix
- * B1.6.1 tras playtest 2026-07-06): las 4 esquinas de la arena + los 4 puntos
- * medios de los bordes, todos con margen `GUARDIAN_BARREL_WALL_MARGIN`
- * respecto a la pared (mismo margen que la versión anterior aleatoria). Orden
- * fijo, sin significado semántico salvo estabilidad de tests.
+ * playtest 2026-07-10: "ponlos entre las rocas centrales mejor que en las
+ * esquinas" — antes aparecían en el perímetro de la arena, lejos de la
+ * acción). Ahora están en la región CENTRAL, entre las 4 rocas que forman el
+ * anillo (boss-guardian.json, rocas en (±3.2,±3.2)): los 4 huecos entre rocas
+ * adyacentes (a `GUARDIAN_BARREL_GAP_OFFSET` del centro, sobre cada eje) y los
+ * 4 puntos interiores hacia el centro (a `GUARDIAN_BARREL_INNER_OFFSET` en
+ * ambos ejes) — pero nunca el centro exacto, donde patrulla/aparece el
+ * Guardián. Orden fijo, sin significado semántico salvo estabilidad de tests.
  */
 export function guardianBarrelSpawnPoints(bounds: AABB): { x: number; y: number }[] {
-  const margin = GUARDIAN_BARREL_WALL_MARGIN;
   const midX = (bounds.minX + bounds.maxX) / 2;
   const midY = (bounds.minY + bounds.maxY) / 2;
-  const left = bounds.minX + margin;
-  const right = bounds.maxX - margin;
-  const top = bounds.minY + margin;
-  const bottom = bounds.maxY - margin;
+  const gap = GUARDIAN_BARREL_GAP_OFFSET;
+  const inner = GUARDIAN_BARREL_INNER_OFFSET;
   return [
-    { x: left, y: top }, // esquina NO
-    { x: right, y: top }, // esquina NE
-    { x: right, y: bottom }, // esquina SE
-    { x: left, y: bottom }, // esquina SO
-    { x: midX, y: top }, // punto medio norte
-    { x: midX, y: bottom }, // punto medio sur
-    { x: left, y: midY }, // punto medio oeste
-    { x: right, y: midY }, // punto medio este
+    { x: midX, y: midY + gap }, // hueco norte
+    { x: midX, y: midY - gap }, // hueco sur
+    { x: midX + gap, y: midY }, // hueco este
+    { x: midX - gap, y: midY }, // hueco oeste
+    { x: midX + inner, y: midY + inner }, // interior NE
+    { x: midX + inner, y: midY - inner }, // interior SE
+    { x: midX - inner, y: midY - inner }, // interior SO
+    { x: midX - inner, y: midY + inner }, // interior NO
   ];
 }
 
@@ -617,6 +692,35 @@ function spawnGuardianShardField(world: World, x: number, y: number): void {
   }
 }
 
+/**
+ * Decide si el Guardián puede telegrafiar una carga ya mismo o si debe
+ * reposicionarse antes (GDD §15.2, playtest 2026-07-06 "no carga si tiene una
+ * roca/muro demasiado cerca en la dirección de tiro"): comprueba
+ * `guardianChargePathClear` en la dirección hacia la posición ACTUAL del
+ * héroe. Con recorrido despejado, telegrafía normal (comportamiento intacto:
+ * su ventana sigue siendo estrellarse tras el aviso). Sin recorrido, entra en
+ * GUARDIAN_STAGE_REPOSITION en vez de telegrafiar — nunca se aturde pegado a
+ * una roca a bocajarro del héroe. Se llama tanto desde PATROL (primera carga
+ * de la secuencia) como desde CHAIN_PAUSE/REPOSITION (reintentos y cargas
+ * encadenadas de fase 2/3), sin tocar `bossCounter` (ya gestionado por cada
+ * llamador).
+ */
+function guardianTryEnterChargeOrReposition(world: World, boss: Enemy, events: EventQueue): void {
+  const dx = world.hero.position.x - boss.position.x;
+  const dy = world.hero.position.y - boss.position.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const dirX = dx / len;
+  const dirY = dy / len;
+
+  if (guardianChargePathClear(world, boss, dirX, dirY)) {
+    guardianEnterTelegraph(world, boss, events);
+  } else {
+    boss.bossStage = GUARDIAN_STAGE_REPOSITION;
+    boss.velocity.x = 0;
+    boss.velocity.y = 0;
+  }
+}
+
 function guardianStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
   // Barriles rodantes (GDD §15.2): cadencia independiente del stage actual —
   // aparecen mientras el Guardián patrulla, telegrafía, carga o está aturdido.
@@ -683,6 +787,11 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
           boss.position.y = nextY;
         }
         explodeBarrel(world, rammedBarrel, events, true);
+        // El barril castiga fuerte (GDD §15.2, playtest 2026-07-06): la
+        // explosión ya le aplica su daño de barril (GUARDIAN_BARREL_DAMAGE_FRACTION,
+        // el mayor de los tres modos de daño del Guardián) al jefe vía
+        // `explodeBarrel`/`applyDamageToEnemy` con bypass de ventana — ver
+        // `sim/hazards.ts::explodeBarrel` y `enemy.bossBarrelDamage`.
         pushEvent(events, 'boss-barrel-charge-stun', boss.position.x, boss.position.y, GUARDIAN_BARREL_STUN_DURATION);
         guardianEnterStunned(boss, GUARDIAN_BARREL_STUN_DURATION);
         break;
@@ -740,8 +849,21 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
     case GUARDIAN_STAGE_CHAIN_PAUSE: {
       boss.bossTimer -= dt;
       if (boss.bossTimer <= 0) {
-        guardianEnterTelegraph(world, boss, events);
+        guardianTryEnterChargeOrReposition(world, boss, events);
       }
+      break;
+    }
+
+    case GUARDIAN_STAGE_REPOSITION: {
+      // Se mueve (a velocidad de patrulla) hacia el centro de su sala buscando
+      // línea despejada hacia el héroe (GDD §15.2, playtest 2026-07-06): no
+      // toca `patrolTo` (el ciclo de esquinas de la patrulla normal queda
+      // intacto para cuando vuelva a patrullar de verdad).
+      const bounds = guardianRoomBounds(world, boss);
+      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const centerY = (bounds.minY + bounds.maxY) / 2;
+      guardianMoveTowardWithAvoidance(world, boss, centerX, centerY, dt);
+      guardianTryEnterChargeOrReposition(world, boss, events);
       break;
     }
 
@@ -759,7 +881,7 @@ function guardianStepPattern(world: World, boss: Enemy, dt: number, events: Even
       const dy = world.hero.position.y - boss.position.y;
       if (Math.hypot(dx, dy) <= GUARDIAN_DETECT_RANGE) {
         boss.bossCounter = 0;
-        guardianEnterTelegraph(world, boss, events);
+        guardianTryEnterChargeOrReposition(world, boss, events);
       }
       break;
     }
@@ -789,6 +911,9 @@ function guardianOnPhaseChanged(world: World, boss: Enemy): void {
 // arriba): la Reina NUNCA pasa por `stepEnemyAi`, así que:
 // - `patrolTo`: punto de deambulación objetivo actual (elegido al azar dentro
 //   de su sala cada QUEEN_WANDER_INTERVAL, o hacia el héroe en fase 3 pánico).
+// - `patrolFrom`: sin uso propio en la Reina (la persecución es libre, sin
+//   correa ni ancla desde playtest 2026-07-10). Se queda en su valor inicial
+//   del pool y no se lee.
 // - `bossTimer`: cuenta atrás hasta el próximo cambio de punto de deambulación.
 // - `bossCounter`: cuenta atrás (en segundos, no ticks) hasta soltar el
 //   próximo charco de rastro — comparte "reloj" con `trailDropTimer` del Trail
@@ -856,6 +981,7 @@ function queenOnInit(world: World, boss: Enemy): void {
       bossPhase: 1,
       bossVulnerable: false,
       bossDamageOutsideWindowFactor: 0,
+      bossBarrelDamage: 0,
       bossTelegraphUntil: 0,
       bossTelegraphKind: '',
       bossTimer: 0,
@@ -871,6 +997,8 @@ function queenOnInit(world: World, boss: Enemy): void {
   // Vulnerable SIEMPRE (GDD §15.3: sin ventana de aturdimiento clásica) —
   // se fija una única vez aquí, no hay ningún stage que la desactive nunca.
   boss.bossVulnerable = true;
+  // (Ya no se fija ningún ancla de correa: la Reina persigue libremente al
+  // héroe, sin volver a un centro — playtest 2026-07-10 "quitar la correa".)
 }
 
 /** Nº de larvas vivas (hp>0) de ESTA Reina (cap de rendimiento, GDD §15.3/§15.6). */
@@ -882,6 +1010,11 @@ function queenLiveLarvaCount(world: World, boss: Enemy): number {
     if (isQueenLarva(e) && e.roomId === boss.roomId && e.hp > 0) count++;
   }
   return count;
+}
+
+/** Cap de larvas vivas simultáneas de la fase actual (GDD §15.3, playtest 2026-07-06: "escalada de larvas por fase" 2/4/6). */
+function queenLarvaMaxForPhase(phase: 1 | 2 | 3): number {
+  return QUEEN_LARVA_MAX_BY_PHASE[phase - 1];
 }
 
 /** Elige un nuevo punto de deambulación dentro de la sala de la Reina (determinista vía world.rng). */
@@ -946,17 +1079,45 @@ function queenStepMove(world: World, boss: Enemy, dt: number): void {
   const dx = boss.patrolTo.x - boss.position.x;
   const dy = boss.patrolTo.y - boss.position.y;
   const dist = Math.hypot(dx, dy);
-  if (dist < 0.2) {
-    boss.velocity.x = 0;
-    boss.velocity.y = 0;
-    return;
+  let wanderVx = 0;
+  let wanderVy = 0;
+  if (dist >= 0.2) {
+    const nx = dx / dist;
+    const ny = dy / dist;
+    boss.position.x += nx * speed * dt;
+    boss.position.y += ny * speed * dt;
+    wanderVx = nx * speed;
+    wanderVy = ny * speed;
   }
-  const nx = dx / dist;
-  const ny = dy / dist;
-  boss.position.x += nx * speed * dt;
-  boss.position.y += ny * speed * dt;
-  boss.velocity.x = nx * speed;
-  boss.velocity.y = ny * speed;
+
+  queenStepStalk(world, boss, dt, wanderVx, wanderVy);
+}
+
+/**
+ * Persecución libre hacia el héroe, superpuesta a la deambulación normal (GDD
+ * §15.3, playtest 2026-07-06 "la Reina te acecha"; playtest 2026-07-10 "no
+ * llega al jugador... haz que llegue a tocar al jugador" + "incrementaría la
+ * velocidad con la que persigue conforme pasan las fases" + "quitar la correa,
+ * que persiga libremente"): plantarse en un punto fijo a disparar deja de ser
+ * seguro. La Reina se dirige SIEMPRE hacia el héroe —ya no hay correa ni ancla
+ * central de vuelta— y persigue por toda la arena; solo la velocidad de este
+ * empuje escala por fase (`QUEEN_STALK_SPEED_BY_PHASE`, índice `bossPhase -
+ * 1`). No esquiva obstáculos (atraviesa las columnas igual que en la
+ * deambulación; evitación queda para otra tarea). Escribe `boss.velocity`
+ * sumando su propio vector al de deambulación ya calculado
+ * (`wanderVx`/`wanderVy`) — cero asignaciones de objetos, solo escalares.
+ */
+function queenStepStalk(world: World, boss: Enemy, dt: number, wanderVx: number, wanderVy: number): void {
+  const dx = world.hero.position.x - boss.position.x;
+  const dy = world.hero.position.y - boss.position.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const dirX = dx / len;
+  const dirY = dy / len;
+  const stalkSpeed = QUEEN_STALK_SPEED_BY_PHASE[boss.bossPhase - 1];
+  boss.position.x += dirX * stalkSpeed * dt;
+  boss.position.y += dirY * stalkSpeed * dt;
+  boss.velocity.x = wanderVx + dirX * stalkSpeed;
+  boss.velocity.y = wanderVy + dirY * stalkSpeed;
 }
 
 /**
@@ -984,10 +1145,11 @@ function queenStepTrail(world: World, boss: Enemy, dt: number): void {
   }
 }
 
-/** Activa hasta `QUEEN_LARVA_PER_WAVE` slots libres (hp<=0) de larva, sin superar el cap de vivas. */
+/** Activa hasta `QUEEN_LARVA_PER_WAVE` slots libres (hp<=0) de larva, sin superar el cap de vivas DE LA FASE ACTUAL (GDD §15.3: 2/4/6). */
 function queenSpawnWave(world: World, boss: Enemy, events: EventQueue): void {
   const alreadyLive = queenLiveLarvaCount(world, boss);
-  let toSpawn = Math.min(QUEEN_LARVA_PER_WAVE, QUEEN_LARVA_MAX - alreadyLive);
+  const cap = queenLarvaMaxForPhase(boss.bossPhase);
+  let toSpawn = Math.min(QUEEN_LARVA_PER_WAVE, cap - alreadyLive);
   if (toSpawn <= 0) return;
 
   const enemies = world.enemies;
@@ -1004,9 +1166,10 @@ function queenSpawnWave(world: World, boss: Enemy, events: EventQueue): void {
     larva.hitFlashUntil = 0;
     larva.knockbackUntil = 0;
 
-    // Fase 1: dirección fija hacia la posición del héroe EN ESTE INSTANTE
-    // (línea recta, GDD §15.3); fase 2/3 recalculan cada tick (queenStepLarvae)
-    // y no leen `facing`, pero se fija igual por si la fase cambia después.
+    // Persigue desde el nacimiento en TODAS las fases (GDD §15.3, playtest
+    // 2026-07-06: "en línea recta no amenazaban; el reto llegaba tarde") — el
+    // facing inicial es solo el primer rumbo; `queenStepLarvae` lo recalcula
+    // cada tick hacia la posición ACTUAL del héroe, ya desde fase 1.
     const dx = world.hero.position.x - larva.position.x;
     const dy = world.hero.position.y - larva.position.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -1029,12 +1192,12 @@ function queenStepWaves(world: World, boss: Enemy, dt: number, events: EventQueu
 /**
  * Avanza el movimiento de todas las larvas vivas de la Reina un tick (paso
  * propio simple, GDD §15.3: no pasan por `stepEnemyAi` — no tienen detección
- * ni correa, solo avanzan hacia el héroe desde que nacen). Fase 1: línea
- * recta (`facing` fijado al nacer). Fase 2/3: persiguen de verdad (recalculan
- * dirección cada tick), más agresivas en fase 3 (más rápidas).
+ * ni correa). Persiguen al héroe (recalculan dirección hacia su posición
+ * ACTUAL cada tick) desde la FASE 1 (GDD §15.3, playtest 2026-07-06: "en
+ * línea recta no amenazaban; el reto llegaba tarde" — ya no hay modo "línea
+ * recta fija"). Solo cambia la velocidad por fase: más agresivas en fase 3.
  */
 function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
-  const chasing = boss.bossPhase >= 2;
   const speed =
     boss.bossPhase >= 3 ? QUEEN_LARVA_CHASE_SPEED_PHASE3 : boss.bossPhase === 2 ? QUEEN_LARVA_CHASE_SPEED_PHASE2 : QUEEN_LARVA_SPEED;
 
@@ -1043,17 +1206,13 @@ function queenStepLarvae(world: World, boss: Enemy, dt: number): void {
     const larva = enemies[i];
     if (!isQueenLarva(larva) || larva.roomId !== boss.roomId || larva.hp <= 0) continue;
 
-    let dirX = larva.facing.x;
-    let dirY = larva.facing.y;
-    if (chasing) {
-      const dx = world.hero.position.x - larva.position.x;
-      const dy = world.hero.position.y - larva.position.y;
-      const len = Math.hypot(dx, dy) || 1;
-      dirX = dx / len;
-      dirY = dy / len;
-      larva.facing.x = dirX;
-      larva.facing.y = dirY;
-    }
+    const dx = world.hero.position.x - larva.position.x;
+    const dy = world.hero.position.y - larva.position.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const dirX = dx / len;
+    const dirY = dy / len;
+    larva.facing.x = dirX;
+    larva.facing.y = dirY;
 
     larva.position.x += dirX * speed * dt;
     larva.position.y += dirY * speed * dt;
@@ -1094,7 +1253,8 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     maxHp: GUARDIAN_MAX_HP,
     radius: GUARDIAN_RADIUS,
     hitDamageCapFraction: GUARDIAN_HIT_DAMAGE_CAP_FRACTION,
-    damageOutsideWindow: 0,
+    damageOutsideWindow: GUARDIAN_DAMAGE_OUTSIDE_WINDOW,
+    barrelDamageFraction: GUARDIAN_BARREL_DAMAGE_FRACTION,
     stepPattern: guardianStepPattern,
     onPhaseChanged: guardianOnPhaseChanged,
   },

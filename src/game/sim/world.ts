@@ -267,6 +267,8 @@ export interface Enemy {
    * `BossDef.damageOutsideWindow` al construir el mundo.
    */
   bossDamageOutsideWindowFactor: number;
+  /** Guardián: daño al jefe por explosión de barril en su radio (HP absoluto, bypass de ventana). 0 = usar BARREL_DAMAGE normal (resto de enemigos/jefes). */
+  bossBarrelDamage: number;
   /** world.time hasta el que dura el telegraph en curso (0 = no telegrafiando). */
   bossTelegraphUntil: number;
   /** Etiqueta libre del telegraph/ataque en curso (para render + patrón), '' si no aplica. */
@@ -518,6 +520,7 @@ function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng, origin: Vec2, ro
     bossPhase: 1,
     bossVulnerable: false,
     bossDamageOutsideWindowFactor: 0,
+    bossBarrelDamage: 0,
     bossTelegraphUntil: 0,
     bossTelegraphKind: '',
     bossTimer: 0,

@@ -282,6 +282,11 @@ function stepEnemyProjectileCollision(world: World, p: Projectile, events: Event
  * el daño se aplica SIEMPRE, incluso fuera de ventana. Únicamente
  * `content/bosses.ts::guardianStepPattern` lo usa; por defecto false
  * (comportamiento existente intacto para el resto de llamadores).
+ *
+ * Guardián (playtest 2026-07-10): su `bossDamageOutsideWindowFactor` es 0.2
+ * (no 0 como Reina/test), así que fuera de ventana recibe el 20% del daño del
+ * ARMA — apenas hace daño, pero las mejoras de arma siguen escalando. El
+ * escalado NO se redondea (ver abajo) para no anular armas diminutas.
  */
 export function applyDamageToEnemy(
   world: World,
@@ -294,7 +299,12 @@ export function applyDamageToEnemy(
 ): void {
   if (enemy.hp <= 0) return;
   if (enemy.kind === 'boss' && !enemy.bossVulnerable && !ignoreVulnerabilityWindow) {
-    damage = Math.floor(damage * enemy.bossDamageOutsideWindowFactor);
+    // Fuera de ventana el daño del ARMA se escala por el factor del jefe. Sin
+    // Math.floor a propósito (Guardián, playtest 2026-07-10: factor 0.2 sobre
+    // armas diminutas —flecha=1, hechizo=2— redondearía a 0 y lo haría parecer
+    // inmune; el chip fraccionario "apenas hace daño pero se nota si mejoras el
+    // arma"). Reina/test usan factor 0 → sigue siendo inmune fuera de ventana.
+    damage = damage * enemy.bossDamageOutsideWindowFactor;
     if (damage <= 0) return;
   }
   enemy.hp -= damage;
@@ -314,7 +324,7 @@ export function applyDamageToEnemy(
     enemy.knockbackUntil = world.time + 0.15;
   }
 
-  pushEvent(events, 'enemy-hit', enemy.position.x, enemy.position.y, damage);
+  pushEvent(events, enemy.kind === 'boss' ? 'boss-hit' : 'enemy-hit', enemy.position.x, enemy.position.y, damage);
 
   if (enemy.hp <= 0) {
     pushEvent(events, 'enemy-died', enemy.position.x, enemy.position.y, 1);

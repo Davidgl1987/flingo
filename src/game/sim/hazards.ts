@@ -234,7 +234,13 @@ export function explodeBarrel(world: World, barrel: Barrel, events: EventQueue, 
     const dy = enemy.position.y - barrel.position.y;
     const dist = Math.hypot(dx, dy);
     if (dist <= BARREL_BLAST_RADIUS) {
-      applyDamageToEnemy(world, enemy, BARREL_DAMAGE, dx || 1, dy, events, ignoreBossWindow && enemy.kind === 'boss');
+      // Guardián (playtest 2026-07-10): un barril que explota en su radio le hace
+      // su daño de barril (fracción de su vida máxima) EN CUALQUIER MOMENTO
+      // —aturdido o no, lo detone quien lo detone—, no solo su propia carga.
+      const guardianTarget = enemy.kind === 'boss' && enemy.bossBarrelDamage > 0;
+      const dmg = guardianTarget ? enemy.bossBarrelDamage : BARREL_DAMAGE;
+      const ignoreWindow = guardianTarget || (ignoreBossWindow && enemy.kind === 'boss');
+      applyDamageToEnemy(world, enemy, dmg, dx || 1, dy, events, ignoreWindow);
     }
   }
 

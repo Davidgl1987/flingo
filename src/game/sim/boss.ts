@@ -53,6 +53,7 @@ export function initBossEnemies(world: World): void {
     // Guardián colisionaba y se veía como un enemigo normal de 0.4 (bug B1).
     if (def.radius !== undefined) enemy.radius = def.radius;
     enemy.bossDamageOutsideWindowFactor = def.damageOutsideWindow;
+    enemy.bossBarrelDamage = def.barrelDamageFraction !== undefined ? def.barrelDamageFraction * def.maxHp : 0;
   }
   for (const enemy of bosses) {
     getBossDef(enemy.bossId).onInit?.(world, enemy);

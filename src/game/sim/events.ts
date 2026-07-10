@@ -16,6 +16,8 @@ export type GameEventType =
   | 'launch'
   | 'wall-bounce'
   | 'enemy-hit'
+  /** Golpe del jugador que daña a un JEFE (vs 'enemy-hit' de enemigos normales): shake grande, escalado por daño (playtest 2026-07-10: "más shake al dañar al jefe, menos a enemigos pequeños"). intensity = daño. */
+  | 'boss-hit'
   | 'enemy-died'
   | 'player-damaged'
   | 'player-died'

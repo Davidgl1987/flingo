@@ -73,13 +73,18 @@ export function reactToEvent(
 
   if (spec.trauma > 0) {
     const intensityScale =
-      event.type === 'wall-bounce' ? Math.min(1.5, Math.max(0.3, event.intensity / 4)) : 1;
+      event.type === 'wall-bounce'
+        ? Math.min(1.5, Math.max(0.3, event.intensity / 4))
+        : event.type === 'boss-hit'
+          ? Math.min(1.3, Math.max(0.35, event.intensity / 4))
+          : 1;
     addTrauma(juice, spec.trauma * intensityScale);
   }
 
   // Hit-stop: golpes fuertes (embestida/impacto con daño ≥2), explosión de barril, muerte de enemigo.
   const isStrongHit =
-    (event.type === 'enemy-hit' || event.type === 'player-damaged') && event.intensity >= STRONG_HIT_DAMAGE_THRESHOLD;
+    (event.type === 'enemy-hit' || event.type === 'boss-hit' || event.type === 'player-damaged') &&
+    event.intensity >= STRONG_HIT_DAMAGE_THRESHOLD;
   if (isStrongHit || event.type === 'barrel-explosion' || event.type === 'enemy-died') {
     triggerHitStop(juice, HIT_STOP_DURATION);
   }

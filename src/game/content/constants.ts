@@ -206,10 +206,24 @@ export const GUARDIAN_STUN_DURATION = 1.4;
  */
 export const GUARDIAN_CHARGE_DAMAGE_PHASE1 = 1;
 export const GUARDIAN_CHARGE_DAMAGE_PHASE3 = 2;
+/** Fracción del daño del ARMA que recibe el Guardián mientras NO está aturdido (playtest 2026-07-10: "sin aturdir apenas hace daño, pero que se note si mejoras el arma"). Multiplica el daño real del arma/embestida/proyectil (así las mejoras de daño siguen escalando), a diferencia de un valor fijo. Aturdido = daño completo (factor 1, gestionado por la ventana de vulnerabilidad). El barril (GUARDIAN_BARREL_DAMAGE_FRACTION) sigue siendo el mayor. */
+export const GUARDIAN_DAMAGE_OUTSIDE_WINDOW = 0.2;
 /** Empujón fuerte al héroe si la carga le golpea (u/s). */
 export const GUARDIAN_CHARGE_KNOCKBACK_SPEED = 6.5;
 /** Cooldown de patrulla tras recuperarse del aturdimiento antes de poder detectar de nuevo (s). */
 export const GUARDIAN_RECOVER_PAUSE = 0.4;
+/**
+ * Distancia mínima despejada (u) exigida en la dirección hacia el héroe antes
+ * de telegrafiar una carga (GDD §15.2, playtest 2026-07-06 "sigue
+ * atascándose"): si hay un sólido (roca/muro) a menos de esta distancia en
+ * línea hacia el héroe, el Guardián NO carga — se estrellaría al instante,
+ * a bocajarro del héroe, que le pegaría gratis mientras vuelve a cargar
+ * contra la misma roca (camping). En su lugar reposiciona (ver
+ * `guardianStepPatrolMove`) y reintenta cada tick. Algo mayor que
+ * GUARDIAN_RADIUS (0.62) para dejar margen real de carga, no solo evitar
+ * el contacto inmediato.
+ */
+export const GUARDIAN_MIN_CHARGE_CLEARANCE = 2.7;
 /** Fase 2 (66%): pausa corta entre las dos cargas encadenadas (s). */
 export const GUARDIAN_DOUBLE_CHARGE_PAUSE = 0.5;
 /** Nº de cargas encadenadas en fase 2/3 (una pausa corta entre ambas). */
@@ -240,9 +254,9 @@ export const GUARDIAN_RADIUS = 0.62;
 export const GUARDIAN_BARREL_SPAWN_INTERVAL = 8;
 /** Aturdimiento si la carga arrolla un barril rodante (vs GUARDIAN_STUN_DURATION normal de 1.4s). */
 export const GUARDIAN_BARREL_STUN_DURATION = 2.2;
+/** Daño al Guardián por una explosión de barril en su radio, EN CUALQUIER MOMENTO (aturdido o no) y la detone quien la detone, como fracción de su vida máxima (playtest 2026-07-10). Bypassa la ventana de aturdimiento. El mayor de los tres modos. */
+export const GUARDIAN_BARREL_DAMAGE_FRACTION = 0.15;
 export const GUARDIAN_BARREL_MAX_ACTIVE = 3;
-/** Margen respecto a la pared/roca al elegir un punto perimetral para el barril (evita clipping). */
-export const GUARDIAN_BARREL_WALL_MARGIN = 0.6;
 /** Radio del barril rodante: mismo tamaño que el barril estándar de sala (0.8×0.8 → radio 0.4). */
 export const GUARDIAN_BARREL_RADIUS = 0.4;
 /**
@@ -310,18 +324,45 @@ export const QUEEN_TRAIL_PUDDLE_LIFETIME = 6.5;
  * inactivos (hp=0) hasta que una oleada los active.
  */
 export const QUEEN_WAVE_INTERVAL = 3;
-export const QUEEN_LARVA_MAX = 6;
-/** Nº de larvas invocadas por oleada (dentro del cap de vivas). */
+/**
+ * Cap de larvas vivas simultáneas, ESCALADO POR FASE (GDD §15.3, playtest
+ * 2026-07-06 "escalada de larvas por fase"): 2 en fase 1, 4 en fase 2, 6 en
+ * fase 3 — la presión del enjambre crece con el combate en vez de ser un
+ * techo fijo desde el principio. El pool preasignado en `world.enemies`
+ * sigue reservando el MÁXIMO de los tres (índice 2 = fase 3 = 6 slots), igual
+ * que antes de escalar el cap (`queenOnInit` no cambia).
+ */
+export const QUEEN_LARVA_MAX_BY_PHASE: [number, number, number] = [2, 4, 6];
+/** Tamaño del pool preasignado de slots de larva: el máximo de QUEEN_LARVA_MAX_BY_PHASE (fase 3). */
+export const QUEEN_LARVA_MAX = QUEEN_LARVA_MAX_BY_PHASE[2];
+/** Nº de larvas invocadas por oleada (dentro del cap de vivas de la fase actual). */
 export const QUEEN_LARVA_PER_WAVE = 2;
 export const QUEEN_LARVA_HP = 1;
 export const QUEEN_LARVA_RADIUS = 0.26;
-/** Velocidad de avance de una larva hacia el héroe (recta en fase 1). */
+/**
+ * Velocidad de avance de una larva hacia el héroe. Persiguen desde la FASE 1
+ * (GDD §15.3, playtest 2026-07-06: "en línea recta no amenazaban; el reto
+ * llegaba tarde") — ya no hay modo "línea recta fija"; solo cambia la
+ * velocidad por fase.
+ */
 export const QUEEN_LARVA_SPEED = 1.1;
-/** Fase 2/3 (GDD §15.3): las larvas persiguen (esquivan hazards) en vez de ir en línea recta; algo más rápidas y agresivas en fase 3. */
+/** Fase 2/3 (GDD §15.3): las larvas persiguen más rápido y son más agresivas. */
 export const QUEEN_LARVA_CHASE_SPEED_PHASE2 = 1.35;
 export const QUEEN_LARVA_CHASE_SPEED_PHASE3 = 1.7;
 /** Prefijo de id de los slots de larva de la Reina (para distinguirlos del resto de `world.enemies`, ver `isQueenLarva`). */
 export const QUEEN_LARVA_ID_PREFIX = 'queen-larva-';
+
+/**
+ * Persecución hacia el héroe (GDD §15.3, playtest 2026-07-06 "la Reina te
+ * acecha"): plantarse en un punto fijo a disparar deja de ser seguro. NO es
+ * un dash agresivo (eso es el Chaser) — solo un sesgo hacia el héroe
+ * superpuesto a la deambulación normal (`queenStepMove` sigue fijando
+ * `patrolTo` y dejando rastro igual que antes; el acecho es un empuje extra
+ * hacia el héroe aplicado sobre ese movimiento). Sin correa: la Reina persigue
+ * libremente por toda la arena (playtest 2026-07-10 "quitar la correa").
+ */
+/** Velocidad de acecho de la Reina hacia el héroe, ESCALADA POR FASE (playtest 2026-07-10: "que me persiga más rápido conforme pasan las fases" + "que llegue a tocar al jugador"). Índice 0/1/2 = fase 1/2/3. Se superpone a la deambulación normal (queenStepMove). */
+export const QUEEN_STALK_SPEED_BY_PHASE: [number, number, number] = [1.0, 1.6, 2.3];
 
 // ── Mundo y run ───────────────────────────────────────────────────────────
 

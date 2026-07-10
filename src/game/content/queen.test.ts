@@ -10,12 +10,16 @@
 import { describe, expect, it } from 'vitest';
 import bossQueenJson from '../../levels/boss-queen.json';
 import {
+  HERO_RADIUS,
   QUEEN_HIT_DAMAGE_CAP_FRACTION,
   QUEEN_LARVA_HP,
   QUEEN_LARVA_MAX,
+  QUEEN_LARVA_MAX_BY_PHASE,
   QUEEN_LARVA_PER_WAVE,
   QUEEN_MAX_HP,
+  QUEEN_MOVE_SPEED_PHASE1,
   QUEEN_RADIUS,
+  QUEEN_STALK_SPEED_BY_PHASE,
   QUEEN_TRAIL_DROP_INTERVAL,
   QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
   QUEEN_TRAIL_PUDDLE_LIFETIME,
@@ -167,63 +171,94 @@ describe('Reina: cadencia de oleadas de larvas (GDD §15.6: "oleada cada ~3s")',
     }
   });
 
-  it('respeta el cap QUEEN_LARVA_MAX de larvas vivas simultáneas tras muchas oleadas', () => {
+  it('en fase 1 el cap de larvas vivas simultáneas es 2 (GDD §15.3, playtest 2026-07-06: escalada 2/4/6 por fase), tras muchas oleadas', () => {
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     world.hero.position.x = 100;
     world.hero.position.y = 100;
+    expect(boss(world).bossPhase).toBe(1);
 
     // 10 oleadas de sobra para saturar el cap si no lo respetara.
     const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
     advance(world, events, ticksPerWave * 10);
-    expect(liveLarvae(world).length).toBeLessThanOrEqual(QUEEN_LARVA_MAX);
-    // Y el array de enemigos no crece sin límite (slots reutilizados, sin `.push` en runtime).
+    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[0]);
+    expect(liveLarvae(world).length).toBe(2);
+    // El pool preasignado sigue siendo del tamaño del máximo (fase 3 = 6),
+    // aunque el cap ACTIVO en fase 1 sea menor (slots reutilizados, sin
+    // `.push` en runtime).
     const larvaSlotCount = world.enemies.filter((e) => e.id.startsWith('queen-larva-')).length;
     expect(larvaSlotCount).toBe(QUEEN_LARVA_MAX);
   });
 
-  it('no invoca larvas nuevas mientras el cap ya está lleno (las oleadas de más quedan sin efecto)', () => {
+  it('no invoca larvas nuevas mientras el cap de la fase actual ya está lleno (las oleadas de más quedan sin efecto)', () => {
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     world.hero.position.x = 100;
     world.hero.position.y = 100;
     const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
 
-    // Satura el cap.
+    // Satura el cap de fase 1 (2).
     advance(world, events, ticksPerWave * 10);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX);
+    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[0]);
 
     // Una oleada más: sigue en el cap (no lo sobrepasa).
     advance(world, events, ticksPerWave);
-    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX);
+    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[0]);
+  });
+
+  it('en fase 2 el cap sube a 4 y en fase 3 a 6 (GDD §15.3)', () => {
+    const world = makeQueenWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+    const q = boss(world);
+    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
+
+    q.hp = Math.floor(q.maxHp * 0.6); // fuerza fase 2
+    advance(world, events, 1);
+    expect(q.bossPhase).toBe(2);
+    advance(world, events, ticksPerWave * 10);
+    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[1]);
+    expect(liveLarvae(world).length).toBe(4);
+
+    q.hp = Math.floor(q.maxHp * 0.2); // fuerza fase 3
+    advance(world, events, 1);
+    expect(q.bossPhase).toBe(3);
+    advance(world, events, ticksPerWave * 10);
+    expect(liveLarvae(world).length).toBe(QUEEN_LARVA_MAX_BY_PHASE[2]);
+    expect(liveLarvae(world).length).toBe(6);
   });
 });
 
-describe('Reina: comportamiento de larvas por fase (GDD §15.3)', () => {
-  it('fase 1: la larva avanza en línea recta (dirección fija hacia el héroe en el instante de nacer)', () => {
+describe('Reina: comportamiento de larvas por fase (GDD §15.3, playtest 2026-07-06: persiguen desde fase 1)', () => {
+  it('fase 1: la larva YA persigue de verdad (recalcula dirección hacia la posición actual del héroe, no línea recta fija)', () => {
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     world.hero.position.x = 20;
     world.hero.position.y = 0;
     advance(world, events, Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT) + 1);
+    expect(boss(world).bossPhase).toBe(1);
 
     const larva = liveLarvae(world)[0];
     expect(larva).toBeDefined();
     const facingBefore = { x: larva.facing.x, y: larva.facing.y };
 
-    // El héroe se teletransporta lejos de esa línea recta; en fase 1 la larva
-    // NO debe corregir su rumbo (sigue con el facing fijado al nacer).
+    // El héroe se teletransporta lejos de esa dirección inicial; en fase 1 la
+    // larva DEBE corregir su rumbo (playtest 2026-07-06: "en línea recta no
+    // amenazaban; el reto llegaba tarde" — ya no hay modo línea recta fija).
     advance(world, events, 30);
     world.hero.position.x = 0;
     world.hero.position.y = -20;
     advance(world, events, 30);
-    expect(larva.facing.x).toBeCloseTo(facingBefore.x, 6);
-    expect(larva.facing.y).toBeCloseTo(facingBefore.y, 6);
-    // Avanzó en esa dirección fija (hacia +x, donde estaba el héroe al nacer).
-    expect(larva.position.x).toBeGreaterThan(0);
+    expect(larva.facing.x).not.toBeCloseTo(facingBefore.x, 1);
+    const dx = world.hero.position.x - larva.position.x;
+    const dy = world.hero.position.y - larva.position.y;
+    const len = Math.hypot(dx, dy) || 1;
+    expect(larva.facing.x).toBeCloseTo(dx / len, 1);
+    expect(larva.facing.y).toBeCloseTo(dy / len, 1);
   });
 
-  it('fase 2/3: la larva persigue de verdad (recalcula dirección hacia la posición actual del héroe)', () => {
+  it('fase 2/3: la larva persigue igual (recalcula dirección hacia la posición actual del héroe), más rápido', () => {
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     const q = boss(world);
@@ -246,6 +281,61 @@ describe('Reina: comportamiento de larvas por fase (GDD §15.3)', () => {
     const len = Math.hypot(dx, dy) || 1;
     expect(larva.facing.x).toBeCloseTo(dx / len, 1);
     expect(larva.facing.y).toBeCloseTo(dy / len, 1);
+  });
+});
+
+describe('Reina: cap de larvas nunca superior al de la fase actual (GDD §15.3, playtest 2026-07-06)', () => {
+  it('en fase 1 nunca hay más de 2 larvas vivas, aunque se fuercen muchas oleadas', () => {
+    const world = makeQueenWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
+
+    let maxLive = 0;
+    for (let wave = 0; wave < 15; wave++) {
+      advance(world, events, ticksPerWave);
+      maxLive = Math.max(maxLive, liveLarvae(world).length);
+    }
+    expect(maxLive).toBeLessThanOrEqual(2);
+  });
+
+  it('en fase 2 nunca hay más de 4 larvas vivas', () => {
+    const world = makeQueenWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+    const q = boss(world);
+    q.hp = Math.floor(q.maxHp * 0.6);
+    advance(world, events, 1);
+    expect(q.bossPhase).toBe(2);
+
+    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
+    let maxLive = 0;
+    for (let wave = 0; wave < 15; wave++) {
+      advance(world, events, ticksPerWave);
+      maxLive = Math.max(maxLive, liveLarvae(world).length);
+    }
+    expect(maxLive).toBeLessThanOrEqual(4);
+  });
+
+  it('en fase 3 nunca hay más de 6 larvas vivas', () => {
+    const world = makeQueenWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+    const q = boss(world);
+    q.hp = Math.floor(q.maxHp * 0.2);
+    advance(world, events, 1);
+    expect(q.bossPhase).toBe(3);
+
+    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
+    let maxLive = 0;
+    for (let wave = 0; wave < 15; wave++) {
+      advance(world, events, ticksPerWave);
+      maxLive = Math.max(maxLive, liveLarvae(world).length);
+    }
+    expect(maxLive).toBeLessThanOrEqual(6);
   });
 });
 
@@ -322,7 +412,7 @@ describe('Reina: poción de recompensa al cambiar de fase (mismo criterio que el
 });
 
 describe('Reina: movimiento lento, gestión de terreno (GDD §15.3: "no es persecución, se mueve poco")', () => {
-  it('en fase 1 nunca supera QUEEN_MOVE_SPEED_PHASE1 de velocidad neta', () => {
+  it('en fase 1 nunca supera QUEEN_MOVE_SPEED_PHASE1 + QUEEN_STALK_SPEED_BY_PHASE[0] de velocidad neta (deambulación + acecho combinados)', () => {
     const world = makeQueenWorld();
     const events = createEventQueue(64);
     world.hero.position.x = 100;
@@ -335,7 +425,63 @@ describe('Reina: movimiento lento, gestión de terreno (GDD §15.3: "no es perse
       const speed = Math.hypot(boss(world).velocity.x, boss(world).velocity.y);
       maxSpeed = Math.max(maxSpeed, speed);
     }
-    expect(maxSpeed).toBeLessThanOrEqual(0.66); // QUEEN_MOVE_SPEED_PHASE1 (0.65) + tolerancia
+    // El acecho (GDD §15.3, playtest 2026-07-06 "la Reina te acecha") se suma
+    // a la deambulación normal: el tope pasa de QUEEN_MOVE_SPEED_PHASE1 solo a
+    // la suma de ambas velocidades (peor caso: mismo rumbo). Fase 1 usa el
+    // primer valor de la tabla escalada por fase (playtest 2026-07-10).
+    expect(maxSpeed).toBeLessThanOrEqual(QUEEN_MOVE_SPEED_PHASE1 + QUEEN_STALK_SPEED_BY_PHASE[0] + 0.02);
+  });
+});
+
+describe('Reina: acecho hacia el héroe (GDD §15.3, playtest 2026-07-06 "la Reina te acecha"; playtest 2026-07-10 "que llegue a tocar al jugador" + escalado por fase + persecución libre sin correa)', () => {
+  it('con el héroe fijo lejos, la Reina reduce su distancia al héroe con el tiempo', () => {
+    const world = makeQueenWorld();
+    const events = createEventQueue(64);
+    const q = boss(world);
+    // Héroe fijo, lejos, en una esquina de la sala 15x15 (dentro de bounds
+    // para que sea un objetivo de acecho real, no un punto arbitrario fuera
+    // de la arena).
+    world.hero.position.x = 6;
+    world.hero.position.y = 6;
+
+    const distAtStart = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
+
+    advance(world, events, 600); // 10s: tiempo de sobra para que el acecho progrese
+    const distAfter = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
+
+    // Persigue libremente hacia el héroe, sin correa que la haga volver
+    // (playtest 2026-07-10 "quitar la correa"): su distancia al héroe baja.
+    expect(distAfter).toBeLessThan(distAtStart);
+  });
+
+  it('QUEEN_STALK_SPEED_BY_PHASE escala: fase 3 persigue más rápido que fase 1 (playtest 2026-07-10 "incrementaría la velocidad... conforme pasan las fases")', () => {
+    expect(QUEEN_STALK_SPEED_BY_PHASE[0]).toBeGreaterThan(0);
+    expect(QUEEN_STALK_SPEED_BY_PHASE[1]).toBeGreaterThan(QUEEN_STALK_SPEED_BY_PHASE[0]);
+    expect(QUEEN_STALK_SPEED_BY_PHASE[2]).toBeGreaterThan(QUEEN_STALK_SPEED_BY_PHASE[1]);
+  });
+
+  it('en la sala real (boss-queen.json), con el héroe en su playerStart, la Reina llega a TOCARLO (fix playtest 2026-07-10: antes se daba la vuelta por la correa sin llegar; ahora persigue libremente)', () => {
+    // Sala real 11x21: héroe arranca en (0,9), a ~9u del centro (0,0) donde
+    // aparece la Reina. Sin correa, persigue en línea recta hasta el contacto.
+    const room = parseRoomData(bossQueenJson).room!;
+    const world = createWorld(room);
+    initBossEnemies(world);
+    const events = createEventQueue(64);
+    const q = boss(world);
+    const contactDist = QUEEN_RADIUS + HERO_RADIUS;
+
+    let reachedContact = false;
+    for (let i = 0; i < 3600; i++) {
+      // hasta 60s
+      stepBosses(world, FIXED_DT, events);
+      world.time += FIXED_DT;
+      const dist = Math.hypot(world.hero.position.x - q.position.x, world.hero.position.y - q.position.y);
+      if (dist <= contactDist + 0.05) {
+        reachedContact = true;
+        break;
+      }
+    }
+    expect(reachedContact).toBe(true);
   });
 });
 
