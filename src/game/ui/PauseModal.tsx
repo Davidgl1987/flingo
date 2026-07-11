@@ -25,6 +25,7 @@ import {
 import { resumeGame, type GameSession } from '@/game/session';
 import { UPGRADE_POOL } from '@/game/sim/upgrades';
 import { useUiStore } from '@/game/store';
+import './modals.css';
 
 const ENEMY_LEGEND: { label: string; color: string }[] = [
   { label: 'Dummy — básico', color: '#ff5964' },

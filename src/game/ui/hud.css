@@ -1,0 +1,172 @@
+/* ── HUD ── */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 0;
+}
+
+.hud-top-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-key {
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 224, 130, 0.8));
+  animation: key-pop 0.45s ease-out;
+}
+
+@keyframes key-pop {
+  0% {
+    transform: scale(0.2);
+  }
+  55% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hud-hearts {
+  display: flex;
+  gap: 2px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* Feedback de HP (GDD §12): parpadeo rojo al dañar, rosa al curar. Se
+   retrigea remontando el nodo con key={hp} — CSS puro, sin re-render por frame. */
+.hud-hearts-damage {
+  animation: hearts-damage 0.5s ease-out;
+}
+
+.hud-hearts-heal {
+  animation: hearts-heal 0.5s ease-out;
+}
+
+@keyframes hearts-damage {
+  0%,
+  40% {
+    filter: drop-shadow(0 0 8px rgba(255, 59, 59, 1)) brightness(1.8);
+    transform: scale(1.15);
+  }
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
+}
+
+@keyframes hearts-heal {
+  0%,
+  40% {
+    filter: drop-shadow(0 0 8px rgba(255, 107, 203, 1)) brightness(1.5);
+    transform: scale(1.12);
+  }
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
+}
+
+/* Botón de pausa (GDD §12: arriba a la derecha, ≥48px táctil). */
+.hud-pause-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 2px solid #39405c;
+  background: rgba(18, 21, 34, 0.88);
+  color: #aab2d4;
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: -1px;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.hud-pause-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.heart-full {
+  color: #ff5964;
+}
+
+.heart-empty {
+  color: #39405c;
+}
+
+.hud-coins {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 19px;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+.hud-coin-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe9a8, #ffd166 55%, #c98f1b);
+}
+
+.hud-room-banner {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+}
+
+.hud-room-progress {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #aab2d4;
+  text-transform: uppercase;
+}
+
+.hud-room-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e8e8f0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.hud-notice {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 52px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 21, 34, 0.88);
+  border: 1px solid #39405c;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  white-space: nowrap;
+}

@@ -14,6 +14,7 @@ import { useEffect, useRef } from 'react';
 import { pauseGame, type GameSession } from '@/game/session';
 import { useUiStore } from '@/game/store';
 import { BossHealthBar } from './BossHealthBar';
+import './hud.css';
 import { WeaponBar } from './WeaponBar';
 
 const NOTICE_DURATION_MS = 1200;

@@ -1,0 +1,300 @@
+/* ── Editor de niveles (GDD §13) ── */
+
+.editor-root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: #0b0d14;
+  overflow: hidden;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 8px) 14px 8px;
+  border-bottom: 1px solid #39405c;
+  flex: 0 0 auto;
+}
+
+.editor-title {
+  margin: 0;
+  font-size: 16px;
+  flex: 1;
+}
+
+.editor-back {
+  color: #aab2d4;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.editor-canvas {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.editor-placing-hint {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 21, 34, 0.9);
+  border: 1px solid #54c7ff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.editor-placing-hint button {
+  background: none;
+  border: none;
+  color: #54c7ff;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.editor-status {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 21, 34, 0.92);
+  border: 1px solid #39405c;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.editor-panel {
+  width: 300px;
+  flex: 0 0 auto;
+  overflow-y: auto;
+  border-left: 1px solid #39405c;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (max-width: 720px) {
+  .editor-body {
+    flex-direction: column;
+  }
+  .editor-canvas-wrap {
+    flex: 0 0 46dvh;
+  }
+  .editor-panel {
+    width: auto;
+    flex: 1;
+    border-left: none;
+    border-top: 1px solid #39405c;
+  }
+}
+
+.editor-section h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #aab2d4;
+}
+
+.editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: #aab2d4;
+  margin-bottom: 8px;
+  flex: 1;
+}
+
+.editor-field input {
+  background: #1b2033;
+  border: 1px solid #39405c;
+  border-radius: 8px;
+  color: #e8e8f0;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.editor-field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.editor-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  background: #1b2033;
+  border: 1px solid #39405c;
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.editor-doors-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.editor-doors-label {
+  font-size: 12px;
+  color: #aab2d4;
+  width: 44px;
+}
+
+.editor-door-slot {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.editor-door-slot input {
+  width: 58px;
+  background: #1b2033;
+  border: 1px solid #39405c;
+  border-radius: 8px;
+  color: #e8e8f0;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.editor-door-slot button {
+  background: none;
+  border: none;
+  color: #ff5964;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 5px;
+}
+
+.editor-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor-palette-btn {
+  background: #1b2033;
+  border: 1.5px solid #39405c;
+  border-radius: 8px;
+  color: #e8e8f0;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 10px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.editor-palette-btn.active {
+  background: #202741;
+  box-shadow: 0 0 8px rgba(84, 199, 255, 0.45);
+}
+
+.editor-btn {
+  background: #1b2033;
+  border: 1px solid #39405c;
+  border-radius: 10px;
+  color: #e8e8f0;
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 14px;
+  min-height: 40px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.editor-btn-primary {
+  background: #54c7ff;
+  border-color: #54c7ff;
+  color: #0b0d14;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.editor-btn-danger {
+  border-color: #ff5964;
+  color: #ff5964;
+}
+
+.editor-btn-wide {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.editor-btn-small {
+  background: #1b2033;
+  border: 1px solid #39405c;
+  border-radius: 8px;
+  color: #e8e8f0;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+
+.editor-btn-small.active {
+  border-color: #54c7ff;
+  color: #54c7ff;
+}
+
+.editor-hint {
+  font-size: 12px;
+  color: #aab2d4;
+  margin: 0 0 8px;
+}
+
+.editor-valid {
+  color: #4dd68a;
+  font-size: 13px;
+  margin: 0;
+}
+
+.editor-errors {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #ff9f45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-header-actions {
+  display: flex;
+  gap: 8px;
+}

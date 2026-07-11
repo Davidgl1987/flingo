@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import './fps-counter.css';
 
 /** Cada cuántos ms se refresca el texto mostrado (2 veces/s ≈ 500 ms). */
 const UPDATE_INTERVAL_MS = 500;

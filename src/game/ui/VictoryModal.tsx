@@ -4,6 +4,7 @@
  */
 
 import { useUiStore } from '@/game/store';
+import './modals.css';
 
 export function VictoryModal({ onRestart }: { onRestart: () => void }) {
   const phase = useUiStore((s) => s.phase);

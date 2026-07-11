@@ -1,0 +1,16 @@
+/* ── Contador de FPS (punto 12 de playtest) ── */
+
+.fps-counter {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 4px);
+  left: 6px;
+  z-index: 6;
+  font-size: 10px;
+  font-family: monospace;
+  color: rgba(170, 178, 212, 0.7);
+  background: rgba(11, 13, 20, 0.5);
+  border-radius: 6px;
+  padding: 2px 6px;
+  pointer-events: none;
+  user-select: none;
+}

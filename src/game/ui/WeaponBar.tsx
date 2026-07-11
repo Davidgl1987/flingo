@@ -11,11 +11,12 @@ import { useEffect, useRef, useState } from 'react';
 import { ARROW_COOLDOWN, BODY_LAUNCH_COOLDOWN, SPELL_COOLDOWN } from '@/game/content/constants';
 import type { GameSession } from '@/game/session';
 import type { WeaponMode } from '@/game/sim/world';
+import './weapon-bar.css';
 
 /**
  * Cada modo lleva el COLOR de su ataque (mismo color que su proyectil/estela,
  * feedback de playtest): cuerpo azul, flecha amarilla, hechizo violeta. Se
- * aplica vía clase CSS `weapon-btn-<mode>` (colores en styles.css).
+ * aplica vía clase CSS `weapon-btn-<mode>` (colores en weapon-bar.css).
  */
 const MODES: { mode: WeaponMode; label: string; icon: string }[] = [
   { mode: 'body', label: 'Cuerpo', icon: '●' },

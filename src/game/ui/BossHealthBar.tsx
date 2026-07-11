@@ -11,6 +11,7 @@ import { getBossDef } from '@/game/content/bosses';
 import type { GameSession } from '@/game/session';
 import { isBoss } from '@/game/sim/boss';
 import type { Enemy } from '@/game/sim/world';
+import './boss-health-bar.css';
 
 interface VisibleBoss {
   id: string;

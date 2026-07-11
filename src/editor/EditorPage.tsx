@@ -28,6 +28,7 @@ import type {
   Vec2,
 } from '@/game/sim/world';
 import { addExportedRoom, loadDraft, saveDraft, savePlaytestRoom } from './editor-storage';
+import './editor.css';
 
 // ── Modelo del editor ──────────────────────────────────────────────────────
 

@@ -37,6 +37,7 @@ import { VictoryModal } from '@/game/ui/VictoryModal';
 import { AimIndicatorView } from './AimIndicatorView';
 import { CameraRig } from './CameraRig';
 import { EnemyViews } from './EnemyView';
+import './game-root.css';
 import { BarrelViews, HazardViews } from './HazardView';
 import { HeroView } from './HeroView';
 import { ItemViews } from './ItemView';
