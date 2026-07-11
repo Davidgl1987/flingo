@@ -1,4 +1,4 @@
-import type { DoorSide, EnemyKind, HazardKind, ItemKind, RoomTag } from '@/game/sim/world';
+import type { DoorSide, EnemyKind, HazardKind, ItemKind, RoomTag } from '@/game/world/types';
 
 export const ENEMY_KINDS: EnemyKind[] = ['dummy', 'chaser', 'spike', 'trail', 'shooter'];
 export const HAZARD_KINDS: HazardKind[] = ['pit', 'spikes', 'barrel', 'rock', 'slow', 'boost'];
@@ -13,7 +13,7 @@ export const ENEMY_COLOR: Record<EnemyKind, string> = {
   trail: '#4dd68a',
   shooter: '#2b2f42',
   // 'boss' no es colocable desde el editor por ahora (GDD §15: los jefes se
-  // definen por sala en content/bosses.ts + src/levels/boss-*.json, no
+  // definen por sala en features/bosses/registry.ts + src/game/features/dungeon/levels/boss-*.json, no
   // pieza a pieza); el color solo satisface la exhaustividad del Record.
   boss: '#7a3fd6',
 };

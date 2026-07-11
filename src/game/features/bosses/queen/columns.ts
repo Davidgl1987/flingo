@@ -6,10 +6,10 @@
  * su persecución).
  */
 
-import { RAM_SPEED_THRESHOLD } from '@/game/content/constants';
-import { applyDamageToEnemy } from '@/game/sim/combat';
-import { pushEvent, type EventQueue } from '@/game/sim/events';
-import type { Enemy, World } from '@/game/sim/world';
+import { RAM_SPEED_THRESHOLD } from '@/game/features/combat/constants';
+import { applyDamageToEnemy } from '@/game/features/combat/combat';
+import { pushEvent, type EventQueue } from '@/engine/events';
+import type { Enemy, World } from '@/game/world/types';
 import { QUEEN_COLUMN_DAMAGE_FRACTION, QUEEN_COLUMN_HIT_COOLDOWN, QUEEN_COLUMN_STUN_DURATION, QUEEN_COLUMN_TOUCH_SKIN, QUEEN_LARVA_ID_PREFIX } from './constants';
 
 /** Nº de columnas ROTAS de la sala de la Reina (playtest 2026-07-10: su persecución acelera con esto). */

@@ -1,5 +1,5 @@
-import { DOOR_WIDTH, WALL_THICKNESS } from '@/game/content/constants';
-import type { RoomData } from '@/game/sim/world';
+import { DOOR_WIDTH, WALL_THICKNESS } from '@/game/world/constants';
+import type { RoomData } from '@/game/world/types';
 import { ENEMY_COLOR, HAZARD_COLOR, ITEM_COLOR } from '@/editor/constants';
 import type { PlaceKind, Selection } from '@/editor/types';
 

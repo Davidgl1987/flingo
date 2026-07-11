@@ -8,8 +8,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '@/game/sim/world';
-import { createWorld } from '@/game/sim/world';
+import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '@/game/world/types';
+import { createWorld } from '@/game/world/create';
 import { bossHitsSolid, bossRoomBounds, moveBossTowardWithAvoidance } from './movement';
 
 const FIXED_DT = 1 / 60;

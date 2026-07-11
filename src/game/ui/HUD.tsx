@@ -12,8 +12,8 @@
 
 import { useEffect, useRef } from 'react';
 import { BossHealthBar } from '@/game/features/bosses/BossHealthBar';
-import { pauseGame, type GameSession } from '@/game/session';
-import { useUiStore } from '@/game/store';
+import { pauseGame, type GameSession } from '@/game/session/session';
+import { useUiStore } from '@/game/session/store';
 import './hud.css';
 import { WeaponBar } from './WeaponBar';
 

@@ -4,7 +4,7 @@
  *
  * Modos:
  * - Run completa (por defecto): mazmorra procedural generada desde el pool de
- *   salas (src/levels/*.json + salas exportadas del editor). La semilla es
+ *   salas (src/game/features/dungeon/levels/*.json + salas exportadas del editor). La semilla es
  *   aleatoria por run; `?seed=N` en la URL la fuerza (también en reinicios),
  *   para verificación y depuración.
  * - Playtest (prop `playtestRoom`): una sola sala del editor, con botón para
@@ -17,18 +17,18 @@
 
 import { Canvas } from '@react-three/fiber';
 import { useCallback, useState } from 'react';
-import { getRoomPool } from '@/game/content/rooms';
-import { AimInput } from '@/game/input/AimInput';
-import { ParticleView } from '@/game/effects/ParticleView';
-import { ShockwaveView } from '@/game/effects/ShockwaveView';
-import { TrailView } from '@/game/effects/TrailView';
+import { getRoomPool } from '@/game/features/dungeon/rooms';
+import { readForcedBossPhase, readForcedBossRoom, readForcedSeed } from './debug-params';
+import { AimInput } from '@/game/features/hero/AimInput';
+import { ParticleView } from '@/game/features/effects/ParticleView';
+import { ShockwaveView } from '@/game/features/effects/ShockwaveView';
+import { TrailView } from '@/game/features/effects/TrailView';
 import { forceBossPhase } from '@/game/features/bosses/lifecycle';
 import { QueenColumnsView, QueenTethersView } from '@/game/features/bosses/queen/QueenColumnsView';
 import { EnemyViews } from '@/game/features/enemies/EnemyViews';
-import { createDungeonGameSession, createGameSession, restartSession } from '@/game/session';
-import type { GameSession } from '@/game/session';
-import type { RoomData } from '@/game/sim/world';
-import { useUiStore } from '@/game/store';
+import { createDungeonGameSession, createGameSession, restartSession, type GameSession } from '@/game/session/session';
+import type { RoomData } from '@/game/world/types';
+import { useUiStore } from '@/game/session/store';
 import { DamageVignette } from '@/game/ui/DamageVignette';
 import { FpsCounter } from '@/game/ui/FpsCounter';
 import { GameOverModal } from '@/game/ui/GameOverModal';
@@ -36,59 +36,20 @@ import { HUD } from '@/game/ui/HUD';
 import { PauseModal } from '@/game/ui/PauseModal';
 import { UpgradeModal } from '@/game/ui/UpgradeModal';
 import { VictoryModal } from '@/game/ui/VictoryModal';
-import { AimIndicatorView } from './AimIndicatorView';
+import { AimIndicatorView } from '@/game/features/hero/AimIndicatorView';
 import { CameraRig } from './CameraRig';
 import './game-root.css';
-import { BarrelViews, HazardViews } from './HazardView';
-import { HeroView } from './HeroView';
-import { ItemViews } from './ItemView';
-import { ProjectileViews } from './ProjectileView';
-import { PuddleViews } from './PuddleView';
+import { BarrelViews, HazardViews } from '@/game/features/hazards/HazardView';
+import { HeroView } from '@/game/features/hero/HeroView';
+import { ItemViews } from '@/game/features/items/ItemView';
+import { ProjectileViews } from '@/game/features/combat/ProjectileView';
+import { PuddleViews } from '@/game/features/hazards/PuddleView';
 import { RoomView } from './RoomView';
 import { useGameLoop } from './useGameLoop';
 
 /** Componente-driver: registra el loop de sim ANTES que los lectores (orden de montaje). */
 function SimDriver({ session }: { session: GameSession }) {
   useGameLoop(session);
-  return null;
-}
-
-/** Semilla forzada vía ?seed=N (para verificar una mazmorra concreta); null si no hay o no es un entero. */
-function readForcedSeed(): number | null {
-  const raw = new URLSearchParams(window.location.search).get('seed');
-  if (raw === null) return null;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-/**
- * Alias cortos de `?boss=` (herramienta de playtest, BOSSES_PLAN B5): salta
- * directo a la arena del jefe en modo sala única, sin recorrer la mazmorra.
- * Acepta el id del jefe (`?boss=guardian`) o el alias de fase (`?boss=b1`).
- * `b0`/`test-boss` solo existe en dev (DEV_ONLY_LEVEL_JSON de rooms.ts).
- */
-const BOSS_PARAM_ALIAS: Record<string, string> = {
-  b0: 'test-boss',
-  test: 'test-boss',
-  b1: 'guardian',
-  b2: 'queen',
-  b3: 'prisma',
-  b4: 'storm',
-};
-
-/** Sala del jefe pedido vía ?boss=<id|alias>; null si no hay parámetro o no existe tal jefe en el pool. */
-function readForcedBossRoom(): RoomData | null {
-  const raw = new URLSearchParams(window.location.search).get('boss');
-  if (raw === null) return null;
-  const bossId = BOSS_PARAM_ALIAS[raw.toLowerCase()] ?? raw.toLowerCase();
-  return getRoomPool().find((room) => room.boss === bossId) ?? null;
-}
-
-/** Fase forzada del jefe vía `?phase=2|3` (solo con `?boss=`, herramienta de playtest); null si no aplica. */
-function readForcedBossPhase(): 2 | 3 | null {
-  const raw = new URLSearchParams(window.location.search).get('phase');
-  if (raw === '2') return 2;
-  if (raw === '3') return 3;
   return null;
 }
 

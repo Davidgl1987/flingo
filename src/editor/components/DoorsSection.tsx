@@ -1,5 +1,5 @@
-import { DOOR_WIDTH } from '@/game/content/constants';
-import type { RoomData } from '@/game/sim/world';
+import { DOOR_WIDTH } from '@/game/world/constants';
+import type { RoomData } from '@/game/world/types';
 import { SIDES, SIDE_LABEL } from '@/editor/constants';
 
 /** Huecos de puerta por lado (máx. 2 por lado). */

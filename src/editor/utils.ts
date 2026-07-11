@@ -1,4 +1,4 @@
-import type { RoomData } from '@/game/sim/world';
+import type { RoomData } from '@/game/world/types';
 
 export function defaultRoom(): RoomData {
   return {

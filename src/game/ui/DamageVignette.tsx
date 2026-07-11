@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useUiStore } from '@/game/store';
+import { useUiStore } from '@/game/session/store';
 import './damage-vignette.css';
 
 export function DamageVignette() {

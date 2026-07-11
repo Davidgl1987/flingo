@@ -1,4 +1,4 @@
-import type { HazardSpawn } from '@/game/sim/world';
+import type { HazardSpawn } from '@/game/world/types';
 
 export function HazardProperties({ hazard, onChange }: { hazard: HazardSpawn; onChange: (h: HazardSpawn) => void }) {
   return (

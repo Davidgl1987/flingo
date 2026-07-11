@@ -10,8 +10,8 @@
  * `features/enemies/EnemyViews.tsx` vía `bossId`).
  */
 
-import type { EventQueue } from '@/game/sim/events';
-import type { BossId, Enemy, World } from '@/game/sim/world';
+import type { EventQueue } from '@/engine/events';
+import type { BossId, Enemy, World } from '@/game/world/types';
 
 /**
  * Contrato de patrón de un jefe: se llama una vez por tick (mismo dt fijo que

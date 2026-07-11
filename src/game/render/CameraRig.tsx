@@ -37,7 +37,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import type { GameSession } from '@/game/session';
+import type { GameSession } from '@/game/session/session';
 import { cameraSettings } from './cameraSettings';
 
 const CAMERA_OFFSET = new THREE.Vector3(0, 9.5, 6.2);

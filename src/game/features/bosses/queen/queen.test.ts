@@ -8,43 +8,21 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import bossQueenJson from '@/levels/boss-queen.json';
-import { HERO_RADIUS, RAM_SPEED_THRESHOLD } from '@/game/content/constants';
-import { getRoomPool } from '@/game/content/rooms';
-import { applyDamageToEnemy, stepHeroEnemyContacts } from '@/game/sim/combat';
-import { generateDungeon } from '@/game/sim/dungeon';
-import { createEventQueue } from '@/game/sim/events';
-import { parseRoomData } from '@/game/sim/room-format';
-import type { EnemySpawn, RoomData, RoomTag } from '@/game/sim/world';
-import { createWorld } from '@/game/sim/world';
-import { initBossEnemies, stepBosses } from '../lifecycle';
-import { getBossDef } from '../registry';
-import { collectTypes } from '../test-helpers';
+import bossQueenJson from '@/game/features/dungeon/levels/boss-queen.json';
+import { HERO_RADIUS } from '@/game/features/hero/constants';
+import { RAM_SPEED_THRESHOLD } from '@/game/features/combat/constants';
+import { getRoomPool } from '@/game/features/dungeon/rooms';
+import { applyDamageToEnemy, stepHeroEnemyContacts } from '@/game/features/combat/combat';
+import { generateDungeon } from '@/game/features/dungeon/dungeon';
+import { createEventQueue } from '@/engine/events';
+import { parseRoomData } from '@/game/features/dungeon/room-format';
+import type { EnemySpawn, RoomData, RoomTag } from '@/game/world/types';
+import { createWorld } from '@/game/world/create';
+import { initBossEnemies, stepBosses } from '@/game/features/bosses/lifecycle';
+import { getBossDef } from '@/game/features/bosses/registry';
+import { collectTypes } from '@/game/features/bosses/test-helpers';
 import { stepQueenColumns } from './columns';
-import {
-  QUEEN_CHASER_PER_WAVE_BY_PHASE,
-  QUEEN_COLUMN_DAMAGE_FRACTION,
-  QUEEN_COLUMN_HIT_COOLDOWN,
-  QUEEN_COLUMN_HP,
-  QUEEN_COLUMN_STUN_DURATION,
-  QUEEN_DAMAGE_OUTSIDE_WINDOW,
-  QUEEN_GUARDIAN_MAX,
-  QUEEN_GUARDIAN_ORBIT_RADIUS,
-  QUEEN_GUARDIAN_SPAWN_INTERVAL,
-  QUEEN_HIT_DAMAGE_CAP_FRACTION,
-  QUEEN_LARVA_HP,
-  QUEEN_LARVA_MAX,
-  QUEEN_GUARDIAN_CHARGE_COOLDOWN,
-  QUEEN_MAX_HP,
-  QUEEN_RADIUS,
-  QUEEN_STALK_SPEED_BASE,
-  QUEEN_STALK_SPEED_PER_COLUMN,
-  QUEEN_TRAIL_DROP_INTERVAL,
-  QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
-  QUEEN_TRAIL_PUDDLE_LIFETIME,
-  QUEEN_TRAIL_PUDDLE_RADIUS,
-  QUEEN_WAVE_INTERVAL,
-} from './constants';
+import { QUEEN_CHASER_PER_WAVE_BY_PHASE, QUEEN_COLUMN_DAMAGE_FRACTION, QUEEN_COLUMN_HIT_COOLDOWN, QUEEN_COLUMN_HP, QUEEN_COLUMN_STUN_DURATION, QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_GUARDIAN_MAX, QUEEN_GUARDIAN_ORBIT_RADIUS, QUEEN_GUARDIAN_SPAWN_INTERVAL, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_LARVA_HP, QUEEN_LARVA_MAX, QUEEN_GUARDIAN_CHARGE_COOLDOWN, QUEEN_MAX_HP, QUEEN_RADIUS, QUEEN_STALK_SPEED_BASE, QUEEN_STALK_SPEED_PER_COLUMN, QUEEN_TRAIL_DROP_INTERVAL, QUEEN_TRAIL_DROP_INTERVAL_PHASE2, QUEEN_TRAIL_PUDDLE_LIFETIME, QUEEN_TRAIL_PUDDLE_RADIUS, QUEEN_WAVE_INTERVAL } from './constants';
 
 const FIXED_DT = 1 / 60;
 
@@ -458,7 +436,7 @@ describe('Reina: acecho hacia el héroe (GDD §15.3, playtest 2026-07-06 "la Rei
   });
 });
 
-describe('src/levels/boss-queen.json', () => {
+describe('src/game/features/dungeon/levels/boss-queen.json', () => {
   it('valida contra room-format.ts (GDD §13) y referencia el jefe "queen"', () => {
     const result = parseRoomData(bossQueenJson);
     expect(result.errors).toEqual([]);

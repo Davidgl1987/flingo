@@ -1,8 +1,8 @@
 // ── Trail (GDD §7.4) ───────────────────────────────────────────────────────
 
-import { stepPatrol } from '../steering';
+import { stepPatrol } from '@/game/features/enemies/steering';
 import { TRAIL_DROP_INTERVAL, TRAIL_PUDDLE_LIFETIME, TRAIL_PUDDLE_RADIUS, TRAIL_SPEED } from './constants';
-import type { Enemy, World } from '@/game/sim/world';
+import type { Enemy, World } from '@/game/world/types';
 
 function acquirePuddle(world: World) {
   const pool = world.puddles;

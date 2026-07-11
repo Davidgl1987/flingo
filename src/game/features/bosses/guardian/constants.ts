@@ -47,7 +47,7 @@ export const GUARDIAN_PHASE2_CHARGE_COUNT = 2;
 export const GUARDIAN_DUST_INTERVAL = 0.05;
 /**
  * Fase 3 (33%): campo de esquirlas al chocar una carga contra roca/pared.
- * Reutiliza el pool de charcos del Trail (sim/hazards.ts::stepPuddles), cuyo
+ * Reutiliza el pool de charcos del Trail (features/hazards/hazards.ts::stepPuddles), cuyo
  * daño de contacto al héroe está fijo en 1 (mismo valor pedido por el GDD
  * para las esquirlas) — no hay una constante de daño propia porque
  * `stepPuddles` no la parametriza (es genérica para cualquier `Puddle`,

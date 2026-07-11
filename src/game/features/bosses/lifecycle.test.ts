@@ -7,13 +7,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applyDamageToEnemy } from '@/game/sim/combat';
-import { generateDungeon } from '@/game/sim/dungeon';
-import { createDungeonWorld } from '@/game/sim/dungeon-world';
-import { createEventQueue, drainEvents } from '@/game/sim/events';
-import { stepWorld } from '@/game/sim/step';
-import type { EnemySpawn, RoomData, RoomTag, World } from '@/game/sim/world';
-import { createWorld } from '@/game/sim/world';
+import { applyDamageToEnemy } from '@/game/features/combat/combat';
+import { generateDungeon } from '@/game/features/dungeon/dungeon';
+import { createDungeonWorld } from '@/game/features/dungeon/dungeon-world';
+import { createEventQueue, drainEvents } from '@/engine/events';
+import { stepWorld } from '@/game/world/step';
+import type { EnemySpawn, RoomData, RoomTag, World } from '@/game/world/types';
+import { createWorld } from '@/game/world/create';
 import { capBossHitDamage, initBossEnemies, isBoss, stepBossDoorSeal, stepBosses } from './lifecycle';
 import { getBossDef } from './registry';
 import { collectTypes } from './test-helpers';

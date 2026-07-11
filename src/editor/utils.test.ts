@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseRoomData } from '@/game/sim/room-format';
+import { parseRoomData } from '@/game/features/dungeon/room-format';
 import { defaultRoom, nextId, snap } from './utils';
 
 describe('snap', () => {

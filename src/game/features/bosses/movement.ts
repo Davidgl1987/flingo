@@ -7,7 +7,8 @@
  * `moveBossTowardWithAvoidance` la reutiliza desde ambos jefes).
  */
 
-import type { AABB, Enemy, World } from '@/game/sim/world';
+import type { AABB } from '@/engine/geometry';
+import type { Enemy, World } from '@/game/world/types';
 
 /**
  * Sala dueña del jefe (multi-sala) o `world.bounds` en el modo sala única de

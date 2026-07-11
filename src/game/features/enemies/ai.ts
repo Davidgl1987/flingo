@@ -3,12 +3,12 @@
  * world.rng cuando hace falta aleatoriedad en cada stepX).
  */
 
-import { stepChaser } from './chaser/ai';
-import { stepDummy } from './dummy/ai';
-import { stepShooter } from './shooter/ai';
-import { stepSpike } from './spike/ai';
-import { stepTrail } from './trail/ai';
-import type { World } from '@/game/sim/world';
+import { stepChaser } from '@/game/features/enemies/chaser/ai';
+import { stepDummy } from '@/game/features/enemies/dummy/ai';
+import { stepShooter } from '@/game/features/enemies/shooter/ai';
+import { stepSpike } from '@/game/features/enemies/spike/ai';
+import { stepTrail } from '@/game/features/enemies/trail/ai';
+import type { World } from '@/game/world/types';
 
 // ── Orquestador ────────────────────────────────────────────────────────────
 

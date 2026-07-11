@@ -11,12 +11,9 @@
  * escalares; los AABBs recorridos son los arrays ya existentes del mundo.
  */
 
-import {
-  AI_AVOID_LOOKAHEAD,
-  AI_AVOID_SKIN,
-  AI_AVOID_STEER_ANGLE,
-} from './constants';
-import type { AABB, Enemy, World } from '@/game/sim/world';
+import { AI_AVOID_LOOKAHEAD, AI_AVOID_SKIN, AI_AVOID_STEER_ANGLE } from './constants';
+import type { AABB } from '@/engine/geometry';
+import type { Enemy, World } from '@/game/world/types';
 
 const PATROL_ARRIVE_EPS = 0.12;
 

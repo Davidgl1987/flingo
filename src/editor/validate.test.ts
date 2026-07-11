@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { EnemySpawn, HazardSpawn, ItemSpawn } from '@/game/sim/world';
+import type { EnemySpawn, HazardSpawn, ItemSpawn } from '@/game/world/types';
 import { defaultRoom } from './utils';
 import { validateLive } from './validate';
 

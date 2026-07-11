@@ -4,38 +4,24 @@
  * daño+empujón al golpear al héroe, doble carga encadenada solo en fase 2/3,
  * campo de esquirlas solo en fase 3, y la regla de daño por ventana de
  * vulnerabilidad heredada del framework (bosses/lifecycle.ts). También valida
- * `src/levels/boss-guardian.json` contra el parser de room-format.ts.
+ * `src/game/features/dungeon/levels/boss-guardian.json` contra el parser de room-format.ts.
  */
 
 import { describe, expect, it } from 'vitest';
-import bossGuardianJson from '@/levels/boss-guardian.json';
-import { HERO_RADIUS } from '@/game/content/constants';
-import { applyDamageToEnemy } from '@/game/sim/combat';
-import { createEventQueue } from '@/game/sim/events';
-import { explodeBarrel, stepBarrels } from '@/game/sim/hazards';
-import { stepHeroPhysics } from '@/game/sim/physics';
-import { parseRoomData } from '@/game/sim/room-format';
-import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '@/game/sim/world';
-import { barrelInAir, createWorld } from '@/game/sim/world';
-import { initBossEnemies, stepBosses } from '../lifecycle';
-import { getBossDef } from '../registry';
-import { collectTypes } from '../test-helpers';
+import bossGuardianJson from '@/game/features/dungeon/levels/boss-guardian.json';
+import { HERO_RADIUS } from '@/game/features/hero/constants';
+import { applyDamageToEnemy } from '@/game/features/combat/combat';
+import { createEventQueue } from '@/engine/events';
+import { explodeBarrel, stepBarrels } from '@/game/features/hazards/hazards';
+import { stepHeroPhysics } from '@/engine/physics';
+import { parseRoomData } from '@/game/features/dungeon/room-format';
+import { type EnemySpawn, type HazardSpawn, type RoomData, type RoomTag, barrelInAir } from '@/game/world/types';
+import { createWorld } from '@/game/world/create';
+import { initBossEnemies, stepBosses } from '@/game/features/bosses/lifecycle';
+import { getBossDef } from '@/game/features/bosses/registry';
+import { collectTypes } from '@/game/features/bosses/test-helpers';
 import { guardianBarrelSpawnPoints } from './barrels';
-import {
-  GUARDIAN_BARREL_DAMAGE_FRACTION,
-  GUARDIAN_BARREL_FALL_DURATION,
-  GUARDIAN_BARREL_MAX_ACTIVE,
-  GUARDIAN_BARREL_RADIUS,
-  GUARDIAN_BARREL_SPAWN_INTERVAL,
-  GUARDIAN_BARREL_STUN_DURATION,
-  GUARDIAN_CHARGE_DAMAGE_PHASE1,
-  GUARDIAN_CHARGE_DAMAGE_PHASE3,
-  GUARDIAN_DAMAGE_OUTSIDE_WINDOW,
-  GUARDIAN_MAX_HP,
-  GUARDIAN_MIN_CHARGE_CLEARANCE,
-  GUARDIAN_RADIUS,
-  GUARDIAN_STUN_DURATION,
-} from './constants';
+import { GUARDIAN_BARREL_DAMAGE_FRACTION, GUARDIAN_BARREL_FALL_DURATION, GUARDIAN_BARREL_MAX_ACTIVE, GUARDIAN_BARREL_RADIUS, GUARDIAN_BARREL_SPAWN_INTERVAL, GUARDIAN_BARREL_STUN_DURATION, GUARDIAN_CHARGE_DAMAGE_PHASE1, GUARDIAN_CHARGE_DAMAGE_PHASE3, GUARDIAN_DAMAGE_OUTSIDE_WINDOW, GUARDIAN_MAX_HP, GUARDIAN_MIN_CHARGE_CLEARANCE, GUARDIAN_RADIUS, GUARDIAN_STUN_DURATION } from './constants';
 
 const FIXED_DT = 1 / 60;
 
@@ -536,7 +522,7 @@ describe('Guardián: daño del arma escalado por ventana (playtest 2026-07-10)',
   });
 });
 
-describe('src/levels/boss-guardian.json', () => {
+describe('src/game/features/dungeon/levels/boss-guardian.json', () => {
   it('valida contra room-format.ts (GDD §13) y referencia el jefe "guardian"', () => {
     const result = parseRoomData(bossGuardianJson);
     expect(result.errors).toEqual([]);

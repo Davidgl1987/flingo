@@ -7,8 +7,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { GameSession } from '@/game/session';
-import type { Enemy } from '@/game/sim/world';
+import type { GameSession } from '@/game/session/session';
+import type { Enemy } from '@/game/world/types';
 import { isBoss } from './lifecycle';
 import { getBossDef } from './registry';
 import './boss-health-bar.css';

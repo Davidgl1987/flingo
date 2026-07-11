@@ -23,34 +23,15 @@
  *   antes de volver a patrullar, GDD §15.2).
  */
 
-import { applyDamageToHero } from '@/game/sim/combat';
-import { pushEvent, type EventQueue } from '@/game/sim/events';
-import { explodeBarrel } from '@/game/sim/hazards';
-import { dropPotionAt } from '@/game/sim/items';
-import type { AABB, Enemy, World } from '@/game/sim/world';
-import { bossHitsSolid, bossRoomBounds, moveBossTowardWithAvoidance } from '../movement';
+import { applyDamageToHero } from '@/game/features/combat/combat';
+import { pushEvent, type EventQueue } from '@/engine/events';
+import { explodeBarrel } from '@/game/features/hazards/hazards';
+import { dropPotionAt } from '@/game/features/items/items';
+import type { AABB } from '@/engine/geometry';
+import type { Enemy, World } from '@/game/world/types';
+import { bossHitsSolid, bossRoomBounds, moveBossTowardWithAvoidance } from '@/game/features/bosses/movement';
 import { guardianFindLiveBarrelAt, guardianStepBarrelSpawn } from './barrels';
-import {
-  GUARDIAN_BARREL_STUN_DURATION,
-  GUARDIAN_CHARGE_DAMAGE_PHASE1,
-  GUARDIAN_CHARGE_DAMAGE_PHASE3,
-  GUARDIAN_CHARGE_KNOCKBACK_SPEED,
-  GUARDIAN_CHARGE_MAX_DURATION,
-  GUARDIAN_CHARGE_SPEED,
-  GUARDIAN_DETECT_RANGE,
-  GUARDIAN_DOUBLE_CHARGE_PAUSE,
-  GUARDIAN_DUST_INTERVAL,
-  GUARDIAN_HIT_DAMAGE_CAP_FRACTION,
-  GUARDIAN_MIN_CHARGE_CLEARANCE,
-  GUARDIAN_PATROL_SPEED,
-  GUARDIAN_PHASE2_CHARGE_COUNT,
-  GUARDIAN_RADIUS,
-  GUARDIAN_RECOVER_PAUSE,
-  GUARDIAN_SHARD_LIFETIME,
-  GUARDIAN_SHARD_RADIUS,
-  GUARDIAN_STUN_DURATION,
-  GUARDIAN_TELEGRAPH_DURATION,
-} from './constants';
+import { GUARDIAN_BARREL_STUN_DURATION, GUARDIAN_CHARGE_DAMAGE_PHASE1, GUARDIAN_CHARGE_DAMAGE_PHASE3, GUARDIAN_CHARGE_KNOCKBACK_SPEED, GUARDIAN_CHARGE_MAX_DURATION, GUARDIAN_CHARGE_SPEED, GUARDIAN_DETECT_RANGE, GUARDIAN_DOUBLE_CHARGE_PAUSE, GUARDIAN_DUST_INTERVAL, GUARDIAN_HIT_DAMAGE_CAP_FRACTION, GUARDIAN_MIN_CHARGE_CLEARANCE, GUARDIAN_PATROL_SPEED, GUARDIAN_PHASE2_CHARGE_COUNT, GUARDIAN_RADIUS, GUARDIAN_RECOVER_PAUSE, GUARDIAN_SHARD_LIFETIME, GUARDIAN_SHARD_RADIUS, GUARDIAN_STUN_DURATION, GUARDIAN_TELEGRAPH_DURATION } from './constants';
 
 const GUARDIAN_STAGE_PATROL = 0;
 const GUARDIAN_STAGE_TELEGRAPH = 1;
@@ -309,7 +290,7 @@ export function guardianStepPattern(world: World, boss: Enemy, dt: number, event
         // explosión ya le aplica su daño de barril (GUARDIAN_BARREL_DAMAGE_FRACTION,
         // el mayor de los tres modos de daño del Guardián) al jefe vía
         // `explodeBarrel`/`applyDamageToEnemy` con bypass de ventana — ver
-        // `sim/hazards.ts::explodeBarrel` y `enemy.bossBarrelDamage`.
+        // `features/hazards/hazards.ts::explodeBarrel` y `enemy.bossBarrelDamage`.
         pushEvent(events, 'boss-barrel-charge-stun', boss.position.x, boss.position.y, GUARDIAN_BARREL_STUN_DURATION);
         guardianEnterStunned(boss, GUARDIAN_BARREL_STUN_DURATION);
         break;

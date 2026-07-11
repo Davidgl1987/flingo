@@ -29,26 +29,12 @@
  * (persecución real) y no se usa `facing` como caché.
  */
 
-import type { EventQueue } from '@/game/sim/events';
-import { dropPotionAt } from '@/game/sim/items';
-import type { Enemy, World } from '@/game/sim/world';
-import { moveBossTowardWithAvoidance } from '../movement';
+import type { EventQueue } from '@/engine/events';
+import { dropPotionAt } from '@/game/features/items/items';
+import type { Enemy, World } from '@/game/world/types';
+import { moveBossTowardWithAvoidance } from '@/game/features/bosses/movement';
 import { queenBrokenColumnCount } from './columns';
-import {
-  QUEEN_COLUMN_HP,
-  QUEEN_GUARDIAN_MAX,
-  QUEEN_LARVA_HP,
-  QUEEN_LARVA_ID_PREFIX,
-  QUEEN_LARVA_MAX,
-  QUEEN_LARVA_RADIUS,
-  QUEEN_STALK_SPEED_BASE,
-  QUEEN_STALK_SPEED_PER_COLUMN,
-  QUEEN_TRAIL_DROP_INTERVAL,
-  QUEEN_TRAIL_DROP_INTERVAL_PHASE2,
-  QUEEN_TRAIL_PUDDLE_LIFETIME,
-  QUEEN_TRAIL_PUDDLE_RADIUS,
-  QUEEN_WAVE_INTERVAL,
-} from './constants';
+import { QUEEN_COLUMN_HP, QUEEN_GUARDIAN_MAX, QUEEN_LARVA_HP, QUEEN_LARVA_ID_PREFIX, QUEEN_LARVA_MAX, QUEEN_LARVA_RADIUS, QUEEN_STALK_SPEED_BASE, QUEEN_STALK_SPEED_PER_COLUMN, QUEEN_TRAIL_DROP_INTERVAL, QUEEN_TRAIL_DROP_INTERVAL_PHASE2, QUEEN_TRAIL_PUDDLE_LIFETIME, QUEEN_TRAIL_PUDDLE_RADIUS, QUEEN_WAVE_INTERVAL } from './constants';
 import { queenActivateGuardian, queenSpawnChasers, queenStepGuardians, queenStepLarvae } from './larvae';
 
 /**
@@ -185,7 +171,7 @@ function queenStepMove(world: World, boss: Enemy, dt: number): void {
  * criterio que `acquirePuddle` de enemies/trail/ai.ts) en vez de crecer el array.
  *
  * `slows = true` (rediseño 2026-07-10, GDD §15.3): marca el charco como
- * rastro de la Reina para que `stepPuddles` (sim/hazards.ts) le aplique
+ * rastro de la Reina para que `stepPuddles` (features/hazards/hazards.ts) le aplique
  * ralentización + DoT por permanencia en vez del daño de contacto simple del
  * Trail normal — el daño directo YA NO se aplica aquí, lo gestiona
  * `stepPuddles` con sus válvulas (gracia + velocidad de cruce).

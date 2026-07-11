@@ -1,6 +1,7 @@
-import { DOOR_WIDTH } from '@/game/content/constants';
-import { parseRoomData } from '@/game/sim/room-format';
-import type { RoomData, Vec2 } from '@/game/sim/world';
+import { DOOR_WIDTH } from '@/game/world/constants';
+import { parseRoomData } from '@/game/features/dungeon/room-format';
+import type { RoomData } from '@/game/world/types';
+import type { Vec2 } from '@/engine/geometry';
 import { SIDE_LABEL } from './constants';
 
 // ── Validaciones en vivo (GDD §13): parser común + reglas propias del editor ──

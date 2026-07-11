@@ -22,9 +22,9 @@ import {
   cameraSettings,
   setCameraDistanceScale,
 } from '@/game/render/cameraSettings';
-import { resumeGame, type GameSession } from '@/game/session';
-import { UPGRADE_POOL } from '@/game/sim/upgrades';
-import { useUiStore } from '@/game/store';
+import { resumeGame, type GameSession } from '@/game/session/session';
+import { UPGRADE_POOL } from '@/game/session/upgrades';
+import { useUiStore } from '@/game/session/store';
 import './modals.css';
 
 const ENEMY_LEGEND: { label: string; color: string }[] = [

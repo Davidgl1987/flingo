@@ -1,4 +1,4 @@
-import type { EnemySpawn } from '@/game/sim/world';
+import type { EnemySpawn } from '@/game/world/types';
 import { snap } from '@/editor/utils';
 
 export function EnemyProperties({ enemy, onChange }: { enemy: EnemySpawn; onChange: (e: EnemySpawn) => void }) {

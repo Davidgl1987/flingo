@@ -15,19 +15,11 @@
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { DOOR_WIDTH, WALL_THICKNESS } from '@/game/content/constants';
+import { DOOR_WIDTH, WALL_THICKNESS } from '@/game/world/constants';
 import { QUEEN_COLUMN_ID_PREFIX } from '@/game/features/bosses/queen/constants';
-import { DOOR_GATE_ID_PREFIX } from '@/game/sim/dungeon-world';
-import type { Obstacle, World } from '@/game/sim/world';
-import {
-  doorKeyMaterial,
-  doorMaterial,
-  floorMaterial,
-  rockMaterial,
-  unitBox,
-  unitPlane,
-  wallMaterial,
-} from './assets';
+import { DOOR_GATE_ID_PREFIX } from '@/game/features/dungeon/dungeon-world';
+import type { Obstacle, World } from '@/game/world/types';
+import { doorKeyMaterial, doorMaterial, floorMaterial, rockMaterial, unitBox, unitPlane, wallMaterial } from './assets';
 
 const WALL_HEIGHT = 0.9;
 const ROCK_HEIGHT = 0.8;

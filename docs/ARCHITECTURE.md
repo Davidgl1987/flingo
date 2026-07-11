@@ -12,44 +12,57 @@
 
 ## Principio rector: simulación pura, render tonto
 
+Organización por features (reestructuración 2026-07-11, ver
+`docs/plans/RESTRUCTURE_PLAN.md`): cada feature agrupa su sim, su render, sus
+constantes y sus tests. La regla ★ no cambia: **los archivos de sim (engine/,
+world/, y los .ts de cada feature) NUNCA importan React, three.js ni archivos
+.tsx**; los componentes de render leen la sim, jamás al revés.
+
 ```
 src/
-  app/            # App, rutas (juego, editor), viewport móvil
+  app/              # App.tsx, main.tsx (entrada; index.html apunta aquí)
+  styles/base.css   # reset global, #root, .game-root
+  engine/           # ★ genérico, sin dominio de juego
+    geometry.ts     #   Vec2, AABB
+    rng.ts          #   mulberry32 con semilla
+    events.ts       #   cola de eventos de gameplay (impacto, muerte, explosión…)
+    physics.ts      #   círculo-vs-AABB, reflexión, integración + constantes de física global
   game/
-    sim/          # ★ Simulación pura: SIN imports de React ni three.js
-      world.ts    #   estado del mundo (tipos + factoría)
-      step.ts     #   tick de simulación: física, IA, combate, hazards, flujo
-      physics.ts  #   círculo-vs-AABB, reflexión, integración
-      ai.ts       #   comportamientos de los 5 enemigos
-      combat.ts   #   daño, knockback, i-frames, proyectiles
-      hazards.ts  #   foso, pinchos, barril, barro, boost, rastro
-      dungeon.ts  #   generación procedural + flujo de puertas
-      events.ts   #   cola de eventos de gameplay (impacto, muerte, explosión…)
-    content/      # constantes de tuning (1 fichero), definiciones de enemigos/mejoras, salas de serie
-    render/       # componentes R3F que LEEN la sim (nunca la mutan)
-    input/        # puntería por PointerEvents (estado en refs)
-    juice/        # partículas, shake, hit-stop, estelas (consumen events.ts)
-    ui/           # HUD, modales (React DOM encima del canvas, no drei/Html)
-    store.ts      # zustand UI
-  editor/         # editor de salas (React DOM + vista R3F reutilizando render/)
-  levels/         # salas .json
+    world/          # ★ dominio del mundo
+      types.ts      #   tipos (World, Hero, Enemy, RoomData…)
+      create.ts     #   factorías: createWorld, buildRoomEntities, pools
+      step.ts       #   tick de simulación: orquesta física, IA, combate, hazards, flujo
+      constants.ts  #   tuning de mundo/run (salas, muros, puertas)
+    session/        # sesión de juego (session.ts), zustand UI (store.ts), upgrades.ts
+    features/       # una carpeta por feature: sim (★) + render (.tsx) + constants + tests
+      hero/         #   AimInput, launch, HeroView, AimIndicatorView, constantes de héroe/input
+      enemies/      #   steering + dummy/ chaser/ spike/ trail/ shooter/ (ai + constants + Mesh) + EnemyViews
+      bosses/       #   types, lifecycle, movement, registry + test-boss/ guardian/ queen/ + BossHealthBar
+      combat/       #   combat.ts (daño, knockback, i-frames, proyectiles) + ProjectileView + constantes de armas
+      hazards/      #   hazards.ts (foso, pinchos, barril, barro, boost, rastro) + HazardView, PuddleView
+      items/        #   items.ts + ItemView
+      dungeon/      #   dungeon.ts (generación procedural), dungeon-world, room-format, rooms.ts, levels/*.json
+      effects/      #   partículas, shake, hit-stop, estelas, haptics (consumen engine/events.ts)
+    render/         # infraestructura de escena: GameRoot, CameraRig, RoomView, useGameLoop, assets, cameraSettings, debug-params
+    ui/             # HUD, modales (React DOM encima del canvas, no drei/Html), cada uno con su .css
+  editor/           # editor de salas (React DOM + canvas 2D) + components/ + editor.css
 ```
 
 - La **sim** es un objeto mutable poseído por un hook raíz; se hace tick con **timestep fijo de 60 Hz** (acumulador + interpolación de render). Determinista con RNG con semilla.
 - **React nunca está en el hot path**: los componentes R3F leen la sim en `useFrame` y mutan `object3D` directamente (posición, escala, color). El estado de zustand se actualiza solo cuando cambia un valor de UI (HP, monedas, fase), no por frame.
-- La sim publica **eventos** (`impact`, `enemy-died`, `barrel-explosion`, `player-damaged`…) en una cola que juice/ y ui/ drenan cada frame. Nada de callbacks cruzados.
+- La sim publica **eventos** (`impact`, `enemy-died`, `barrel-explosion`, `player-damaged`…) en una cola que features/effects/ y ui/ drenan cada frame. Nada de callbacks cruzados.
 - Los sistemas de reacción (partículas, shake) son **independientes de la sala**: geometría pura, sin acoplarse al flujo de puertas.
 
 ## Presupuesto de rendimiento (móvil gama media, 60 fps)
 
-- **Cero asignaciones por frame** en sim y juice: pools preasignados (proyectiles, partículas, eventos, vectores scratch).
+- **Cero asignaciones por frame** en sim y effects: pools preasignados (proyectiles, partículas, eventos, vectores scratch).
 - **Instancing obligatorio** para partículas (1 `InstancedMesh`, pool ~256), monedas, rastros y cualquier cosa repetida.
 - Geometrías y materiales **compartidos y creados una vez** (módulo de assets); prohibido crear materiales en render.
 - **Sin sombras dinámicas**: blob shadows (plano con textura radial). 1 luz direccional + ambiente. Materiales lambert/basic, paleta plana.
 - `dpr` limitado a `[1, 2]`, `powerPreference: 'high-performance'`, sin postprocesado.
 - Cámara: seguimiento suavizado del héroe con offset elevado/inclinado; el shake se aplica como offset aditivo amortiguado.
 
-## Juice (implementación)
+## Effects (juice, implementación)
 
 - **Shake:** valor de *trauma* [0,1] que decae; offset = trauma² × ruido. Aditivo a la cámara.
 - **Hit-stop:** escala temporal de la sim (`dt *= timeScale`) durante ~60–100 ms en golpes fuertes. Nunca congela el render.
@@ -65,8 +78,8 @@ src/
 ## Editor y niveles
 
 - Formato de sala: JSON según el contrato del GDD §13, versionado con campo `version`.
-- Borrador autoguardado en `localStorage`; exportar/importar el JSON de sala; en dev, plugin de middleware de Vite para escribir en `src/levels/`.
-- El generador procedural (`sim/dungeon.ts`) es una función pura `(seed, pool) → mapa` con las validaciones del GDD §10.2, testeada en vitest.
+- Borrador autoguardado en `localStorage`; exportar/importar el JSON de sala; en dev, plugin de middleware de Vite para escribir en `src/game/features/dungeon/levels/`.
+- El generador procedural (`features/dungeon/dungeon.ts`) es una función pura `(seed, pool) → mapa` con las validaciones del GDD §10.2, testeada en vitest.
 
 ## Testing y verificación
 

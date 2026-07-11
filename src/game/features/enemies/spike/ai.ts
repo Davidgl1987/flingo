@@ -1,8 +1,8 @@
 // ── Spike (GDD §7.3) ───────────────────────────────────────────────────────
 
-import { stepPatrol } from '../steering';
+import { stepPatrol } from '@/game/features/enemies/steering';
 import { SPIKE_PATROL_SPEED } from './constants';
-import type { Enemy, World } from '@/game/sim/world';
+import type { Enemy, World } from '@/game/world/types';
 
 export function stepSpike(world: World, enemy: Enemy, dt: number): void {
   stepPatrol(world, enemy, SPIKE_PATROL_SPEED, dt);

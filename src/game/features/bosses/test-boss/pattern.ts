@@ -2,13 +2,13 @@
  * Jefe de pruebas (Fase B0): quieto, un ataque telegrafiado simple en bucle,
  * ventana tras el ataque. Solo para verificar el framework; NO es un jefe de
  * diseño (B1-B4 lo son). Se añade al pool de salas SOLO en dev/tests (ver
- * content/rooms.ts::getRoomPool), nunca en una run normal si hay otro jefe
+ * features/dungeon/rooms.ts::getRoomPool), nunca en una run normal si hay otro jefe
  * disponible.
  */
 
-import { fireEnemyProjectile } from '@/game/sim/combat';
-import { pushEvent, type EventQueue } from '@/game/sim/events';
-import type { Enemy, World } from '@/game/sim/world';
+import { fireEnemyProjectile } from '@/game/features/combat/combat';
+import { pushEvent, type EventQueue } from '@/engine/events';
+import type { Enemy, World } from '@/game/world/types';
 
 const TEST_BOSS_TELEGRAPH_DURATION = 0.8;
 const TEST_BOSS_ATTACK_DURATION = 0.25;

@@ -3,8 +3,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { stepEnemyAi } from '../ai';
-import { createWorld, type EnemySpawn, type HazardSpawn, type RoomData, type World } from '@/game/sim/world';
+import { stepEnemyAi } from '@/game/features/enemies/ai';
+import { createWorld } from '@/game/world/create';
+import type { EnemySpawn, HazardSpawn, RoomData, World } from '@/game/world/types';
 import { CHASER_SPEED, CHASER_SPEED_WHILE_AIMING } from './constants';
 
 const FIXED_DT = 1 / 60;

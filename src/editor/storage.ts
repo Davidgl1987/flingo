@@ -1,16 +1,16 @@
 /**
  * Persistencia del editor (GDD §13): borrador autoguardado, sala de playtest
  * y pool de salas exportadas (que el generador procedural consume vía
- * content/rooms.ts::getRoomPool). Todo en localStorage, todo pasado por el
+ * features/dungeon/rooms.ts::getRoomPool). Todo en localStorage, todo pasado por el
  * parser del formato antes de confiar en ello.
  */
 
-import { parseRoomData } from '@/game/sim/room-format';
-import type { RoomData } from '@/game/sim/world';
+import { parseRoomData } from '@/game/features/dungeon/room-format';
+import type { RoomData } from '@/game/world/types';
 
 const DRAFT_KEY = 'flingo-editor-draft';
 const PLAYTEST_KEY = 'flingo-editor-playtest';
-/** DEBE coincidir con content/rooms.ts (pool del generador). */
+/** DEBE coincidir con features/dungeon/rooms.ts (pool del generador). */
 const EXPORTED_ROOMS_KEY = 'flingo-editor-exported-rooms';
 
 function safeRead(key: string): unknown {

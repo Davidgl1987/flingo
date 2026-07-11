@@ -40,8 +40,8 @@ import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Group, Material, Mesh } from 'three';
 import { QUEEN_LARVA_ID_PREFIX } from '@/game/features/bosses/queen/constants';
-import type { GameSession } from '@/game/session';
-import type { BossId, Enemy, EnemyKind } from '@/game/sim/world';
+import type { GameSession } from '@/game/session/session';
+import type { BossId, Enemy, EnemyKind } from '@/game/world/types';
 import {
   blobShadowMaterial,
   bossBodyMaterial,
@@ -69,11 +69,11 @@ import {
   unitCircle,
   unitSphere,
 } from '@/game/render/assets';
-import { ChaserMesh } from './chaser/Mesh';
-import { DummyMesh } from './dummy/Mesh';
-import { ShooterMesh } from './shooter/Mesh';
-import { SpikeMesh } from './spike/Mesh';
-import { TrailMesh } from './trail/Mesh';
+import { ChaserMesh } from '@/game/features/enemies/chaser/Mesh';
+import { DummyMesh } from '@/game/features/enemies/dummy/Mesh';
+import { ShooterMesh } from '@/game/features/enemies/shooter/Mesh';
+import { SpikeMesh } from '@/game/features/enemies/spike/Mesh';
+import { TrailMesh } from '@/game/features/enemies/trail/Mesh';
 
 const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
   dummy: dummyMaterial,

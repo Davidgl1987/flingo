@@ -20,9 +20,9 @@
  * framework).
  */
 
-import { closeConnection } from '@/game/sim/dungeon-world';
-import { pushEvent, type EventQueue } from '@/game/sim/events';
-import type { BossId, Enemy, World } from '@/game/sim/world';
+import { closeConnection } from '@/game/features/dungeon/dungeon-world';
+import { pushEvent, type EventQueue } from '@/engine/events';
+import type { BossId, Enemy, World } from '@/game/world/types';
 import { getBossDef } from './registry';
 
 /** true si el enemigo dado es un jefe vivo o muerto (kind==='boss'), para narrowing en los llamadores. */
@@ -31,11 +31,11 @@ export function isBoss(enemy: Enemy): enemy is Enemy & { bossId: BossId } {
 }
 
 /**
- * Se llama una vez, justo tras construir el mundo (world.ts::createWorld /
+ * Se llama una vez, justo tras construir el mundo (world/create.ts::createWorld /
  * dungeon-world.ts::createDungeonWorld no pueden importar registry.ts sin
- * crear un ciclo: sim/ → features/bosses/ está permitido, pero world.ts es
- * sim/ y registry.ts importa sim/world.ts, así que world.ts NO puede
- * importar registry.ts de vuelta). Sobrescribe hp/maxHp del placeholder de
+ * crear un ciclo: world/ → features/bosses/ está permitido, pero registry.ts
+ * importa world/types.ts, así que world/ NO puede importar registry.ts de
+ * vuelta). Sobrescribe hp/maxHp del placeholder de
  * `createEnemy` con el valor real de `BossDef.maxHp`.
  */
 export function initBossEnemies(world: World): void {

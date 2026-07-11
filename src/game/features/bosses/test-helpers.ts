@@ -1,6 +1,6 @@
 /** Helpers de test compartidos entre los tests de jefes (lifecycle/guardian/queen/movement). */
 
-import { drainEvents, type EventQueue, type GameEvent } from '@/game/sim/events';
+import { drainEvents, type EventQueue, type GameEvent } from '@/engine/events';
 
 /** Drena la cola de eventos y devuelve solo sus tipos, en orden, para asserts legibles. */
 export function collectTypes(events: EventQueue): GameEvent['type'][] {

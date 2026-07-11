@@ -2,7 +2,7 @@
  * Columnas de la Reina del Enjambre + sus cuerdas (T2 render, rediseño
  * 2026-07-10, GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md).
  *
- * `world.queenColumns` (sim, `src/game/sim/world.ts`) es la fuente de verdad
+ * `world.queenColumns` (sim, `src/game/world/types.ts`) es la fuente de verdad
  * de su vida: cada columna vale `QUEEN_COLUMN_HP` (3, playtest 2026-07-10)
  * hp intacta → 2 (leve) → 1 (grave, cada golpe de embestida resta 1) → 0 con
  * `broken=true` (rota, restos). El `Obstacle` sólido correspondiente se
@@ -34,7 +34,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import * as THREE from 'three';
-import type { GameSession } from '@/game/session';
+import type { GameSession } from '@/game/session/session';
 import {
   queenColumnCrackedLightMaterial,
   queenColumnCrackedMaterial,

@@ -61,7 +61,7 @@ export const QUEEN_WANDER_INTERVAL = 2.6;
 
 /**
  * Rastro de la Reina (GDD §15.3 "como el Trail, pero más grande y duradero"):
- * reutiliza el pool de charcos del Trail (world.puddles, sim/hazards.ts::
+ * reutiliza el pool de charcos del Trail (world.puddles, features/hazards/hazards.ts::
  * stepPuddles) con parámetros PROPIOS —radio mayor, vida más larga— en vez de
  * los de TRAIL_PUDDLE_RADIUS/TRAIL_PUDDLE_LIFETIME (que son del enemigo Trail
  * normal). Cadencia fase 1; fase 2 la acelera (QUEEN_TRAIL_DROP_INTERVAL_PHASE2).

@@ -1,5 +1,5 @@
-import { ROOM_MIN_SIZE } from '@/game/content/constants';
-import type { RoomData } from '@/game/sim/world';
+import { ROOM_MIN_SIZE } from '@/game/world/constants';
+import type { RoomData } from '@/game/world/types';
 import { ALL_TAGS } from '@/editor/constants';
 
 /** Metadatos de la sala: id, nombre, tamaño y tags. */

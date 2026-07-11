@@ -8,9 +8,10 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ARROW_COOLDOWN, BODY_LAUNCH_COOLDOWN, SPELL_COOLDOWN } from '@/game/content/constants';
-import type { GameSession } from '@/game/session';
-import type { WeaponMode } from '@/game/sim/world';
+import { ARROW_COOLDOWN, SPELL_COOLDOWN } from '@/game/features/combat/constants';
+import { BODY_LAUNCH_COOLDOWN } from '@/game/features/hero/constants';
+import type { GameSession } from '@/game/session/session';
+import type { WeaponMode } from '@/game/world/types';
 import './weapon-bar.css';
 
 /**

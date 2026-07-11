@@ -1,4 +1,4 @@
-import type { EnemySpawn, HazardSpawn, ItemSpawn, RoomData } from '@/game/sim/world';
+import type { EnemySpawn, HazardSpawn, ItemSpawn, RoomData } from '@/game/world/types';
 import type { PlaceKind, Selection } from '@/editor/types';
 import { RoomSection } from './RoomSection';
 import { DoorsSection } from './DoorsSection';

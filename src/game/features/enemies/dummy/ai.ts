@@ -1,8 +1,8 @@
 // ── Dummy (GDD §7.1) ───────────────────────────────────────────────────────
 
-import { canAggro, heroDistance, moveToward, stepPatrol } from '../steering';
+import { canAggro, heroDistance, moveToward, stepPatrol } from '@/game/features/enemies/steering';
 import { DUMMY_CHASE_SPEED, DUMMY_DETECT_RANGE, DUMMY_LEASH_RANGE, DUMMY_PATROL_SPEED } from './constants';
-import type { Enemy, World } from '@/game/sim/world';
+import type { Enemy, World } from '@/game/world/types';
 
 export function stepDummy(world: World, enemy: Enemy, dt: number): void {
   const aggro = canAggro(world, enemy);

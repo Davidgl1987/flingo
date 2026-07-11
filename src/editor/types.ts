@@ -1,4 +1,4 @@
-import type { EnemyKind, HazardKind, ItemKind } from '@/game/sim/world';
+import type { EnemyKind, HazardKind, ItemKind } from '@/game/world/types';
 
 export type Selection =
   | { type: 'enemy'; id: string }

@@ -7,8 +7,8 @@ import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { RefObject } from 'react';
 import type { Group, Mesh } from 'three';
-import type { GameSession } from '@/game/session';
-import type { Enemy } from '@/game/sim/world';
+import type { GameSession } from '@/game/session/session';
+import type { Enemy } from '@/game/world/types';
 import {
   shooterEyeChargeMaterial,
   shooterEyeMaterial,

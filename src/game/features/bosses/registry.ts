@@ -5,18 +5,12 @@
  * tocar el framework de `lifecycle.ts`.
  */
 
-import type { BossId } from '@/game/sim/world';
-import {
-  GUARDIAN_BARREL_DAMAGE_FRACTION,
-  GUARDIAN_DAMAGE_OUTSIDE_WINDOW,
-  GUARDIAN_HIT_DAMAGE_CAP_FRACTION,
-  GUARDIAN_MAX_HP,
-  GUARDIAN_RADIUS,
-} from './guardian/constants';
-import { guardianOnPhaseChanged, guardianStepPattern } from './guardian/pattern';
-import { QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_MAX_HP, QUEEN_RADIUS } from './queen/constants';
-import { queenOnInit, queenOnPhaseChanged, queenStepPattern } from './queen/pattern';
-import { testBossStepPattern } from './test-boss/pattern';
+import type { BossId } from '@/game/world/types';
+import { GUARDIAN_BARREL_DAMAGE_FRACTION, GUARDIAN_DAMAGE_OUTSIDE_WINDOW, GUARDIAN_HIT_DAMAGE_CAP_FRACTION, GUARDIAN_MAX_HP, GUARDIAN_RADIUS } from '@/game/features/bosses/guardian/constants';
+import { guardianOnPhaseChanged, guardianStepPattern } from '@/game/features/bosses/guardian/pattern';
+import { QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_MAX_HP, QUEEN_RADIUS } from '@/game/features/bosses/queen/constants';
+import { queenOnInit, queenOnPhaseChanged, queenStepPattern } from '@/game/features/bosses/queen/pattern';
+import { testBossStepPattern } from '@/game/features/bosses/test-boss/pattern';
 import type { BossDef } from './types';
 
 export const BOSS_DEFS: Record<BossId, BossDef> = {

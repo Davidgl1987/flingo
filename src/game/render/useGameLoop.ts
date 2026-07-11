@@ -9,14 +9,14 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
-import { FIXED_DT } from '@/game/content/constants';
-import { consumeHitStop, decayTrauma } from '@/game/effects/effectsState';
-import { reactToEvent } from '@/game/effects/reactToEvent';
-import { ensureUpgradeChoices, type GameSession } from '@/game/session';
-import { drainEvents, type GameEvent } from '@/game/sim/events';
-import { stepWorld } from '@/game/sim/step';
-import type { GamePhase } from '@/game/sim/world';
-import { useUiStore } from '@/game/store';
+import { FIXED_DT } from '@/engine/physics';
+import { consumeHitStop, decayTrauma } from '@/game/features/effects/effectsState';
+import { reactToEvent } from '@/game/features/effects/reactToEvent';
+import { ensureUpgradeChoices, type GameSession } from '@/game/session/session';
+import { drainEvents, type GameEvent } from '@/engine/events';
+import { stepWorld } from '@/game/world/step';
+import type { GamePhase } from '@/game/world/types';
+import { useUiStore } from '@/game/session/store';
 
 /** Tope de tiempo de frame acumulable (evita la espiral de la muerte en tabs suspendidas). */
 const MAX_FRAME_TIME = 0.25;

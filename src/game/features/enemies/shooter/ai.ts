@@ -1,16 +1,9 @@
 // ── Shooter (GDD §7.5) ─────────────────────────────────────────────────────
 
-import { canAggro, moveToward, stepPatrol } from '../steering';
-import {
-  SHOOTER_CHARGE_DURATION,
-  SHOOTER_CHASE_DURATION,
-  SHOOTER_CHASE_SPEED,
-  SHOOTER_PROJECTILE_DAMAGE,
-  SHOOTER_PROJECTILE_RADIUS,
-  SHOOTER_PROJECTILE_SPEED,
-} from './constants';
-import { fireEnemyProjectile } from '@/game/sim/combat';
-import type { Enemy, World } from '@/game/sim/world';
+import { canAggro, moveToward, stepPatrol } from '@/game/features/enemies/steering';
+import { SHOOTER_CHARGE_DURATION, SHOOTER_CHASE_DURATION, SHOOTER_CHASE_SPEED, SHOOTER_PROJECTILE_DAMAGE, SHOOTER_PROJECTILE_RADIUS, SHOOTER_PROJECTILE_SPEED } from './constants';
+import { fireEnemyProjectile } from '@/game/features/combat/combat';
+import type { Enemy, World } from '@/game/world/types';
 
 export function stepShooter(world: World, enemy: Enemy, dt: number): void {
   // Sin aggro (punto 7): patrulla como cualquier otro arquetipo, con el

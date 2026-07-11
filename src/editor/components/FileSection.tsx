@@ -1,4 +1,4 @@
-/** Acciones de fichero: exportar/importar y (en dev) guardar en src/levels. */
+/** Acciones de fichero: exportar/importar y (en dev) guardar en src/game/features/dungeon/levels. */
 export function FileSection({
   exportRoom,
   importRoom,
@@ -23,7 +23,7 @@ export function FileSection({
       </div>
       {import.meta.env.DEV && (
         <button type="button" className="editor-btn editor-btn-wide" onClick={() => void saveToDevServer()}>
-          Guardar en src/levels (dev)
+          Guardar en src/game/features/dungeon/levels (dev)
         </button>
       )}
       <input

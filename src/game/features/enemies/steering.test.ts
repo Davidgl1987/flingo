@@ -5,11 +5,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { stepEnemyAi } from './ai';
-import { generateDungeon } from '@/game/sim/dungeon';
-import { createDungeonWorld } from '@/game/sim/dungeon-world';
-import { createEventQueue, drainEvents } from '@/game/sim/events';
-import { stepWorld } from '@/game/sim/step';
-import { createWorld, type EnemySpawn, type HazardSpawn, type RoomData, type World } from '@/game/sim/world';
+import { generateDungeon } from '@/game/features/dungeon/dungeon';
+import { createDungeonWorld } from '@/game/features/dungeon/dungeon-world';
+import { createEventQueue, drainEvents } from '@/engine/events';
+import { stepWorld } from '@/game/world/step';
+import { createWorld } from '@/game/world/create';
+import type { EnemySpawn, HazardSpawn, RoomData, World } from '@/game/world/types';
 
 const FIXED_DT = 1 / 60;
 

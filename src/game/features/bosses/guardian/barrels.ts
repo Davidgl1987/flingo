@@ -4,15 +4,11 @@
  * en un punto (para resolver si una carga en curso arrolla uno).
  */
 
-import { pushEvent, type EventQueue } from '@/game/sim/events';
-import { barrelInAir, type AABB, type Enemy, type World } from '@/game/sim/world';
-import { bossRoomBounds } from '../movement';
-import {
-  GUARDIAN_BARREL_FALL_DURATION,
-  GUARDIAN_BARREL_MAX_ACTIVE,
-  GUARDIAN_BARREL_RADIUS,
-  GUARDIAN_BARREL_SPAWN_INTERVAL,
-} from './constants';
+import { pushEvent, type EventQueue } from '@/engine/events';
+import { barrelInAir, type Enemy, type World } from '@/game/world/types';
+import type { AABB } from '@/engine/geometry';
+import { bossRoomBounds } from '@/game/features/bosses/movement';
+import { GUARDIAN_BARREL_FALL_DURATION, GUARDIAN_BARREL_MAX_ACTIVE, GUARDIAN_BARREL_RADIUS, GUARDIAN_BARREL_SPAWN_INTERVAL } from './constants';
 
 /** Nº de barriles rodantes vivos (sin explotar) de la sala del Guardián (GDD §15.2: cap `GUARDIAN_BARREL_MAX_ACTIVE`). */
 function guardianLiveBarrelCount(world: World, boss: Enemy): number {
@@ -99,7 +95,7 @@ function guardianBarrelSpawnPoint(world: World, boss: Enemy): { x: number; y: nu
 
 /**
  * Activa un barril rodante en un slot ya explotado del pool (reutiliza,
- * mismo patrón que `dropCoinAt`/`dropPotionAt` de sim/items.ts) o añade uno
+ * mismo patrón que `dropCoinAt`/`dropPotionAt` de features/items/items.ts) o añade uno
  * nuevo si no hay ninguno libre (evento raro, cada ~8s, no hot path).
  *
  * Caída del cielo (GDD §15.2, playtest 2026-07-06): al spawnear fija

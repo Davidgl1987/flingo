@@ -1,4 +1,4 @@
-import type { EnemySpawn, HazardSpawn, ItemSpawn } from '@/game/sim/world';
+import type { EnemySpawn, HazardSpawn, ItemSpawn } from '@/game/world/types';
 import type { Selection } from '@/editor/types';
 import { EnemyProperties } from './EnemyProperties';
 import { HazardProperties } from './HazardProperties';

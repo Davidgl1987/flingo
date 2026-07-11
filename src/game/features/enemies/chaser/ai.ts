@@ -1,8 +1,8 @@
 // ── Chaser (GDD §7.2) ──────────────────────────────────────────────────────
 
-import { canAggro, moveToward, stepPatrol } from '../steering';
+import { canAggro, moveToward, stepPatrol } from '@/game/features/enemies/steering';
 import { CHASER_SPEED, CHASER_SPEED_WHILE_AIMING } from './constants';
-import type { Enemy, World } from '@/game/sim/world';
+import type { Enemy, World } from '@/game/world/types';
 
 export function stepChaser(world: World, enemy: Enemy, dt: number): void {
   // Fuera de su sala (o sala no visitada): patrulla como cualquier otro

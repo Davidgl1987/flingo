@@ -9,20 +9,21 @@
  *
  * Persistencia: borrador autoguardado en localStorage; exportar descarga el
  * .json, lo copia al portapapeles y lo añade al pool local del generador;
- * en dev, "Guardar en src/levels" hace POST /api/editor/rooms (middleware de
+ * en dev, "Guardar en src/game/features/dungeon/levels" hace POST /api/editor/rooms (middleware de
  * Vite) y escribe el fichero en el repo.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { parseRoomData, parseRoomDataFromJson } from '@/game/sim/room-format';
-import type { HazardSpawn, RoomData, Vec2 } from '@/game/sim/world';
+import { parseRoomData, parseRoomDataFromJson } from '@/game/features/dungeon/room-format';
+import type { HazardSpawn, RoomData } from '@/game/world/types';
+import type { Vec2 } from '@/engine/geometry';
 import { addExportedRoom, loadDraft, saveDraft, savePlaytestRoom } from './storage';
 import { HAZARD_DEFAULT_SIZE } from './constants';
 import { defaultRoom, nextId, snap } from './utils';
 import { validateLive } from './validate';
 import type { PlaceKind, Selection } from './types';
-import { EditorCanvas } from './components/EditorCanvas';
-import { EditorSidePanel } from './components/EditorSidePanel';
+import { EditorCanvas } from '@/editor/components/EditorCanvas';
+import { EditorSidePanel } from '@/editor/components/EditorSidePanel';
 import './editor.css';
 
 // ── Página ─────────────────────────────────────────────────────────────────
@@ -287,7 +288,7 @@ export function EditorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(result.room),
       });
-      showStatus(response.ok ? `Guardada en src/levels/${result.room.id}.json` : 'Error del servidor al guardar.');
+      showStatus(response.ok ? `Guardada en src/game/features/dungeon/levels/${result.room.id}.json` : 'Error del servidor al guardar.');
     } catch {
       showStatus('No se pudo contactar con el dev server.');
     }

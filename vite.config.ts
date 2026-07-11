@@ -21,9 +21,10 @@ interface DevResponse {
 
 /**
  * Middleware SOLO en dev (GDD §13): el editor hace POST /api/editor/rooms con
- * el JSON de una sala y aquí se escribe en src/levels/<id>.json, para que las
- * salas creadas en el editor entren al repo (y al pool de serie) sin copiar
- * ficheros a mano. En build/producción este endpoint no existe.
+ * el JSON de una sala y aquí se escribe en
+ * src/game/features/dungeon/levels/<id>.json, para que las salas creadas en el
+ * editor entren al repo (y al pool de serie) sin copiar ficheros a mano. En
+ * build/producción este endpoint no existe.
  */
 function editorRoomsEndpoint(): Plugin {
   return {
@@ -58,12 +59,12 @@ function editorRoomsEndpoint(): Plugin {
               }
               const { mkdirSync, writeFileSync } = await import('node:fs');
               const { resolve } = await import('node:path');
-              const levelsDir = resolve(process.cwd(), 'src/levels');
+              const levelsDir = resolve(process.cwd(), 'src/game/features/dungeon/levels');
               mkdirSync(levelsDir, { recursive: true });
               writeFileSync(resolve(levelsDir, `${id}.json`), JSON.stringify(parsed, null, 2) + '\n', 'utf8');
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: true, file: `src/levels/${id}.json` }));
+              res.end(JSON.stringify({ ok: true, file: `src/game/features/dungeon/levels/${id}.json` }));
             } catch {
               res.statusCode = 400;
               res.end('JSON inválido.');
