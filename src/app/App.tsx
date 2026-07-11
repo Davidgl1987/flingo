@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { EditorPage } from '@/editor/EditorPage';
-import { loadPlaytestRoom } from '@/editor/editor-storage';
+import { loadPlaytestRoom } from '@/editor/storage';
 import { GameRoot } from '@/game/render/GameRoot';
 
 type Route = 'game' | 'editor' | 'playtest';
