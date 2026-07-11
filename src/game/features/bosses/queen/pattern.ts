@@ -33,7 +33,7 @@ import type { EventQueue } from '@/engine/events';
 import { dropPotionAt } from '@/game/features/items/items';
 import type { Enemy, World } from '@/game/world/types';
 import { moveBossTowardWithAvoidance } from '@/game/features/bosses/movement';
-import { queenBrokenColumnCount } from './columns';
+import { queenBrokenColumnCount, type QueenState } from './columns';
 import { QUEEN_COLUMN_HP, QUEEN_GUARDIAN_MAX, QUEEN_LARVA_HP, QUEEN_LARVA_ID_PREFIX, QUEEN_LARVA_MAX, QUEEN_LARVA_RADIUS, QUEEN_STALK_SPEED_BASE, QUEEN_STALK_SPEED_PER_COLUMN, QUEEN_TRAIL_DROP_INTERVAL, QUEEN_TRAIL_DROP_INTERVAL_PHASE2, QUEEN_TRAIL_PUDDLE_LIFETIME, QUEEN_TRAIL_PUDDLE_RADIUS, QUEEN_WAVE_INTERVAL } from './constants';
 import { queenActivateGuardian, queenSpawnChasers, queenStepGuardians, queenStepLarvae } from './larvae';
 
@@ -93,18 +93,23 @@ export function queenOnInit(world: World, boss: Enemy): void {
 
   // Rediseño 2026-07-10 (GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md §1): el
   // cuerpo del jefe ya NO es vulnerable (ni de forma permanente ni por
-  // ventana) — su vida está en las columnas de su sala. Puebla
-  // `world.queenColumns` a partir de los `Obstacle` ya construidos por los
-  // hazards 'rock' de su propia sala (ver world.ts::buildRoomEntities), cuyo
-  // id local empieza por "column" (boss-queen.json: column-nw-1..4/
-  // column-ne-1..4). En integración multi-sala futura habría que poblar esto
-  // al ENTRAR en la sala del jefe en vez de aquí; por ahora `onInit` basta
-  // para el modo sala única de los tests y la ruta de playtest `?boss=b2`.
+  // ventana) — su vida está en las columnas de su sala. Puebla las `columns`
+  // del estado a partir de los `Obstacle` ya construidos por los hazards 'rock'
+  // de su propia sala (ver buildRoomEntities), cuyo id local empieza por
+  // "column" (boss-queen.json: column-nw-1..4/column-ne-1..4). En integración
+  // multi-sala futura habría que poblar esto al ENTRAR en la sala del jefe en
+  // vez de aquí; por ahora `onInit` basta para el modo sala única de los tests
+  // y la ruta de playtest `?boss=b2`.
+  // Reserva el slot opaco `world.bossState` con el estado propio de la Reina
+  // (su vida vive en `columns`); el core no conoce este tipo, solo se toca aquí
+  // y vía `queenState` (ver queen/columns.ts).
+  const state: QueenState = { bossId: 'queen', columns: [] };
+  world.bossState = state;
   for (const o of world.obstacles) {
     if (o.roomId !== boss.roomId) continue;
     const local = o.id.includes(':') ? o.id.slice(o.id.lastIndexOf(':') + 1) : o.id;
     if (!local.startsWith('column')) continue;
-    world.queenColumns.push({
+    state.columns.push({
       id: o.id,
       position: { x: (o.aabb.minX + o.aabb.maxX) / 2, y: (o.aabb.minY + o.aabb.maxY) / 2 },
       halfW: (o.aabb.maxX - o.aabb.minX) / 2,
@@ -119,7 +124,7 @@ export function queenOnInit(world: World, boss: Enemy): void {
   // cupo QUEEN_GUARDIAN_MAX), para que no haya ventana libre en la que arrasar
   // las columnas seguidas. El resto lo repone `queenStepGuardians`.
   let placedGuardians = 0;
-  for (const col of world.queenColumns) {
+  for (const col of state.columns) {
     if (placedGuardians >= QUEEN_GUARDIAN_MAX) break;
     if (queenActivateGuardian(world, boss, col, null)) placedGuardians++;
   }

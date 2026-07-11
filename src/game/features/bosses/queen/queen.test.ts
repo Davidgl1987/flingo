@@ -21,7 +21,7 @@ import { createWorld } from '@/game/world/create';
 import { initBossEnemies, stepBosses } from '@/game/features/bosses/lifecycle';
 import { getBossDef } from '@/game/features/bosses/registry';
 import { collectTypes } from '@/game/features/bosses/test-helpers';
-import { stepQueenColumns } from './columns';
+import { queenState, stepQueenColumns } from './columns';
 import { QUEEN_CHASER_PER_WAVE_BY_PHASE, QUEEN_COLUMN_DAMAGE_FRACTION, QUEEN_COLUMN_HIT_COOLDOWN, QUEEN_COLUMN_HP, QUEEN_COLUMN_STUN_DURATION, QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_GUARDIAN_MAX, QUEEN_GUARDIAN_ORBIT_RADIUS, QUEEN_GUARDIAN_SPAWN_INTERVAL, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_LARVA_HP, QUEEN_LARVA_MAX, QUEEN_GUARDIAN_CHARGE_COOLDOWN, QUEEN_MAX_HP, QUEEN_RADIUS, QUEEN_STALK_SPEED_BASE, QUEEN_STALK_SPEED_PER_COLUMN, QUEEN_TRAIL_DROP_INTERVAL, QUEEN_TRAIL_DROP_INTERVAL_PHASE2, QUEEN_TRAIL_PUDDLE_LIFETIME, QUEEN_TRAIL_PUDDLE_RADIUS, QUEEN_WAVE_INTERVAL } from './constants';
 
 const FIXED_DT = 1 / 60;
@@ -83,6 +83,19 @@ describe('Reina del Enjambre: definición', () => {
     expect(def.damageOutsideWindow).toBe(QUEEN_DAMAGE_OUTSIDE_WINDOW);
     expect(QUEEN_DAMAGE_OUTSIDE_WINDOW).toBeGreaterThan(0);
     expect(QUEEN_DAMAGE_OUTSIDE_WINDOW).toBeLessThan(1);
+  });
+});
+
+describe('Reina: accessor de estado vacío-seguro (queenState)', () => {
+  it('en un mundo sin reina, queenState devuelve un estado con columns=[] (nunca null)', () => {
+    // Sala sin jefe ni columnas: bossState arranca en null (world/create.ts).
+    const world = createWorld(makeRoom());
+    expect(world.bossState).toBeNull();
+    const state = queenState(world);
+    expect(state.columns).toEqual([]);
+    // Los consumidores pueden leer .columns sin comprobar (QueenColumnsView
+    // monta siempre, GameRoot lo monta incondicionalmente).
+    expect(state.columns.length).toBe(0);
   });
 });
 
@@ -399,7 +412,7 @@ describe('Reina: acecho hacia el héroe (GDD §15.3, playtest 2026-07-06 "la Rei
       const events = createEventQueue(64);
       world.hero.position.x = 100; // lejos: persigue a tope
       world.hero.position.y = 100;
-      for (let i = 0; i < broken && i < world.queenColumns.length; i++) world.queenColumns[i].broken = true;
+      for (let i = 0; i < broken && i < queenState(world).columns.length; i++) queenState(world).columns[i].broken = true;
       let m = 0;
       for (let i = 0; i < 120; i++) {
         stepBosses(world, FIXED_DT, events);
@@ -564,17 +577,17 @@ function ramColumn(
 }
 
 describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3)', () => {
-  it('onInit puebla world.queenColumns desde las rocas `column-*` de su sala', () => {
+  it('onInit puebla queenState(world).columns desde las rocas `column-*` de su sala', () => {
     const world = makeQueenWorldWithColumns();
-    expect(world.queenColumns.length).toBe(2);
-    expect(world.queenColumns.every((c) => c.hp === QUEEN_COLUMN_HP && !c.broken)).toBe(true);
+    expect(queenState(world).columns.length).toBe(2);
+    expect(queenState(world).columns.every((c) => c.hp === QUEEN_COLUMN_HP && !c.broken)).toBe(true);
   });
 
   it('romper una columna (QUEEN_COLUMN_HP embestidas) baja la vida del jefe; los golpes previos solo la dañan', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue();
     const q = boss(world);
-    const col = world.queenColumns[0];
+    const col = queenState(world).columns[0];
     const before = q.hp;
 
     // Golpes previos (QUEEN_COLUMN_HP - 1): dañan la columna, no bajan la vida del jefe.
@@ -594,7 +607,7 @@ describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3
   it('la columna rota deja de ser sólida (se retira de world.obstacles)', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue();
-    const col = world.queenColumns[0];
+    const col = queenState(world).columns[0];
     expect(world.obstacles.some((o) => o.id === col.id)).toBe(true);
     ramColumn(world, events, col, QUEEN_COLUMN_HP);
     expect(col.broken).toBe(true);
@@ -604,7 +617,7 @@ describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3
   it('solo la embestida daña la columna: tocarla a baja velocidad no le resta vida', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue();
-    const col = world.queenColumns[0];
+    const col = queenState(world).columns[0];
     world.hero.position.x = col.position.x;
     world.hero.position.y = col.position.y;
     world.hero.velocity.x = 0.1; // muy por debajo de RAM_SPEED_THRESHOLD
@@ -641,7 +654,7 @@ describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue();
     const q = boss(world);
-    const col = world.queenColumns[0];
+    const col = queenState(world).columns[0];
     // Quedan 2 columnas: romper UNA deja otra en pie → aturdimiento TEMPORAL.
     ramColumn(world, events, col, QUEEN_COLUMN_HP);
     expect(q.bossVulnerableUntil).toBeGreaterThan(world.time);
@@ -669,11 +682,11 @@ describe('Reina: la vida está en las columnas (rediseño 2026-07-10, GDD §15.3
     initBossEnemies(world);
     const events = createEventQueue(64);
     const q = boss(world);
-    expect(world.queenColumns.length).toBe(8);
-    for (const col of [...world.queenColumns]) {
+    expect(queenState(world).columns.length).toBe(8);
+    for (const col of [...queenState(world).columns]) {
       ramColumn(world, events, col, QUEEN_COLUMN_HP);
     }
-    expect(world.queenColumns.every((c) => c.broken)).toBe(true);
+    expect(queenState(world).columns.every((c) => c.broken)).toBe(true);
     expect(q.bossVulnerableUntil).toBe(Infinity);
     advance(world, events, 1);
     expect(q.bossVulnerable).toBe(true);
@@ -694,7 +707,7 @@ describe('Reina: persigue RODEANDO obstáculos (TAREA 5 rediseño 2026-07-10, "n
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue(64);
     const q = boss(world);
-    const col = world.queenColumns[0]; // column-a en (3,0), medio-lado 0.5 — justo en la línea recta boss→héroe.
+    const col = queenState(world).columns[0]; // column-a en (3,0), medio-lado 0.5 — justo en la línea recta boss→héroe.
     world.hero.position.x = 6;
     world.hero.position.y = 0;
 
@@ -748,7 +761,7 @@ describe('Reina: guardianas de columna (T4, rediseño 2026-07-10)', () => {
     const guardians = liveLarvae(world).filter((l) => !l.chasing);
     expect(guardians.length).toBeGreaterThanOrEqual(1);
     for (const g of guardians) {
-      const col = world.queenColumns.find(
+      const col = queenState(world).columns.find(
         (c) => Math.abs(c.position.x - g.patrolFrom.x) < 0.01 && Math.abs(c.position.y - g.patrolFrom.y) < 0.01,
       );
       expect(col).toBeDefined(); // anclada al centro de una columna
@@ -778,7 +791,7 @@ describe('Reina: guardianas de columna (T4, rediseño 2026-07-10)', () => {
     world.hero.position.y = 100;
     advance(world, events, guardianSpawnTicks * 3 + 5);
 
-    const col = world.queenColumns[0];
+    const col = queenState(world).columns[0];
     const guardiansOfCol = () =>
       liveLarvae(world).filter(
         (l) => !l.chasing && Math.abs(l.patrolFrom.x - col.position.x) < 0.01 && Math.abs(l.patrolFrom.y - col.position.y) < 0.01,
@@ -799,7 +812,7 @@ describe('Reina: guardianas presentes que embisten (playtest 2026-07-10)', () =>
     const guardians = liveLarvae(world).filter((l) => !l.chasing);
     expect(guardians.length).toBe(Math.min(2, QUEEN_GUARDIAN_MAX));
     for (const g of guardians) {
-      const col = world.queenColumns.find(
+      const col = queenState(world).columns.find(
         (c) => Math.abs(c.position.x - g.patrolFrom.x) < 0.01 && Math.abs(c.position.y - g.patrolFrom.y) < 0.01,
       );
       expect(col).toBeDefined(); // anclada a una columna
@@ -809,7 +822,7 @@ describe('Reina: guardianas presentes que embisten (playtest 2026-07-10)', () =>
   it('una guardiana no carga nada más nacer (cooldown inicial)', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue(64);
-    const col = world.queenColumns[0];
+    const col = queenState(world).columns[0];
     world.hero.position.x = col.position.x; // héroe pegado a la columna
     world.hero.position.y = col.position.y + 0.5;
     advance(world, events, 3); // pocos ticks, muy por debajo del cooldown inicial
@@ -819,7 +832,7 @@ describe('Reina: guardianas presentes que embisten (playtest 2026-07-10)', () =>
   it('con el héroe cerca y pasado el cooldown, la guardiana telegrafía una embestida (evento boss-guardian-charge)', () => {
     const world = makeQueenWorldWithColumns();
     const events = createEventQueue(64);
-    const col = world.queenColumns[0];
+    const col = queenState(world).columns[0];
     world.hero.position.x = col.position.x;
     world.hero.position.y = col.position.y + 0.5;
     advance(world, events, Math.round(QUEEN_GUARDIAN_CHARGE_COOLDOWN / FIXED_DT) + 4);

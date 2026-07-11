@@ -21,8 +21,7 @@
 
 import { DOOR_TOUCH_MARGIN, ROOM_CLEAR_SCORE } from './constants';
 import { FIXED_DT, stepBodySeparation, stepEnemyCollisions, stepHeroPhysics } from '@/engine/physics';
-import { stepBossDoorSeal, stepBosses } from '@/game/features/bosses/lifecycle';
-import { stepQueenColumns } from '@/game/features/bosses/queen/columns';
+import { stepBossDoorSeal, stepBosses, stepBossStates } from '@/game/features/bosses/lifecycle';
 import { stepEnemyAi } from '@/game/features/enemies/ai';
 import { stepHeroEnemyContacts, stepProjectiles } from '@/game/features/combat/combat';
 import { openConnection } from '@/game/features/dungeon/dungeon-world';
@@ -206,7 +205,7 @@ export function stepWorld(world: World, events: EventQueue): void {
 
   if (currentPhase(world) !== 'game-over') {
     stepHeroEnemyContacts(world, world.contactDamageCooldowns, events);
-    stepQueenColumns(world, world.contactDamageCooldowns, events);
+    stepBossStates(world, world.contactDamageCooldowns, events);
   }
 
   // Separación de cuerpos DESPUÉS del gameplay de contacto: la embestida y el

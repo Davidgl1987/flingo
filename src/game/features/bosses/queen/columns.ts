@@ -9,12 +9,63 @@
 import { RAM_SPEED_THRESHOLD } from '@/game/features/combat/constants';
 import { applyDamageToEnemy } from '@/game/features/combat/combat';
 import { pushEvent, type EventQueue } from '@/engine/events';
-import type { Enemy, World } from '@/game/world/types';
+import type { Vec2 } from '@/engine/geometry';
+import type { BossState, Enemy, World } from '@/game/world/types';
 import { QUEEN_COLUMN_DAMAGE_FRACTION, QUEEN_COLUMN_HIT_COOLDOWN, QUEEN_COLUMN_STUN_DURATION, QUEEN_COLUMN_TOUCH_SKIN, QUEEN_LARVA_ID_PREFIX } from './constants';
+
+/**
+ * Columna destructible de la sala de la Reina (GDD §15.3 rediseño 2026-07-10):
+ * su vida ESTÁ en estas columnas. Se rompe solo a embestidas (2 golpes; hp
+ * 2→1 agrietada→0 rota). Al romperse se retira su Obstacle sólido de
+ * world.obstacles y baja la vida del jefe.
+ */
+export interface QueenColumn {
+  id: string; // mismo id que su Obstacle en world.obstacles
+  position: Vec2; // centro
+  halfW: number;
+  halfH: number;
+  hp: number; // QUEEN_COLUMN_HP → 1 (agrietada) → 0 (rota)
+  broken: boolean;
+  roomId?: string;
+}
+
+/**
+ * Estado propio de la Reina del Enjambre en el slot opaco `World.bossState`
+ * (GDD §15.3): su vida vive en `columns`. El core no conoce este tipo — solo
+ * ve `BossState`; `queenState` es el ÚNICO sitio que hace el type-guard.
+ */
+export interface QueenState extends BossState {
+  bossId: 'queen';
+  columns: QueenColumn[];
+}
+
+/**
+ * Estado vacío seguro que devuelve `queenState` cuando el mundo aún no tiene a
+ * la Reina inicializada (sala sin reina, o antes de `queenOnInit`). Congelado
+ * para que un consumidor no lo mute por accidente: solo se lee (longitud 0 →
+ * todos los bucles no hacen nada). Así `QueenColumnsView` puede montar siempre
+ * (GameRoot lo monta incondicionalmente) sin romper en salas sin reina.
+ */
+const EMPTY_QUEEN_STATE: QueenState = Object.freeze({
+  bossId: 'queen' as const,
+  columns: [] as QueenColumn[],
+});
+
+/**
+ * Accessor tipado del estado de la Reina desde el slot opaco `world.bossState`
+ * (type-guard sobre `bossId`, el ÚNICO `as` del feature). Devuelve el estado
+ * vivo si la Reina está inicializada, o `EMPTY_QUEEN_STATE` (vacío seguro) si
+ * no — nunca null, para que los consumidores lean `.columns` sin comprobar.
+ */
+export function queenState(world: World): QueenState {
+  const state = world.bossState;
+  if (state !== null && state.bossId === 'queen') return state as QueenState;
+  return EMPTY_QUEEN_STATE;
+}
 
 /** Nº de columnas ROTAS de la sala de la Reina (playtest 2026-07-10: su persecución acelera con esto). */
 export function queenBrokenColumnCount(world: World, boss: Enemy): number {
-  const columns = world.queenColumns;
+  const columns = queenState(world).columns;
   let count = 0;
   for (let i = 0; i < columns.length; i++) {
     const c = columns[i];
@@ -31,14 +82,15 @@ export function queenBrokenColumnCount(world: World, boss: Enemy): number {
  * Cooldown por columna (mismo mapa de contacto) para que un choque cuente 1 vez.
  */
 export function stepQueenColumns(world: World, cooldowns: Map<string, number>, events: EventQueue): void {
-  if (world.queenColumns.length === 0) return;
+  const columns = queenState(world).columns;
+  if (columns.length === 0) return;
 
   const hero = world.hero;
   const speed = Math.hypot(hero.velocity.x, hero.velocity.y);
   const ramming = speed >= RAM_SPEED_THRESHOLD;
 
-  for (let i = 0; i < world.queenColumns.length; i++) {
-    const col = world.queenColumns[i];
+  for (let i = 0; i < columns.length; i++) {
+    const col = columns[i];
     if (col.broken) continue;
     if (col.roomId !== undefined && col.roomId !== world.currentRoomId) continue;
 
@@ -95,7 +147,7 @@ export function stepQueenColumns(world: World, cooldowns: Map<string, number>, e
         // romper una columna, ahí sí le haces más daño"). Si con ESTA rotura ya
         // no le queda ninguna columna en pie, pasa a vulnerable PERMANENTE
         // (Infinity): el último 1/3 de vida se remata a golpes normales.
-        const anyLeft = world.queenColumns.some(
+        const anyLeft = columns.some(
           (c) => !c.broken && (c.roomId === undefined || c.roomId === col.roomId),
         );
         boss.bossVulnerableUntil = anyLeft ? world.time + QUEEN_COLUMN_STUN_DURATION : Infinity;

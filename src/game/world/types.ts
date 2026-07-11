@@ -350,19 +350,16 @@ export interface HazardRuntime extends HazardSpawn {
 }
 
 /**
- * Columna destructible de la sala de la Reina (GDD §15.3 rediseño 2026-07-10):
- * su vida ESTÁ en estas columnas. Se rompe solo a embestidas (2 golpes; hp
- * 2→1 agrietada→0 rota). Al romperse se retira su Obstacle sólido de
- * world.obstacles y baja la vida del jefe.
+ * Estado opaco propio de un jefe concreto (GDD §15). El core (`world/`,
+ * `engine/`) reserva un único slot `World.bossState` pero NO conoce su forma:
+ * cada jefe que necesite estado extra define su tipo concreto en
+ * `features/bosses/<jefe>/` extendiendo esta interfaz, con un accessor tipado
+ * (type-guard sobre `bossId`, en un único sitio). Mismo espíritu que `BossDef`:
+ * añadir un jefe con estado propio no toca el core.
  */
-export interface QueenColumn {
-  id: string; // mismo id que su Obstacle en world.obstacles
-  position: Vec2; // centro
-  halfW: number;
-  halfH: number;
-  hp: number; // QUEEN_COLUMN_HP → 1 (agrietada) → 0 (rota)
-  broken: boolean;
-  roomId?: string;
+export interface BossState {
+  /** Discriminante para el type-guard del accessor de cada jefe; el core nunca lo lee. */
+  readonly bossId: BossId;
 }
 
 export type GamePhase = 'playing' | 'paused' | 'room-cleared' | 'game-over' | 'victory';
@@ -385,8 +382,8 @@ export interface World {
   puddles: Puddle[];
   items: Item[];
   barrels: Barrel[];
-  /** Columnas destructibles de la sala de la Reina (GDD §15.3 rediseño 2026-07-10); vacío para el resto de salas. */
-  queenColumns: QueenColumn[];
+  /** Estado opaco del jefe de la sala actual (`BossState`), o null si no hay jefe con estado propio. Cada jefe accede al suyo mediante su accessor tipado en `features/bosses/`; el core nunca inspecciona su forma. */
+  bossState: BossState | null;
   /** Hazards no-roca, no-barril (pit/spikes/slow/boost), estáticos durante la sala. */
   hazards: HazardRuntime[];
   /** Última posición firme (fuera de fosos) del héroe, para respawn tras caer. */

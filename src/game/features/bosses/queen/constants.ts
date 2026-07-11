@@ -24,7 +24,8 @@ export const QUEEN_COLUMN_HP = 3;
  * columnas de la Reina (T2 render, GDD §15.3): boss-queen.json las nombra
  * `column-nw-1..4`/`column-ne-1..4`. Mismo criterio que ya usa
  * `queen/pattern.ts::queenOnInit` (ahí inline, sin importar este fichero para
- * no tocar la sim) para poblar `world.queenColumns`; el render lo reutiliza
+ * no tocar la sim) para poblar el estado de la Reina (`QueenState.columns`);
+ * el render lo reutiliza
  * para excluir esas rocas del pintado genérico de `RoomView` (las pinta
  * `QueenColumnsView` con su propio estado intacta/agrietada/escombros).
  */

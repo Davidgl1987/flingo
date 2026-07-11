@@ -2,14 +2,15 @@
  * Columnas de la Reina del Enjambre + sus cuerdas (T2 render, rediseño
  * 2026-07-10, GDD §15.3, docs/plans/QUEEN_REDESIGN_PLAN.md).
  *
- * `world.queenColumns` (sim, `src/game/world/types.ts`) es la fuente de verdad
- * de su vida: cada columna vale `QUEEN_COLUMN_HP` (3, playtest 2026-07-10)
- * hp intacta → 2 (leve) → 1 (grave, cada golpe de embestida resta 1) → 0 con
- * `broken=true` (rota, restos). El `Obstacle` sólido correspondiente se
- * retira de `world.obstacles` al romperse (`stepQueenColumns`, `queen/columns.ts`) —
- * por eso `RoomView.tsx` EXCLUYE del pintado genérico de rocas cualquier
- * obstáculo cuyo id local empiece por `column` (mismo criterio que
- * `queen/pattern.ts::queenOnInit` usa para poblar `world.queenColumns`, ver
+ * `queenState(world).columns` (sim, `queen/columns.ts`, leído del slot opaco
+ * `world.bossState`) es la fuente de verdad de su vida: cada columna vale
+ * `QUEEN_COLUMN_HP` (3, playtest 2026-07-10) hp intacta → 2 (leve) → 1 (grave,
+ * cada golpe de embestida resta 1) → 0 con `broken=true` (rota, restos). El
+ * `Obstacle` sólido correspondiente se retira de `world.obstacles` al romperse
+ * (`stepQueenColumns`, `queen/columns.ts`) — por eso `RoomView.tsx` EXCLUYE del
+ * pintado genérico de rocas cualquier obstáculo cuyo id local empiece por
+ * `column` (mismo criterio que `queen/pattern.ts::queenOnInit` usa para poblar
+ * el estado de la Reina, ver
  * `QUEEN_COLUMN_ID_PREFIX`): este fichero es el ÚNICO que pinta las
  * columnas, en sus 4 estados (intacta/leve/grave/restos), evitando el
  * doble-render.
@@ -45,6 +46,7 @@ import {
   rockMaterial,
   unitBox,
 } from '@/game/render/assets';
+import { queenState } from './columns';
 import { QUEEN_COLUMN_HP } from './constants';
 
 /** Altura vertical de una columna en pie — igual que ROCK_HEIGHT de RoomView.tsx (misma silueta que cualquier roca). */
@@ -83,7 +85,7 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
   const crackedRef = useRef<THREE.InstancedMesh>(null);
   const crackStripeRef = useRef<THREE.InstancedMesh>(null);
   const debrisRef = useRef<THREE.InstancedMesh>(null);
-  const count = session.world.queenColumns.length;
+  const count = queenState(session.world).columns.length;
 
   useFrame(() => {
     const intact = intactRef.current;
@@ -93,7 +95,7 @@ export function QueenColumnsView({ session }: { session: GameSession }) {
     const debris = debrisRef.current;
     if (!intact || !crackedLight || !cracked || !crackStripe || !debris) return;
 
-    const columns = session.world.queenColumns;
+    const columns = queenState(session.world).columns;
     for (let i = 0; i < columns.length; i++) {
       const col = columns[i];
       const width = col.halfW * 2;
@@ -211,10 +213,10 @@ function setTetherMatrix(mesh: THREE.InstancedMesh, i: number, ax: number, ay: n
 
 export function QueenTethersView({ session }: { session: GameSession }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
-  const count = session.world.queenColumns.length;
+  const count = queenState(session.world).columns.length;
   // Timestamp (world.time) en que cada columna se rompió, para animar su
   // retracción; -Infinity = aún no se ha roto. Se crea una única vez (nunca
-  // cambia de tamaño: queenColumns no gana/pierde columnas tras onInit).
+  // cambia de tamaño: el estado de la Reina no gana/pierde columnas tras onInit).
   const brokenAtRef = useRef<Float32Array | null>(null);
   if (brokenAtRef.current === null && count > 0) {
     brokenAtRef.current = new Float32Array(count).fill(-Infinity);
@@ -226,7 +228,7 @@ export function QueenTethersView({ session }: { session: GameSession }) {
     if (!mesh || !brokenAt) return;
 
     const world = session.world;
-    const columns = world.queenColumns;
+    const columns = queenState(world).columns;
     const boss = world.enemies.find((e) => e.kind === 'boss' && e.bossId === 'queen');
     if (!boss) {
       for (let i = 0; i < columns.length; i++) hideInstance(mesh, i);

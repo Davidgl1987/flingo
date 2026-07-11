@@ -10,6 +10,7 @@ import { GUARDIAN_BARREL_DAMAGE_FRACTION, GUARDIAN_DAMAGE_OUTSIDE_WINDOW, GUARDI
 import { guardianOnPhaseChanged, guardianStepPattern } from '@/game/features/bosses/guardian/pattern';
 import { QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_MAX_HP, QUEEN_RADIUS } from '@/game/features/bosses/queen/constants';
 import { queenOnInit, queenOnPhaseChanged, queenStepPattern } from '@/game/features/bosses/queen/pattern';
+import { stepQueenColumns } from '@/game/features/bosses/queen/columns';
 import { testBossStepPattern } from '@/game/features/bosses/test-boss/pattern';
 import type { BossDef } from './types';
 
@@ -46,6 +47,9 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     // rotas — ver `queenStepPattern`/`stepQueenColumns`).
     damageOutsideWindow: QUEEN_DAMAGE_OUTSIDE_WINDOW,
     stepPattern: queenStepPattern,
+    // Su vida vive en las columnas: las embestidas del héroe contra ellas se
+    // resuelven en la fase de contacto del tick (ver `stepBossStates`).
+    stepState: stepQueenColumns,
     onPhaseChanged: queenOnPhaseChanged,
     onInit: queenOnInit,
   },

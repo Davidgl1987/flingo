@@ -10,6 +10,7 @@
 
 import { pushEvent, type EventQueue } from '@/engine/events';
 import type { Enemy, World } from '@/game/world/types';
+import { queenState } from './columns';
 import { QUEEN_CHASER_PER_WAVE_BY_PHASE, QUEEN_GUARDIAN_CHARGE_COOLDOWN, QUEEN_GUARDIAN_CHARGE_DURATION, QUEEN_GUARDIAN_CHARGE_RANGE, QUEEN_GUARDIAN_CHARGE_SPEED, QUEEN_GUARDIAN_MAX, QUEEN_GUARDIAN_ORBIT_RADIUS, QUEEN_GUARDIAN_SPAWN_INTERVAL, QUEEN_GUARDIAN_SPEED, QUEEN_GUARDIAN_TELEGRAPH, QUEEN_LARVA_CHASE_SPEED_PHASE2, QUEEN_LARVA_CHASE_SPEED_PHASE3, QUEEN_LARVA_HP, QUEEN_LARVA_ID_PREFIX, QUEEN_LARVA_MAX, QUEEN_LARVA_SPEED } from './constants';
 
 export function isQueenLarva(enemy: Enemy): boolean {
@@ -135,7 +136,7 @@ export function queenStepGuardians(world: World, boss: Enemy, dt: number, events
   if (queenLiveGuardianCount(world, boss) >= QUEEN_GUARDIAN_MAX) return;
   if (queenLiveLarvaCount(world, boss) >= QUEEN_LARVA_MAX) return;
 
-  const columns = world.queenColumns;
+  const columns = queenState(world).columns;
   for (let c = 0; c < columns.length; c++) {
     const col = columns[c];
     if (col.broken) continue;

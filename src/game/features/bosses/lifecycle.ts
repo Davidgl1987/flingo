@@ -157,6 +157,23 @@ export function stepBosses(world: World, dt: number, events: EventQueue): void {
 }
 
 /**
+ * Avanza el estado propio (`World.bossState`) de todo jefe presente en la sala,
+ * en la fase de contacto del tick. Generaliza la antigua llamada directa a
+ * `stepQueenColumns` desde `world/step.ts`: el core ya no nombra a ningún jefe,
+ * despacha por `BossDef.stepState`. Se conserva EXACTA la semántica anterior —
+ * corre para el jefe esté vivo O muerto (no se filtra por hp, igual que la
+ * llamada suelta que solo dependía de que existieran columnas), y el propio
+ * hook retorna pronto si no hay estado que avanzar (sala sin ese jefe). El
+ * llamador (`step.ts`) ya lo envuelve en el gate `!== 'game-over'`.
+ */
+export function stepBossStates(world: World, cooldowns: Map<string, number>, events: EventQueue): void {
+  for (const enemy of world.enemies) {
+    if (!isBoss(enemy)) continue;
+    getBossDef(enemy.bossId).stepState?.(world, cooldowns, events);
+  }
+}
+
+/**
  * Sellado de la sala de jefe (GDD §15.1 punto 7): en cuanto el héroe está
  * físicamente dentro de la sala de jefe (ya con la puerta de llave abierta,
  * ver stepBossDoorKeyCheck en step.ts) y el jefe sigue vivo, se cierra la

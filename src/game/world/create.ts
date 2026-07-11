@@ -251,7 +251,7 @@ export function createWorld(room: RoomData, seed = 1): World {
     puddles: createPuddlePool(),
     items,
     barrels,
-    queenColumns: [],
+    bossState: null,
     hazards,
     safePosition: { x: playerStart.x, y: playerStart.y },
     fallingUntil: 0,

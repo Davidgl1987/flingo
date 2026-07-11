@@ -36,12 +36,12 @@ function isGateObstacle(o: Obstacle): boolean {
 /**
  * true si este `Obstacle` es una columna destructible de la Reina del
  * Enjambre (T2 render, GDD §15.3): su id LOCAL (tras el `roomId:` opcional)
- * empieza por `column` — mismo criterio que `bosses.ts::onInit` usa para
- * poblar `world.queenColumns`. Se excluyen del pintado genérico de rocas
- * para que NO se dibujen dos veces: `QueenColumnsView` (montado desde
+ * empieza por `column` — mismo criterio que `queen/pattern.ts::queenOnInit`
+ * usa para poblar el estado de la Reina. Se excluyen del pintado genérico de
+ * rocas para que NO se dibujen dos veces: `QueenColumnsView` (montado desde
  * GameRoot) es el único que las pinta, en sus 3 estados (intacta/agrietada/
- * escombros) leyendo directamente `world.queenColumns`, que sigue siendo la
- * fuente de verdad incluso tras romperse (cuando ya no queda `Obstacle`).
+ * escombros) leyendo `queenState(world).columns`, que sigue siendo la fuente
+ * de verdad incluso tras romperse (cuando ya no queda `Obstacle`).
  */
 function isQueenColumnObstacle(o: Obstacle): boolean {
   const local = o.id.includes(':') ? o.id.slice(o.id.lastIndexOf(':') + 1) : o.id;
@@ -200,7 +200,7 @@ function SingleRoomView({ world }: { world: World }) {
         scale={[t, WALL_HEIGHT, height]}
       />
       {/* Rocas (obstáculos AABB). Las columnas de la Reina (`isQueenColumnObstacle`)
-          se excluyen aquí: las pinta QueenColumnsView desde world.queenColumns,
+          se excluyen aquí: las pinta QueenColumnsView desde queenState(world).columns,
           con estado intacta/agrietada/escombros — ver comentario de cabecera. */}
       {world.obstacles.filter((o) => !isQueenColumnObstacle(o)).map((obstacle) => {
         const { minX, minY, maxX, maxY } = obstacle.aabb;

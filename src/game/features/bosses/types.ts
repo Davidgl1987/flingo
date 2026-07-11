@@ -23,6 +23,16 @@ import type { BossId, Enemy, World } from '@/game/world/types';
  */
 export type BossPatternStep = (world: World, boss: Enemy, dt: number, events: EventQueue) => void;
 
+/**
+ * Paso de estado propio de un jefe en la fase de contacto del tick (mismo
+ * punto que `stepHeroEnemyContacts`, ver `world/step.ts`): recibe el mapa de
+ * cooldowns de daño por contacto para reutilizarlo por entidad. La Reina lo usa
+ * para su `stepQueenColumns` (embestidas del héroe contra sus columnas). Corre
+ * para TODO jefe presente en `world.enemies`, vivo o muerto, mientras la sala
+ * no esté en `game-over` — igual semántica que tenía la llamada directa.
+ */
+export type BossStateStep = (world: World, cooldowns: Map<string, number>, events: EventQueue) => void;
+
 export interface BossDef {
   id: BossId;
   /** Nombre mostrado en la barra de vida (HUD). */
@@ -51,6 +61,15 @@ export interface BossDef {
   barrelDamageFraction?: number;
   /** Avance de un tick del patrón de ataque de este jefe. */
   stepPattern: BossPatternStep;
+  /**
+   * Hook opcional de estado propio del jefe, invocado desde la fase de
+   * contacto del tick (`world/step.ts`, dentro del gate `!== 'game-over'`,
+   * justo tras `stepHeroEnemyContacts`) vía `lifecycle.ts::stepBossStates`.
+   * Punto de extensión para jefes cuyo estado en `World.bossState` reacciona a
+   * la posición/velocidad del héroe este tick (p.ej. la Reina: embestidas
+   * contra sus columnas). Omitir si el jefe no tiene estado que avanzar aquí.
+   */
+  stepState?: BossStateStep;
   /** Se llama una vez al cruzar a fase 2 o 3 (para resetear bossStage/timers propios del patrón). */
   onPhaseChanged?: (world: World, boss: Enemy, phase: 2 | 3) => void;
   /**
