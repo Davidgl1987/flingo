@@ -143,7 +143,7 @@ export function stepBosses(world: World, dt: number, events: EventQueue): void {
 
     if (enemy.hp > 0) {
       // Contención por sala (mismo criterio que el resto de la IA, ver
-      // ai.ts canAggro): un jefe fuera de la sala actual del héroe no
+      // enemies/steering.ts::canAggro): un jefe fuera de la sala actual del héroe no
       // avanza su patrón — no aplica en la práctica porque el jefe vive
       // solo en su propia sala de jefe, pero mantiene el invariante si
       // algún jefe futuro compartiera sala con otras entidades multi-sala.

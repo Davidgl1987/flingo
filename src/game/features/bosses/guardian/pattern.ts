@@ -290,7 +290,7 @@ export function guardianStepPattern(world: World, boss: Enemy, dt: number, event
 
       // Barril rodante arrollado (GDD §15.2, playtest 2026-07-06): la carga es
       // a ciegas — el Guardián NO esquiva barriles (a diferencia de la IA
-      // normal, ver ai.ts::pointInAvoidHazard) — así que se comprueba ANTES
+      // normal, ver enemies/steering.ts::pointInAvoidHazard) — así que se comprueba ANTES
       // que el choque contra sólidos y, si acierta, sustituye ese choque:
       // explosión normal (daño a héroe/enemigos/cadena) + daño SIN gating de
       // ventana al propio Guardián (su castigo) + aturdimiento largo.

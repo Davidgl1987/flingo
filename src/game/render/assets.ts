@@ -119,7 +119,7 @@ export const spikeMaterial = new THREE.MeshLambertMaterial({ color: '#9aa1bd' })
 export const spikeConeMaterial = new THREE.MeshLambertMaterial({ color: '#e2e6f2' });
 export const trailMaterial = new THREE.MeshLambertMaterial({ color: '#4dd68a' });
 export const shooterMaterial = new THREE.MeshLambertMaterial({ color: '#2b2f42' });
-/** Flash blanco al recibir daño: material único intercambiado temporalmente por render/EnemyView. */
+/** Flash blanco al recibir daño: material único intercambiado temporalmente por features/enemies/EnemyViews. */
 export const enemyHitFlashMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff' });
 /** Telegrafiado de carga del Shooter: disco pulsante bajo sus pies. */
 export const shooterTelegraphMaterial = new THREE.MeshBasicMaterial({
@@ -133,7 +133,7 @@ export const shooterTelegraphMaterial = new THREE.MeshBasicMaterial({
 // compartidos por CUALQUIER jefe (B1-B4 los reutilizan); el jefe de pruebas
 // de la Fase B0 los usa directamente sin composición propia.
 
-/** Cuerpo por defecto de un jefe (B1-B4 pueden sustituirlo por su propia composición, ver EnemyView). */
+/** Cuerpo por defecto de un jefe (B1-B4 pueden sustituirlo por su propia composición, ver EnemyViews). */
 export const bossBodyMaterial = new THREE.MeshLambertMaterial({ color: '#7a3fd6' });
 /** Anillo de telegraph genérico (GDD §15.1 punto 2: aviso visible antes de cualquier ataque). */
 export const bossTelegraphMaterial = new THREE.MeshBasicMaterial({
@@ -236,7 +236,7 @@ export const queenTetherMaterial = new THREE.MeshBasicMaterial({
  * genérico de larva/Dummy) en vez de un anillo aparte, para que sea
  * inconfundible incluso entre el resto de larvas atacantes.
  */
-/** Telegraph (bossStage=1): parpadea alternando con el rojo base — intercambiado por EnemyView, nunca mutado. */
+/** Telegraph (bossStage=1): parpadea alternando con el rojo base — intercambiado por EnemyViews, nunca mutado. */
 export const queenGuardianTelegraphMaterial = new THREE.MeshBasicMaterial({ color: '#ffe083' });
 /** Carga (bossStage=2, opcional): tono rojo más intenso y saturado que el reposo — "ya viene, esquiva". */
 export const queenGuardianChargeMaterial = new THREE.MeshBasicMaterial({ color: '#ff2d2d' });

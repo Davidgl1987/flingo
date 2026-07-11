@@ -7,7 +7,7 @@
  *
  * SIN imports de React ni three.js: es contenido puro, consumido por la sim
  * (`lifecycle.ts`) y por el render (composición específica por jefe en
- * `render/EnemyView.tsx` vía `bossId`).
+ * `features/enemies/EnemyViews.tsx` vía `bossId`).
  */
 
 import type { EventQueue } from '@/game/sim/events';

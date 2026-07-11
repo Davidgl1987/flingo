@@ -22,7 +22,7 @@
 import { DOOR_TOUCH_MARGIN, FIXED_DT, ROOM_CLEAR_SCORE } from '@/game/content/constants';
 import { stepBossDoorSeal, stepBosses } from '@/game/features/bosses/lifecycle';
 import { stepQueenColumns } from '@/game/features/bosses/queen/columns';
-import { stepEnemyAi } from './ai';
+import { stepEnemyAi } from '@/game/features/enemies/ai';
 import { stepHeroEnemyContacts, stepProjectiles } from './combat';
 import { openConnection } from './dungeon-world';
 import { pushEvent, type EventQueue } from './events';

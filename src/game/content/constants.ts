@@ -84,11 +84,6 @@ export const SPELL_RADIUS_UPGRADED = 0.25;
 /** Multiplicador de recarga flecha/hechizo con la mejora Pulso Firme. */
 export const STEADY_PULSE_RELOAD_MULTIPLIER = 0.72;
 
-// ── Enemigo hostil: proyectil del Shooter ─────────────────────────────────
-
-export const SHOOTER_PROJECTILE_DAMAGE = 1;
-export const SHOOTER_PROJECTILE_RADIUS = 0.16;
-
 // ── Pools preasignados ─────────────────────────────────────────────────────
 
 /**
@@ -102,48 +97,8 @@ export const SHOOTER_PROJECTILE_RADIUS = 0.16;
 export const PROJECTILE_POOL_SIZE = 96;
 export const PUDDLE_POOL_SIZE = 32;
 
-// ── Enemigos (fase 2; definidos ya por contrato) ──────────────────────────
-
-export const DUMMY_HP = 2;
-export const DUMMY_PATROL_SPEED = 0.8;
-export const DUMMY_CHASE_SPEED = 1.7;
-/** Distancia a la que el Dummy detecta al héroe y empieza a perseguir (u). */
-export const DUMMY_DETECT_RANGE = 2.35;
-/** Correa: distancia máxima de su zona antes de volver a patrullar (u). */
-export const DUMMY_LEASH_RANGE = 2.2;
-
-export const CHASER_HP = 3;
-export const CHASER_SPEED = 2.35;
-/** Velocidad del Chaser cuando detecta que el jugador está apuntando. */
-export const CHASER_SPEED_WHILE_AIMING = 3.0;
-
-export const SPIKE_HP = 3;
-export const SPIKE_PATROL_SPEED = 0.95;
-
-export const TRAIL_HP_MIN = 3;
-export const TRAIL_HP_MAX = 4;
-export const TRAIL_SPEED = 0.86;
-/** Cada cuánto suelta un charco el Trail (s). */
-export const TRAIL_DROP_INTERVAL = 0.55;
-export const TRAIL_PUDDLE_RADIUS = 0.45;
-export const TRAIL_PUDDLE_LIFETIME = 3.2;
-
-export const SHOOTER_HP_MIN = 3;
-export const SHOOTER_HP_MAX = 4;
-export const SHOOTER_CHASE_SPEED = 1.45;
-/** Ciclo del Shooter: persigue 1 s → carga 1 s → dispara. */
-export const SHOOTER_CHASE_DURATION = 1.0;
-export const SHOOTER_CHARGE_DURATION = 1.0;
-export const SHOOTER_PROJECTILE_SPEED = 6.6;
-
-// ── Navegación de IA (steering local con evitación) ───────────────────────
-
-/** Distancia de sondeo (raycast corto) por delante del enemigo para detectar obstáculos/hazards. */
-export const AI_AVOID_LOOKAHEAD = 0.9;
-/** Ángulo (rad) de desvío aplicado cuando el sondeo frontal detecta bloqueo. */
-export const AI_AVOID_STEER_ANGLE = Math.PI / 3;
-/** Margen extra sobre el radio del enemigo al comprobar bloqueo contra AABBs. */
-export const AI_AVOID_SKIN = 0.12;
+// ── Enemigos: combate genérico (steering/tuning por arquetipo vive en
+// game/features/enemies/) ─────────────────────────────────────────────────
 
 /** Knockback al golpear a un enemigo: empuje en velocidad + desplazamiento. */
 export const ENEMY_KNOCKBACK_SPEED = 2.4;

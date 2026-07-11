@@ -11,8 +11,8 @@ import {
   HERO_START_HP,
   PROJECTILE_POOL_SIZE,
   PUDDLE_POOL_SIZE,
-  SHOOTER_CHASE_DURATION,
 } from '@/game/content/constants';
+import { SHOOTER_CHASE_DURATION } from '@/game/features/enemies/shooter/constants';
 import { createRng, type Rng } from './rng';
 
 export interface Vec2 {

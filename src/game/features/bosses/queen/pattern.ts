@@ -18,7 +18,7 @@
  *   próxima oleada de larvas (QUEEN_WAVE_INTERVAL); no es un telegraph real
  *   (la Reina no tiene, GDD §15.3), pero el campo ya existe y el render lo
  *   deja en paz porque `bossId==='queen'` no dibuja el anillo genérico de
- *   telegraph (ver EnemyView.tsx: solo bossVulnerable pinta algo, y aquí es
+ *   telegraph (ver EnemyViews.tsx: solo bossVulnerable pinta algo, y aquí es
  *   permanente).
  *
  * Larvas: NO son un `BossDef` ni un `EnemyKind` nuevo — son `Enemy` normales
@@ -182,7 +182,7 @@ function queenStepMove(world: World, boss: Enemy, dt: number): void {
  * (mismo pool que el Trail y las esquirlas del Guardián) con parámetros
  * PROPIOS (QUEEN_TRAIL_PUDDLE_RADIUS/QUEEN_TRAIL_PUDDLE_LIFETIME): si el pool
  * está lleno, no suelta charco este tick (degradación silenciosa, igual
- * criterio que `acquirePuddle` de ai.ts) en vez de crecer el array.
+ * criterio que `acquirePuddle` de enemies/trail/ai.ts) en vez de crecer el array.
  *
  * `slows = true` (rediseño 2026-07-10, GDD §15.3): marca el charco como
  * rastro de la Reina para que `stepPuddles` (sim/hazards.ts) le aplique
