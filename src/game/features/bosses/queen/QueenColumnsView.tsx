@@ -6,10 +6,10 @@
  * de su vida: cada columna vale `QUEEN_COLUMN_HP` (3, playtest 2026-07-10)
  * hp intacta → 2 (leve) → 1 (grave, cada golpe de embestida resta 1) → 0 con
  * `broken=true` (rota, restos). El `Obstacle` sólido correspondiente se
- * retira de `world.obstacles` al romperse (`stepQueenColumns`, combat.ts) —
+ * retira de `world.obstacles` al romperse (`stepQueenColumns`, `queen/columns.ts`) —
  * por eso `RoomView.tsx` EXCLUYE del pintado genérico de rocas cualquier
  * obstáculo cuyo id local empiece por `column` (mismo criterio que
- * `bosses.ts::onInit` usa para poblar `world.queenColumns`, ver
+ * `queen/pattern.ts::queenOnInit` usa para poblar `world.queenColumns`, ver
  * `QUEEN_COLUMN_ID_PREFIX`): este fichero es el ÚNICO que pinta las
  * columnas, en sus 4 estados (intacta/leve/grave/restos), evitando el
  * doble-render.
@@ -34,7 +34,6 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import * as THREE from 'three';
-import { QUEEN_COLUMN_HP } from '@/game/content/constants';
 import type { GameSession } from '@/game/session';
 import {
   queenColumnCrackedLightMaterial,
@@ -45,7 +44,8 @@ import {
   queenTetherMaterial,
   rockMaterial,
   unitBox,
-} from './assets';
+} from '@/game/render/assets';
+import { QUEEN_COLUMN_HP } from './constants';
 
 /** Altura vertical de una columna en pie — igual que ROCK_HEIGHT de RoomView.tsx (misma silueta que cualquier roca). */
 const COLUMN_HEIGHT = 0.8;

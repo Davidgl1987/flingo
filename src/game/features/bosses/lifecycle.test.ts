@@ -7,15 +7,16 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { getBossDef } from '@/game/content/bosses';
-import { capBossHitDamage, initBossEnemies, isBoss, stepBossDoorSeal, stepBosses } from './boss';
-import { applyDamageToEnemy } from './combat';
-import { generateDungeon } from './dungeon';
-import { createDungeonWorld } from './dungeon-world';
-import { createEventQueue, drainEvents, type GameEvent } from './events';
-import { stepWorld } from './step';
-import type { EnemySpawn, RoomData, RoomTag, World } from './world';
-import { createWorld } from './world';
+import { applyDamageToEnemy } from '@/game/sim/combat';
+import { generateDungeon } from '@/game/sim/dungeon';
+import { createDungeonWorld } from '@/game/sim/dungeon-world';
+import { createEventQueue, drainEvents } from '@/game/sim/events';
+import { stepWorld } from '@/game/sim/step';
+import type { EnemySpawn, RoomData, RoomTag, World } from '@/game/sim/world';
+import { createWorld } from '@/game/sim/world';
+import { capBossHitDamage, initBossEnemies, isBoss, stepBossDoorSeal, stepBosses } from './lifecycle';
+import { getBossDef } from './registry';
+import { collectTypes } from './test-helpers';
 
 const FIXED_DT = 1 / 60;
 
@@ -47,12 +48,6 @@ function makeBossWorld(bossSpawn: Partial<EnemySpawn> = {}): World {
   const world = createWorld(makeRoom({ enemies: [spawn] }));
   initBossEnemies(world);
   return world;
-}
-
-function collectTypes(events: ReturnType<typeof createEventQueue>): GameEvent['type'][] {
-  const types: GameEvent['type'][] = [];
-  drainEvents(events, (e) => types.push(e.type));
-  return types;
 }
 
 describe('initBossEnemies', () => {

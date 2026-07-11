@@ -9,7 +9,7 @@ import { createEffectsState, type EffectsState } from '@/game/effects/effectsSta
 import { ParticlePool } from '@/game/effects/particles';
 import { ShockwavePool } from '@/game/effects/shockwave';
 import { TrailPool } from '@/game/effects/trail';
-import { initBossEnemies } from '@/game/sim/boss';
+import { initBossEnemies } from '@/game/features/bosses/lifecycle';
 import { generateDungeon } from '@/game/sim/dungeon';
 import { createDungeonWorld } from '@/game/sim/dungeon-world';
 import { createEventQueue, type EventQueue } from '@/game/sim/events';

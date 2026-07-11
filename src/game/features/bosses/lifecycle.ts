@@ -2,7 +2,7 @@
  * Framework de jefes (GDD §15.1, Fase B0 de docs/plans/BOSSES_PLAN.md).
  *
  * Contratos implementados aquí (comunes a cualquier jefe futuro; B1-B4 solo
- * añaden una entrada a `content/bosses.ts` + sus `stepPattern`):
+ * añaden una entrada a `registry.ts::BOSS_DEFS` + sus `stepPattern`):
  *  - Fases por umbral de vida (66%/33%) con evento `boss-phase-changed`.
  *  - Telegraph (aviso ≥0.6s) y ventana de vulnerabilidad explícita, ya
  *    representados como campos escalares en `Enemy` (world.ts) y mutados por
@@ -13,17 +13,17 @@
  *  - Puerta sellada al entrar en la sala de jefe; clímax + apertura + victory
  *    al morir (reutiliza el pipeline de effects existente vía eventos).
  *
- * SIN imports de React ni three.js. `content/bosses.ts` es la única pieza
+ * SIN imports de React ni three.js. `registry.ts` es la única pieza
  * "de contenido" que este módulo conoce (igual que sim/upgrades.ts conoce
  * su propio pool, aunque ese vive en el mismo fichero por historia; aquí se
- * separa en content/ porque el GDD pide una tabla por jefe ampliable sin
- * tocar el framework).
+ * separa porque el GDD pide una tabla por jefe ampliable sin tocar el
+ * framework).
  */
 
-import { getBossDef } from '@/game/content/bosses';
-import { closeConnection } from './dungeon-world';
-import { pushEvent, type EventQueue } from './events';
-import type { BossId, Enemy, World } from './world';
+import { closeConnection } from '@/game/sim/dungeon-world';
+import { pushEvent, type EventQueue } from '@/game/sim/events';
+import type { BossId, Enemy, World } from '@/game/sim/world';
+import { getBossDef } from './registry';
 
 /** true si el enemigo dado es un jefe vivo o muerto (kind==='boss'), para narrowing en los llamadores. */
 export function isBoss(enemy: Enemy): enemy is Enemy & { bossId: BossId } {
@@ -32,11 +32,11 @@ export function isBoss(enemy: Enemy): enemy is Enemy & { bossId: BossId } {
 
 /**
  * Se llama una vez, justo tras construir el mundo (world.ts::createWorld /
- * dungeon-world.ts::createDungeonWorld no pueden importar content/bosses.ts
- * sin crear un ciclo: sim/ → content/ está permitido, content/ → sim/ está
- * permitido, pero world.ts es sim/ y bosses.ts importa sim/world.ts, así que
- * world.ts NO puede importar bosses.ts de vuelta). Sobrescribe hp/maxHp del
- * placeholder de `createEnemy` con el valor real de `BossDef.maxHp`.
+ * dungeon-world.ts::createDungeonWorld no pueden importar registry.ts sin
+ * crear un ciclo: sim/ → features/bosses/ está permitido, pero world.ts es
+ * sim/ y registry.ts importa sim/world.ts, así que world.ts NO puede
+ * importar registry.ts de vuelta). Sobrescribe hp/maxHp del placeholder de
+ * `createEnemy` con el valor real de `BossDef.maxHp`.
  */
 export function initBossEnemies(world: World): void {
   // No se puede iterar `world.enemies` directamente con un `for...of` mientras

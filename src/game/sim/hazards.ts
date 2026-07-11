@@ -15,13 +15,11 @@ import {
   PIT_DAMAGE,
   PIT_FALL_DURATION,
   PIT_FORGIVENESS_MARGIN,
-  QUEEN_TRAIL_CROSS_SPEED,
-  QUEEN_TRAIL_DOT_GRACE,
-  QUEEN_TRAIL_SLOW_FACTOR,
   SPIKES_ENEMY_DAMAGE_INTERVAL,
   SPIKES_DAMAGE,
   SPIKES_PUSH_SPEED,
 } from '@/game/content/constants';
+import { QUEEN_TRAIL_CROSS_SPEED, QUEEN_TRAIL_DOT_GRACE, QUEEN_TRAIL_SLOW_FACTOR } from '@/game/features/bosses/queen/constants';
 import { applyDamageToEnemy, applyDamageToHero } from './combat';
 import { pushEvent, type EventQueue } from './events';
 import { barrelInAir, type Barrel, type HazardSpawn, type World } from './world';

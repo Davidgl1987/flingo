@@ -7,10 +7,10 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { getBossDef } from '@/game/content/bosses';
 import type { GameSession } from '@/game/session';
-import { isBoss } from '@/game/sim/boss';
 import type { Enemy } from '@/game/sim/world';
+import { isBoss } from './lifecycle';
+import { getBossDef } from './registry';
 import './boss-health-bar.css';
 
 interface VisibleBoss {

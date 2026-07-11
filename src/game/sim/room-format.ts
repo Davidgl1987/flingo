@@ -7,8 +7,8 @@
  * SIN imports de React ni three.js.
  */
 
-import { BOSS_DEFS } from '@/game/content/bosses';
 import { DOOR_WIDTH, ROOM_MIN_SIZE } from '@/game/content/constants';
+import { BOSS_DEFS } from '@/game/features/bosses/registry';
 import type {
   BossId,
   DoorSide,

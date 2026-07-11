@@ -3,12 +3,24 @@
  * ciclo completo patrulla→telegraph→carga→choque→aturdimiento→recuperación,
  * daño+empujón al golpear al héroe, doble carga encadenada solo en fase 2/3,
  * campo de esquirlas solo en fase 3, y la regla de daño por ventana de
- * vulnerabilidad heredada del framework (sim/boss.ts). También valida
+ * vulnerabilidad heredada del framework (bosses/lifecycle.ts). También valida
  * `src/levels/boss-guardian.json` contra el parser de room-format.ts.
  */
 
 import { describe, expect, it } from 'vitest';
 import bossGuardianJson from '@/levels/boss-guardian.json';
+import { HERO_RADIUS } from '@/game/content/constants';
+import { applyDamageToEnemy } from '@/game/sim/combat';
+import { createEventQueue } from '@/game/sim/events';
+import { explodeBarrel, stepBarrels } from '@/game/sim/hazards';
+import { stepHeroPhysics } from '@/game/sim/physics';
+import { parseRoomData } from '@/game/sim/room-format';
+import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '@/game/sim/world';
+import { barrelInAir, createWorld } from '@/game/sim/world';
+import { initBossEnemies, stepBosses } from '../lifecycle';
+import { getBossDef } from '../registry';
+import { collectTypes } from '../test-helpers';
+import { guardianBarrelSpawnPoints } from './barrels';
 import {
   GUARDIAN_BARREL_DAMAGE_FRACTION,
   GUARDIAN_BARREL_FALL_DURATION,
@@ -23,17 +35,7 @@ import {
   GUARDIAN_MIN_CHARGE_CLEARANCE,
   GUARDIAN_RADIUS,
   GUARDIAN_STUN_DURATION,
-  HERO_RADIUS,
 } from './constants';
-import { getBossDef, guardianBarrelSpawnPoints } from './bosses';
-import { initBossEnemies, stepBosses } from '@/game/sim/boss';
-import { applyDamageToEnemy } from '@/game/sim/combat';
-import { createEventQueue, drainEvents, type GameEvent } from '@/game/sim/events';
-import { explodeBarrel, stepBarrels } from '@/game/sim/hazards';
-import { stepHeroPhysics } from '@/game/sim/physics';
-import { parseRoomData } from '@/game/sim/room-format';
-import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '@/game/sim/world';
-import { barrelInAir, createWorld } from '@/game/sim/world';
 
 const FIXED_DT = 1 / 60;
 
@@ -78,13 +80,7 @@ function makeGuardianWorld(opts: { bossSpawn?: Partial<EnemySpawn>; hazards?: Ha
   return world;
 }
 
-function collectTypes(events: ReturnType<typeof createEventQueue>): GameEvent['type'][] {
-  const types: GameEvent['type'][] = [];
-  drainEvents(events, (e) => types.push(e.type));
-  return types;
-}
-
-/** Avanza N ticks llamando a stepBosses (igual patrón que boss.test.ts). */
+/** Avanza N ticks llamando a stepBosses (igual patrón que lifecycle.test.ts). */
 function advance(world: ReturnType<typeof createWorld>, events: ReturnType<typeof createEventQueue>, ticks: number) {
   for (let i = 0; i < ticks; i++) {
     stepBosses(world, FIXED_DT, events);
@@ -870,7 +866,7 @@ describe('boss-guardian.json: regla anti-trampa de arena (GDD §15.2)', () => {
   });
 
   it('el Guardián patrulla el perímetro sin atascarse contra las rocas nuevas (esquinas de patrulla lejos de ±3.2)', () => {
-    // guardianPatrolCorners (content/bosses.ts) usa margen GUARDIAN_RADIUS+0.5
+    // guardianPatrolCorners (guardian/pattern.ts) usa margen GUARDIAN_RADIUS+0.5
     // respecto al bounds de la sala: con halfW=halfH=7.5 las esquinas de
     // patrulla caen en ±(7.5 − (0.62+0.5)) = ±6.38, muy lejos de las rocas
     // (que ahora ocupan hasta ±(3.2+0.9)=±4.1) — no debería haber solape.

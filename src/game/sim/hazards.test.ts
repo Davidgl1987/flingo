@@ -11,12 +11,10 @@ import {
   MUD_SLOW_FACTOR_PER_TICK,
   PIT_FALL_DURATION,
   PIT_FORGIVENESS_MARGIN,
-  QUEEN_TRAIL_CROSS_SPEED,
-  QUEEN_TRAIL_DOT_GRACE,
-  QUEEN_TRAIL_SLOW_FACTOR,
   SPIKES_ENEMY_DAMAGE_INTERVAL,
   SPIKES_PUSH_SPEED,
 } from '@/game/content/constants';
+import { QUEEN_TRAIL_CROSS_SPEED, QUEEN_TRAIL_DOT_GRACE, QUEEN_TRAIL_SLOW_FACTOR } from '@/game/features/bosses/queen/constants';
 import { createEventQueue, drainEvents, type GameEvent } from './events';
 import { stepBarrels, stepEnemyHazards, stepHeroHazards, stepPuddles } from './hazards';
 import { stepWorld } from './step';

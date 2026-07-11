@@ -27,7 +27,7 @@ import {
   GUARDIAN_BARREL_FALL_DURATION,
   GUARDIAN_BARREL_FALL_HEIGHT,
   GUARDIAN_BARREL_SHADOW_FRACTION,
-} from '@/game/content/constants';
+} from '@/game/features/bosses/guardian/constants';
 import type { GameSession } from '@/game/session';
 import { pushEvent } from '@/game/sim/events';
 import { barrelInAir, type HazardSpawn } from '@/game/sim/world';

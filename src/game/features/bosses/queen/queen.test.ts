@@ -9,8 +9,19 @@
 
 import { describe, expect, it } from 'vitest';
 import bossQueenJson from '@/levels/boss-queen.json';
+import { HERO_RADIUS, RAM_SPEED_THRESHOLD } from '@/game/content/constants';
+import { getRoomPool } from '@/game/content/rooms';
+import { applyDamageToEnemy, stepHeroEnemyContacts } from '@/game/sim/combat';
+import { generateDungeon } from '@/game/sim/dungeon';
+import { createEventQueue } from '@/game/sim/events';
+import { parseRoomData } from '@/game/sim/room-format';
+import type { EnemySpawn, RoomData, RoomTag } from '@/game/sim/world';
+import { createWorld } from '@/game/sim/world';
+import { initBossEnemies, stepBosses } from '../lifecycle';
+import { getBossDef } from '../registry';
+import { collectTypes } from '../test-helpers';
+import { stepQueenColumns } from './columns';
 import {
-  HERO_RADIUS,
   QUEEN_CHASER_PER_WAVE_BY_PHASE,
   QUEEN_COLUMN_DAMAGE_FRACTION,
   QUEEN_COLUMN_HIT_COOLDOWN,
@@ -33,17 +44,7 @@ import {
   QUEEN_TRAIL_PUDDLE_LIFETIME,
   QUEEN_TRAIL_PUDDLE_RADIUS,
   QUEEN_WAVE_INTERVAL,
-  RAM_SPEED_THRESHOLD,
 } from './constants';
-import { getBossDef } from './bosses';
-import { getRoomPool } from './rooms';
-import { initBossEnemies, stepBosses } from '@/game/sim/boss';
-import { applyDamageToEnemy, stepHeroEnemyContacts, stepQueenColumns } from '@/game/sim/combat';
-import { generateDungeon } from '@/game/sim/dungeon';
-import { createEventQueue, drainEvents, type GameEvent } from '@/game/sim/events';
-import { parseRoomData } from '@/game/sim/room-format';
-import type { EnemySpawn, RoomData, RoomTag } from '@/game/sim/world';
-import { createWorld } from '@/game/sim/world';
 
 const FIXED_DT = 1 / 60;
 
@@ -75,12 +76,6 @@ function makeQueenWorld(opts: { bossSpawn?: Partial<EnemySpawn> } = {}) {
   const world = createWorld(makeRoom({ enemies: [spawn] }));
   initBossEnemies(world);
   return world;
-}
-
-function collectTypes(events: ReturnType<typeof createEventQueue>): GameEvent['type'][] {
-  const types: GameEvent['type'][] = [];
-  drainEvents(events, (e) => types.push(e.type));
-  return types;
 }
 
 function advance(world: ReturnType<typeof createWorld>, events: ReturnType<typeof createEventQueue>, ticks: number) {
