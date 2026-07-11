@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { seriesRooms, testRoom } from './content/rooms';
+import { seriesRooms, testRoom } from '@/game/content/rooms';
 import { createDungeonGameSession, createGameSession, restartSession } from './session';
 
 describe('createDungeonGameSession (arranque de run completa)', () => {

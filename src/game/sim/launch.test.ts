@@ -7,7 +7,7 @@ import {
   BODY_LAUNCH_COOLDOWN,
   LAUNCH_SPEED_MAX,
   LAUNCH_SPEED_MIN,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { createEventQueue, drainEvents, type GameEvent } from './events';
 import { launchHero, launchSpeed } from './launch';
 import { stepWorld } from './step';

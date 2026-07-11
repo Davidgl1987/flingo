@@ -7,7 +7,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import * as THREE from 'three';
-import type { GameSession } from '../session';
+import type { GameSession } from '@/game/session';
 import { puddleMaterial, unitCircle } from './assets';
 
 const scratchMatrix = new THREE.Matrix4();

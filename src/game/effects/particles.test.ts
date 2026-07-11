@@ -4,12 +4,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createRng } from '../sim/rng';
+import { createRng } from '@/game/sim/rng';
 import { ParticlePool, PARTICLE_POOL_SIZE } from './particles';
 import { reactToEvent } from './reactToEvent';
-import { createJuiceState } from './juiceState';
+import { createEffectsState } from './effectsState';
 import { ShockwavePool } from './shockwave';
-import type { GameEvent } from '../sim/events';
+import type { GameEvent } from '@/game/sim/events';
 
 describe('ParticlePool', () => {
   it('el pool no crece: los arrays mantienen su capacidad aunque se sature', () => {
@@ -58,34 +58,34 @@ describe('reactToEvent → pools', () => {
 
   it('un evento con burst activa partículas; uno silencioso no', () => {
     const pool = new ParticlePool(64);
-    const juice = createJuiceState();
+    const effects = createEffectsState();
     const rng = createRng(1);
-    reactToEvent(makeEvent('enemy-died'), pool, juice, null, rng);
+    reactToEvent(makeEvent('enemy-died'), pool, effects, null, rng);
     expect(pool.aliveCount).toBeGreaterThan(0);
 
     const silent = new ParticlePool(64);
-    reactToEvent(makeEvent('room-entered'), silent, juice, null, rng);
+    reactToEvent(makeEvent('room-entered'), silent, effects, null, rng);
     expect(silent.aliveCount).toBe(0);
   });
 
   it('la explosión de barril dispara hit-stop, trauma máximo y onda expansiva', () => {
     const pool = new ParticlePool(64);
-    const juice = createJuiceState();
+    const effects = createEffectsState();
     const shockwaves = new ShockwavePool();
-    reactToEvent(makeEvent('barrel-explosion', 2.0), pool, juice, shockwaves, createRng(1));
-    expect(juice.trauma).toBe(1);
-    expect(juice.hitStopRemaining).toBeGreaterThan(0);
+    reactToEvent(makeEvent('barrel-explosion', 2.0), pool, effects, shockwaves, createRng(1));
+    expect(effects.trauma).toBe(1);
+    expect(effects.hitStopRemaining).toBeGreaterThan(0);
     expect(shockwaves.active[0]).toBe(1);
     expect(shockwaves.maxRadius[0]).toBeCloseTo(2.0);
   });
 
   it('embestida floja (daño 1) NO dispara hit-stop; fuerte (daño ≥2) sí', () => {
     const pool = new ParticlePool(64);
-    const weak = createJuiceState();
+    const weak = createEffectsState();
     reactToEvent(makeEvent('enemy-hit', 1), pool, weak, null, createRng(1));
     expect(weak.hitStopRemaining).toBe(0);
 
-    const strong = createJuiceState();
+    const strong = createEffectsState();
     reactToEvent(makeEvent('enemy-hit', 2), pool, strong, null, createRng(1));
     expect(strong.hitStopRemaining).toBeGreaterThan(0);
   });

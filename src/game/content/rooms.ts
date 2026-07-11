@@ -7,17 +7,17 @@
  * el norte.
  */
 
-import boossDenJson from '../../levels/boss-den.json';
-import bossGuardianJson from '../../levels/boss-guardian.json';
-import bossQueenJson from '../../levels/boss-queen.json';
-import bossTestJson from '../../levels/boss-test.json';
-import combatArenaJson from '../../levels/combat-arena.json';
-import combatCrossroadsJson from '../../levels/combat-crossroads.json';
-import combatSpikefieldJson from '../../levels/combat-spikefield.json';
-import keyVaultJson from '../../levels/key-vault.json';
-import startHallJson from '../../levels/start-hall.json';
-import { parseRoomData } from '../sim/room-format';
-import type { RoomData } from '../sim/world';
+import boossDenJson from '@/levels/boss-den.json';
+import bossGuardianJson from '@/levels/boss-guardian.json';
+import bossQueenJson from '@/levels/boss-queen.json';
+import bossTestJson from '@/levels/boss-test.json';
+import combatArenaJson from '@/levels/combat-arena.json';
+import combatCrossroadsJson from '@/levels/combat-crossroads.json';
+import combatSpikefieldJson from '@/levels/combat-spikefield.json';
+import keyVaultJson from '@/levels/key-vault.json';
+import startHallJson from '@/levels/start-hall.json';
+import { parseRoomData } from '@/game/sim/room-format';
+import type { RoomData } from '@/game/sim/world';
 
 /**
  * Sala de pruebas de fase 2 (11×15): contiene los 5 arquetipos de enemigo,

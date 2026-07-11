@@ -14,7 +14,7 @@ import {
   TRAIL_DROP_INTERVAL,
   TRAIL_PUDDLE_LIFETIME,
   TRAIL_PUDDLE_RADIUS,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { stepEnemyAi } from './ai';
 import { generateDungeon } from './dungeon';
 import { createDungeonWorld } from './dungeon-world';

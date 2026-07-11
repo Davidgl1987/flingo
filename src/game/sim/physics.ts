@@ -18,7 +18,7 @@ import {
   MAX_SPEED,
   RESTITUTION,
   STOP_THRESHOLD,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { pushEvent, type EventQueue } from './events';
 import type { AABB, Vec2, World } from './world';
 

@@ -9,9 +9,9 @@
  */
 
 import { create } from 'zustand';
-import { HERO_START_HP } from './content/constants';
-import type { GamePhase } from './sim/world';
-import type { UpgradeId } from './sim/upgrades';
+import { HERO_START_HP } from '@/game/content/constants';
+import type { GamePhase } from '@/game/sim/world';
+import type { UpgradeId } from '@/game/sim/upgrades';
 
 interface UiState {
   hp: number;

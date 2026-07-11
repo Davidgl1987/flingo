@@ -1,17 +1,17 @@
 /**
- * Traduce un GameEvent de la sim en reacciones de juice: burst de partículas,
+ * Traduce un GameEvent de la sim en reacciones de effects: burst de partículas,
  * trauma de cámara, hit-stop y háptica. Se llama una vez por evento drenado
  * desde el mismo `drainEvents` de useGameLoop.ts (la cola solo se puede
  * drenar una vez por frame; centralizar aquí evita un segundo consumidor).
  *
  * Función pura respecto a sus argumentos explícitos (solo muta los pools y
- * el JuiceState recibidos); no importa React ni three.js.
+ * el EffectsState recibidos); no importa React ni three.js.
  */
 
-import type { GameEvent } from '../sim/events';
+import type { GameEvent } from '@/game/sim/events';
 import { BURST_BY_EVENT, ITEM_PICKUP_COLOR } from './burstTable';
 import { vibrate, HAPTIC_PATTERN } from './haptics';
-import { addTrauma, triggerHitStop, type JuiceState } from './juiceState';
+import { addTrauma, triggerHitStop, type EffectsState } from './effectsState';
 import type { ParticlePool } from './particles';
 import type { ShockwavePool } from './shockwave';
 
@@ -34,7 +34,7 @@ function hexToRgb01(hex: string): [number, number, number] {
 export function reactToEvent(
   event: GameEvent,
   particles: ParticlePool,
-  juice: JuiceState,
+  effects: EffectsState,
   shockwaves: ShockwavePool | null = null,
   rng: () => number = Math.random,
 ): void {
@@ -78,7 +78,7 @@ export function reactToEvent(
         : event.type === 'boss-hit'
           ? Math.min(1.3, Math.max(0.35, event.intensity / 4))
           : 1;
-    addTrauma(juice, spec.trauma * intensityScale);
+    addTrauma(effects, spec.trauma * intensityScale);
   }
 
   // Hit-stop: golpes fuertes (embestida/impacto con daño ≥2), explosión de barril, muerte de enemigo.
@@ -86,12 +86,12 @@ export function reactToEvent(
     (event.type === 'enemy-hit' || event.type === 'boss-hit' || event.type === 'player-damaged') &&
     event.intensity >= STRONG_HIT_DAMAGE_THRESHOLD;
   if (isStrongHit || event.type === 'barrel-explosion' || event.type === 'enemy-died') {
-    triggerHitStop(juice, HIT_STOP_DURATION);
+    triggerHitStop(effects, HIT_STOP_DURATION);
   }
   // Clímax de derrota de jefe (GDD §15.1 punto 8): hit-stop propio, más largo
   // que el resto del juego a propósito (ver BOSS_DEFEATED_HIT_STOP_DURATION).
   if (event.type === 'boss-defeated') {
-    triggerHitStop(juice, BOSS_DEFEATED_HIT_STOP_DURATION);
+    triggerHitStop(effects, BOSS_DEFEATED_HIT_STOP_DURATION);
   }
 
   // Háptica (GDD §12/ARCHITECTURE "Móvil"): daño recibido, explosión, victoria.

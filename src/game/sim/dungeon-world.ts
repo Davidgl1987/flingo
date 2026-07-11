@@ -17,7 +17,7 @@
  * SIN imports de React ni three.js.
  */
 
-import { DOOR_WIDTH, HERO_RADIUS, HERO_START_HP, WALL_THICKNESS } from '../content/constants';
+import { DOOR_WIDTH, HERO_RADIUS, HERO_START_HP, WALL_THICKNESS } from '@/game/content/constants';
 import { buildRoomWallSegments, type DungeonMap } from './dungeon';
 import { createRng } from './rng';
 import {

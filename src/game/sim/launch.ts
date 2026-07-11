@@ -7,7 +7,7 @@ import {
   LAUNCH_SPEED_MAX,
   LAUNCH_SPEED_MIN,
   MIN_LAUNCH_FORCE,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { pushEvent, type EventQueue } from './events';
 import type { World } from './world';
 

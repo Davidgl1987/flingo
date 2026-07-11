@@ -34,8 +34,8 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import * as THREE from 'three';
-import { QUEEN_COLUMN_HP } from '../content/constants';
-import type { GameSession } from '../session';
+import { QUEEN_COLUMN_HP } from '@/game/content/constants';
+import type { GameSession } from '@/game/session';
 import {
   queenColumnCrackedLightMaterial,
   queenColumnCrackedMaterial,

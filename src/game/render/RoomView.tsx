@@ -15,9 +15,9 @@
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { DOOR_WIDTH, QUEEN_COLUMN_ID_PREFIX, WALL_THICKNESS } from '../content/constants';
-import { DOOR_GATE_ID_PREFIX } from '../sim/dungeon-world';
-import type { Obstacle, World } from '../sim/world';
+import { DOOR_WIDTH, QUEEN_COLUMN_ID_PREFIX, WALL_THICKNESS } from '@/game/content/constants';
+import { DOOR_GATE_ID_PREFIX } from '@/game/sim/dungeon-world';
+import type { Obstacle, World } from '@/game/sim/world';
 import {
   doorKeyMaterial,
   doorMaterial,

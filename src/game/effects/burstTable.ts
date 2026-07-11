@@ -8,7 +8,7 @@
  * lanzamiento/escudo, naranja = explosión, blanco = impacto, rojo = daño.
  */
 
-import type { GameEventType } from '../sim/events';
+import type { GameEventType } from '@/game/sim/events';
 
 export interface BurstSpec {
   /** Color hex de las partículas. */
@@ -74,7 +74,7 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // suelo se sienta (el rebote visual del cuerpo lo hace el render).
   'boss-barrel-land': { color: '#a89a76', size: 0.11, count: 14, life: 0.4, speed: 2.2, trauma: 0.14 },
   // Arrollar un barril con la carga ya dispara 'barrel-explosion' (su propio
-  // burst grande); este evento es puramente informativo para juice/HUD sobre
+  // burst grande); este evento es puramente informativo para effects/HUD sobre
   // el aturdimiento largo, sin burst propio (NONE) para no duplicar partículas.
   'boss-barrel-charge-stun': NONE,
   // Reina del Enjambre (GDD §15.3): burst pequeño y verdoso (mismo lenguaje

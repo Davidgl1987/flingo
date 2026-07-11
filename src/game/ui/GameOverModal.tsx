@@ -3,7 +3,7 @@
  * puntuación) y botón de reinicio inmediato. Usable con el pulgar.
  */
 
-import { useUiStore } from '../store';
+import { useUiStore } from '@/game/store';
 
 export function GameOverModal({ onRestart }: { onRestart: () => void }) {
   const phase = useUiStore((s) => s.phase);

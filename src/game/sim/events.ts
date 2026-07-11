@@ -1,7 +1,7 @@
 /**
  * Cola de eventos de gameplay: ring buffer preasignado.
  *
- * La sim publica eventos y juice/ui los drenan cada frame. Cero asignaciones
+ * La sim publica eventos y effects/ui los drenan cada frame. Cero asignaciones
  * en el hot path: los slots se crean una vez y se reutilizan mutándolos.
  *
  * Diseño del slot: en lugar de una unión discriminada con objetos distintos
@@ -141,7 +141,7 @@ export function createEventQueue(capacity = 64): EventQueue {
 
 /**
  * Publica un evento mutando el siguiente slot libre.
- * Si la cola está llena, sobrescribe el más antiguo (los eventos de juice
+ * Si la cola está llena, sobrescribe el más antiguo (los eventos de effects
  * son descartables; nunca debe bloquear la sim).
  */
 export function pushEvent(

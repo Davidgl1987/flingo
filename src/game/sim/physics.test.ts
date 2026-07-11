@@ -11,7 +11,7 @@ import {
   MAX_SPEED,
   RESTITUTION,
   WALL_THICKNESS,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { createEventQueue, drainEvents, type GameEvent } from './events';
 import { collideCircleAabb, collideInnerBounds } from './physics';
 import { stepWorld } from './step';

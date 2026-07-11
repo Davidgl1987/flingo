@@ -4,7 +4,7 @@
  * Extra deja de ofrecerse al llegar a maxHp del héroe.
  */
 
-import { HERO_MAX_HP, STEADY_PULSE_RELOAD_MULTIPLIER } from '../content/constants';
+import { HERO_MAX_HP, STEADY_PULSE_RELOAD_MULTIPLIER } from '@/game/content/constants';
 import { pushEvent, type EventQueue } from './events';
 import type { Rng } from './rng';
 import type { Hero, World } from './world';

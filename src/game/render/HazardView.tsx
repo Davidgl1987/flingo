@@ -27,10 +27,10 @@ import {
   GUARDIAN_BARREL_FALL_DURATION,
   GUARDIAN_BARREL_FALL_HEIGHT,
   GUARDIAN_BARREL_SHADOW_FRACTION,
-} from '../content/constants';
-import type { GameSession } from '../session';
-import { pushEvent } from '../sim/events';
-import { barrelInAir, type HazardSpawn } from '../sim/world';
+} from '@/game/content/constants';
+import type { GameSession } from '@/game/session';
+import { pushEvent } from '@/game/sim/events';
+import { barrelInAir, type HazardSpawn } from '@/game/sim/world';
 import {
   barrelHoopMaterial,
   barrelMaterial,

@@ -41,7 +41,7 @@ import {
   SPELL_SPEED,
   SPELL_WALL_BOUNCES,
   SPIKE_DANGEROUS_DOT_THRESHOLD,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { collideCircleAabb, collideInnerBounds } from './physics';
 import { pushEvent, type EventQueue } from './events';
 import type { Enemy, Hero, Projectile, ProjectileOwner, World } from './world';

@@ -8,9 +8,9 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ARROW_COOLDOWN, BODY_LAUNCH_COOLDOWN, SPELL_COOLDOWN } from '../content/constants';
-import type { GameSession } from '../session';
-import type { WeaponMode } from '../sim/world';
+import { ARROW_COOLDOWN, BODY_LAUNCH_COOLDOWN, SPELL_COOLDOWN } from '@/game/content/constants';
+import type { GameSession } from '@/game/session';
+import type { WeaponMode } from '@/game/sim/world';
 
 /**
  * Cada modo lleva el COLOR de su ataque (mismo color que su proyectil/estela,

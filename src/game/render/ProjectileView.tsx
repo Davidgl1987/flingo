@@ -28,8 +28,8 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Group, Mesh } from 'three';
-import type { GameSession } from '../session';
-import type { Projectile } from '../sim/world';
+import type { GameSession } from '@/game/session';
+import type { Projectile } from '@/game/sim/world';
 import {
   arrowMaterial,
   arrowShaftGeometry,

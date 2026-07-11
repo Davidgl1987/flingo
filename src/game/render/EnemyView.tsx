@@ -49,9 +49,9 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Group, Material, Mesh } from 'three';
-import { QUEEN_LARVA_ID_PREFIX } from '../content/constants';
-import type { GameSession } from '../session';
-import type { BossId, Enemy, EnemyKind } from '../sim/world';
+import { QUEEN_LARVA_ID_PREFIX } from '@/game/content/constants';
+import type { GameSession } from '@/game/session';
+import type { BossId, Enemy, EnemyKind } from '@/game/sim/world';
 import {
   blobShadowMaterial,
   bossBodyMaterial,

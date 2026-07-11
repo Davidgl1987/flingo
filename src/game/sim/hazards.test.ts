@@ -16,7 +16,7 @@ import {
   QUEEN_TRAIL_SLOW_FACTOR,
   SPIKES_ENEMY_DAMAGE_INTERVAL,
   SPIKES_PUSH_SPEED,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { createEventQueue, drainEvents, type GameEvent } from './events';
 import { stepBarrels, stepEnemyHazards, stepHeroHazards, stepPuddles } from './hazards';
 import { stepWorld } from './step';

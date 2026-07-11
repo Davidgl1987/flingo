@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useUiStore } from '../store';
+import { useUiStore } from '@/game/store';
 
 export function DamageVignette() {
   const hp = useUiStore((s) => s.hp);

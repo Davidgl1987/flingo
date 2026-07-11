@@ -11,8 +11,8 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { pauseGame, type GameSession } from '../session';
-import { useUiStore } from '../store';
+import { pauseGame, type GameSession } from '@/game/session';
+import { useUiStore } from '@/game/store';
 import { BossHealthBar } from './BossHealthBar';
 import { WeaponBar } from './WeaponBar';
 

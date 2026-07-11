@@ -20,7 +20,7 @@
  * o compatibles, se cae a un `FALLBACK_LAYOUT` fijo y siempre válido.
  */
 
-import { DOOR_WIDTH, ROOMS_PER_RUN, WALL_THICKNESS } from '../content/constants';
+import { DOOR_WIDTH, ROOMS_PER_RUN, WALL_THICKNESS } from '@/game/content/constants';
 import type { Rng } from './rng';
 import { createRng } from './rng';
 import type { AABB, DoorSide, DoorSlot, RoomData, RoomTag, Vec2 } from './world';

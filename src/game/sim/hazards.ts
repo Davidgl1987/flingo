@@ -21,7 +21,7 @@ import {
   SPIKES_ENEMY_DAMAGE_INTERVAL,
   SPIKES_DAMAGE,
   SPIKES_PUSH_SPEED,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { applyDamageToEnemy, applyDamageToHero } from './combat';
 import { pushEvent, type EventQueue } from './events';
 import { barrelInAir, type Barrel, type HazardSpawn, type World } from './world';

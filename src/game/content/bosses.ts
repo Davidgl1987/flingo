@@ -66,11 +66,11 @@ import {
   QUEEN_TRAIL_PUDDLE_RADIUS,
   QUEEN_WAVE_INTERVAL,
 } from '../content/constants';
-import { applyDamageToHero, fireEnemyProjectile } from '../sim/combat';
-import { pushEvent, type EventQueue } from '../sim/events';
-import { explodeBarrel } from '../sim/hazards';
-import { dropPotionAt } from '../sim/items';
-import { barrelInAir, type AABB, type BossId, type Enemy, type World } from '../sim/world';
+import { applyDamageToHero, fireEnemyProjectile } from '@/game/sim/combat';
+import { pushEvent, type EventQueue } from '@/game/sim/events';
+import { explodeBarrel } from '@/game/sim/hazards';
+import { dropPotionAt } from '@/game/sim/items';
+import { barrelInAir, type AABB, type BossId, type Enemy, type World } from '@/game/sim/world';
 
 /**
  * Contrato de patrón de un jefe: se llama una vez por tick (mismo dt fijo que

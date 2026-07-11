@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { HERO_MAX_HP, STEADY_PULSE_RELOAD_MULTIPLIER } from '../content/constants';
+import { HERO_MAX_HP, STEADY_PULSE_RELOAD_MULTIPLIER } from '@/game/content/constants';
 import { createRng } from './rng';
 import { applyUpgrade, rollUpgradeChoices, UPGRADE_POOL, type UpgradeId } from './upgrades';
 import { createEventQueue } from './events';

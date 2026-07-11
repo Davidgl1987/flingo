@@ -19,7 +19,7 @@
  * Muta `world` y `events` in-place: nada de crear un mundo nuevo por tick.
  */
 
-import { DOOR_TOUCH_MARGIN, FIXED_DT, ROOM_CLEAR_SCORE } from '../content/constants';
+import { DOOR_TOUCH_MARGIN, FIXED_DT, ROOM_CLEAR_SCORE } from '@/game/content/constants';
 import { stepEnemyAi } from './ai';
 import { stepBossDoorSeal, stepBosses } from './boss';
 import { stepHeroEnemyContacts, stepProjectiles, stepQueenColumns } from './combat';

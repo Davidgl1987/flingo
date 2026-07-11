@@ -5,7 +5,7 @@
  * enemy.hp <= 0 recién cruzado a través del evento 'enemy-died').
  */
 
-import { ITEM_PICKUP_RADIUS, POTION_HEAL } from '../content/constants';
+import { ITEM_PICKUP_RADIUS, POTION_HEAL } from '@/game/content/constants';
 import { pushEvent, type EventQueue } from './events';
 import type { Item, World } from './world';
 
@@ -72,7 +72,7 @@ function tryPickup(world: World, item: Item, events: EventQueue): void {
       hero.hasKey = true;
       break;
   }
-  // label = tipo de objeto ('coin'/'potion'/'key'): permite a juice/HUD dar
+  // label = tipo de objeto ('coin'/'potion'/'key'): permite a effects/HUD dar
   // feedback de color propio (dorado/rosa/azul) sin tener que re-derivarlo.
   pushEvent(events, 'item-pickup', item.position.x, item.position.y, 1, item.kind);
 }

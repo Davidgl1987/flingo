@@ -14,8 +14,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DOOR_WIDTH, ROOM_MIN_SIZE, WALL_THICKNESS } from '../game/content/constants';
-import { parseRoomData, parseRoomDataFromJson } from '../game/sim/room-format';
+import { DOOR_WIDTH, ROOM_MIN_SIZE, WALL_THICKNESS } from '@/game/content/constants';
+import { parseRoomData, parseRoomDataFromJson } from '@/game/sim/room-format';
 import type {
   DoorSide,
   EnemyKind,
@@ -26,7 +26,7 @@ import type {
   RoomData,
   RoomTag,
   Vec2,
-} from '../game/sim/world';
+} from '@/game/sim/world';
 import { addExportedRoom, loadDraft, saveDraft, savePlaytestRoom } from './editor-storage';
 
 // ── Modelo del editor ──────────────────────────────────────────────────────

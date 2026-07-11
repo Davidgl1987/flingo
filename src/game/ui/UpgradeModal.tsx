@@ -4,9 +4,9 @@
  * aplica el efecto sobre la sim y reanuda el juego.
  */
 
-import { ensureUpgradeChoices, chooseUpgrade, type GameSession } from '../session';
-import type { UpgradeDef } from '../sim/upgrades';
-import { useUiStore } from '../store';
+import { ensureUpgradeChoices, chooseUpgrade, type GameSession } from '@/game/session';
+import type { UpgradeDef } from '@/game/sim/upgrades';
+import { useUiStore } from '@/game/store';
 
 export function UpgradeModal({ session }: { session: GameSession }) {
   const phase = useUiStore((s) => s.phase);

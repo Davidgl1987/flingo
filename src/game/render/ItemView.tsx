@@ -20,8 +20,8 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef, useState } from 'react';
 import type { Group } from 'three';
-import type { GameSession } from '../session';
-import type { Item } from '../sim/world';
+import type { GameSession } from '@/game/session';
+import type { Item } from '@/game/sim/world';
 import {
   coinGeometry,
   coinMaterial,

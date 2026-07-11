@@ -9,14 +9,14 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
-import { FIXED_DT } from '../content/constants';
-import { consumeHitStop, decayTrauma } from '../juice/juiceState';
-import { reactToEvent } from '../juice/reactToEvent';
-import { ensureUpgradeChoices, type GameSession } from '../session';
-import { drainEvents, type GameEvent } from '../sim/events';
-import { stepWorld } from '../sim/step';
-import type { GamePhase } from '../sim/world';
-import { useUiStore } from '../store';
+import { FIXED_DT } from '@/game/content/constants';
+import { consumeHitStop, decayTrauma } from '@/game/effects/effectsState';
+import { reactToEvent } from '@/game/effects/reactToEvent';
+import { ensureUpgradeChoices, type GameSession } from '@/game/session';
+import { drainEvents, type GameEvent } from '@/game/sim/events';
+import { stepWorld } from '@/game/sim/step';
+import type { GamePhase } from '@/game/sim/world';
+import { useUiStore } from '@/game/store';
 
 /** Tope de tiempo de frame acumulable (evita la espiral de la muerte en tabs suspendidas). */
 const MAX_FRAME_TIME = 0.25;
@@ -64,15 +64,15 @@ export function useGameLoop(session: GameSession): void {
 
   const runFrame = (delta: number): void => {
     const world = session.world;
-    const juice = session.juice.state;
+    const effects = session.effects.state;
     world.heroAiming = session.aim.active;
     const cappedDelta = delta > MAX_FRAME_TIME ? MAX_FRAME_TIME : delta;
 
-    // Hit-stop (ARCHITECTURE.md "Juice (implementación)"): escala el dt que
+    // Hit-stop (ARCHITECTURE.md "Effects (implementación)"): escala el dt que
     // alimenta el acumulador de la sim en golpes fuertes (~60-100ms), sin
     // congelar el render (rAF sigue a tasa normal, la cámara/partículas
     // siguen actualizándose con cappedDelta real).
-    const timeScale = consumeHitStop(juice, cappedDelta);
+    const timeScale = consumeHitStop(effects, cappedDelta);
     let accumulator = session.accumulator + cappedDelta * timeScale;
     while (accumulator >= FIXED_DT) {
       session.heroPrevX = world.hero.position.x;
@@ -83,13 +83,13 @@ export function useGameLoop(session: GameSession): void {
     session.accumulator = accumulator;
     session.renderAlpha = accumulator / FIXED_DT;
 
-    decayTrauma(juice, cappedDelta);
-    session.juice.particles.update(cappedDelta);
-    session.juice.trail.update(cappedDelta);
-    session.juice.shockwaves.update(cappedDelta);
+    decayTrauma(effects, cappedDelta);
+    session.effects.particles.update(cappedDelta);
+    session.effects.trail.update(cappedDelta);
+    session.effects.shockwaves.update(cappedDelta);
 
     drainEvents(session.events, (event) => {
-      reactToEvent(event, session.juice.particles, juice, session.juice.shockwaves);
+      reactToEvent(event, session.effects.particles, effects, session.effects.shockwaves);
 
       if (event.type === 'room-entered') {
         useUiStore.getState().showNotice(event.label);

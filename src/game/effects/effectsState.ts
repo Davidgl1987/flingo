@@ -1,5 +1,5 @@
 /**
- * Estado mutable de juice (ARCHITECTURE.md, "Juice (implementación)"): trauma
+ * Estado mutable de effects (ARCHITECTURE.md, "Effects (implementación)"): trauma
  * de cámara y hit-stop. Objeto plano preasignado, cero asignaciones por
  * frame; funciones puras de actualización para poder testear headless (sin
  * three.js ni R3F).
@@ -17,25 +17,25 @@ const TRAUMA_DECAY_PER_SECOND = 2.6;
 /** Fracción de dt aplicada a la sim mientras dura el hit-stop (no la congela del todo). */
 export const HIT_STOP_TIME_SCALE = 0.12;
 
-export interface JuiceState {
+export interface EffectsState {
   /** [0,1]; decae hacia 0. */
   trauma: number;
   /** Segundos restantes de hit-stop activo (0 = sin hit-stop). */
   hitStopRemaining: number;
 }
 
-export function createJuiceState(): JuiceState {
+export function createEffectsState(): EffectsState {
   return { trauma: 0, hitStopRemaining: 0 };
 }
 
 /** Añade trauma (clamp a [0,1]); los eventos más fuertes suman más. */
-export function addTrauma(state: JuiceState, amount: number): void {
+export function addTrauma(state: EffectsState, amount: number): void {
   const next = state.trauma + amount;
   state.trauma = next > 1 ? 1 : next < 0 ? 0 : next;
 }
 
 /** Decae el trauma exponencialmente con el tiempo real transcurrido (s). */
-export function decayTrauma(state: JuiceState, dt: number): void {
+export function decayTrauma(state: EffectsState, dt: number): void {
   if (state.trauma <= 0) {
     state.trauma = 0;
     return;
@@ -45,7 +45,7 @@ export function decayTrauma(state: JuiceState, dt: number): void {
 }
 
 /** Arma (o extiende) el hit-stop a al menos `seconds` (no lo acorta si ya hay uno más largo en curso). */
-export function triggerHitStop(state: JuiceState, seconds: number): void {
+export function triggerHitStop(state: EffectsState, seconds: number): void {
   if (seconds > state.hitStopRemaining) {
     state.hitStopRemaining = seconds;
   }
@@ -56,7 +56,7 @@ export function triggerHitStop(state: JuiceState, seconds: number): void {
  * de escala a aplicar al dt de la sim para este frame: HIT_STOP_TIME_SCALE
  * mientras dure, 1 (sin efecto) en cuanto se agota.
  */
-export function consumeHitStop(state: JuiceState, dt: number): number {
+export function consumeHitStop(state: EffectsState, dt: number): number {
   if (state.hitStopRemaining <= 0) return 1;
   state.hitStopRemaining -= dt;
   if (state.hitStopRemaining < 0) state.hitStopRemaining = 0;

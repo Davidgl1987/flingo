@@ -21,10 +21,10 @@ import {
   CAMERA_DISTANCE_SCALE_MIN,
   cameraSettings,
   setCameraDistanceScale,
-} from '../render/cameraSettings';
-import { resumeGame, type GameSession } from '../session';
-import { UPGRADE_POOL } from '../sim/upgrades';
-import { useUiStore } from '../store';
+} from '@/game/render/cameraSettings';
+import { resumeGame, type GameSession } from '@/game/session';
+import { UPGRADE_POOL } from '@/game/sim/upgrades';
+import { useUiStore } from '@/game/store';
 
 const ENEMY_LEGEND: { label: string; color: string }[] = [
   { label: 'Dummy — básico', color: '#ff5964' },

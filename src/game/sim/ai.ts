@@ -34,7 +34,7 @@ import {
   TRAIL_PUDDLE_LIFETIME,
   TRAIL_PUDDLE_RADIUS,
   TRAIL_SPEED,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { fireEnemyProjectile } from './combat';
 import type { AABB, Enemy, World } from './world';
 

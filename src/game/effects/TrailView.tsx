@@ -9,7 +9,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { unitSphere } from '../render/assets';
+import { unitSphere } from '@/game/render/assets';
 import type { TrailPool } from './trail';
 
 const trailMaterial = new THREE.MeshBasicMaterial({

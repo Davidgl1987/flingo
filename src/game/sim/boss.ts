@@ -11,7 +11,7 @@
  *    `BossDef.damageOutsideWindow`.
  *  - Techo de daño de un único golpe del jefe al héroe (helper compartido).
  *  - Puerta sellada al entrar en la sala de jefe; clímax + apertura + victory
- *    al morir (reutiliza el pipeline de juice existente vía eventos).
+ *    al morir (reutiliza el pipeline de effects existente vía eventos).
  *
  * SIN imports de React ni three.js. `content/bosses.ts` es la única pieza
  * "de contenido" que este módulo conoce (igual que sim/upgrades.ts conoce
@@ -20,7 +20,7 @@
  * tocar el framework).
  */
 
-import { getBossDef } from '../content/bosses';
+import { getBossDef } from '@/game/content/bosses';
 import { closeConnection } from './dungeon-world';
 import { pushEvent, type EventQueue } from './events';
 import type { BossId, Enemy, World } from './world';

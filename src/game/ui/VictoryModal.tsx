@@ -3,7 +3,7 @@
  * reinicio inmediato (nueva semilla, GDD §10.2). Usable con el pulgar.
  */
 
-import { useUiStore } from '../store';
+import { useUiStore } from '@/game/store';
 
 export function VictoryModal({ onRestart }: { onRestart: () => void }) {
   const phase = useUiStore((s) => s.phase);

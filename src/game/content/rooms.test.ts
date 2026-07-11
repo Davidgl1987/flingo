@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { generateDungeon, validateDungeon } from '../sim/dungeon';
+import { generateDungeon, validateDungeon } from '@/game/sim/dungeon';
 import { seriesRooms } from './rooms';
 
 describe('pool de salas de serie', () => {

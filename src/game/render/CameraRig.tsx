@@ -17,12 +17,12 @@
  * primer `useFrame`, así que la cámara "saltaba" de una posición a otra en el
  * primer par de frames: un salto de posición idéntico a un shake de trauma,
  * pero sin que trauma valiera nada (trauma arranca en 0, confirmado por
- * `createJuiceState`/`createGameSession`/`createDungeonGameSession`: no hay
+ * `createEffectsState`/`createGameSession`/`createDungeonGameSession`: no hay
  * evento inicial que le sume nada). Fix: el snap inicial ahora ocurre dentro
  * del primer `useFrame` (donde `camera.aspect` ya está resuelto contra el
  * tamaño real del canvas), nunca en un efecto aparte.
  *
- * Zoom de puntería (punto 7, GDD "juice"): mientras `session.aim.active`, el
+ * Zoom de puntería (punto 7, GDD "effects"): mientras `session.aim.active`, el
  * factor de distancia se acerca un ~10% (lerp propio, independiente del
  * seguimiento) y vuelve suavemente al soltar. Puramente aditivo sobre el
  * mismo `distanceScaleForAspect`, así que no interfiere con el encuadre móvil.
@@ -37,7 +37,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import type { GameSession } from '../session';
+import type { GameSession } from '@/game/session';
 import { cameraSettings } from './cameraSettings';
 
 const CAMERA_OFFSET = new THREE.Vector3(0, 9.5, 6.2);
@@ -138,7 +138,7 @@ export function CameraRig({ session }: { session: GameSession }) {
     // senos inconmensurados como ruido barato sin asignaciones. No participa
     // en el lerp ni en el lookAt, así que se amortigua solo al decaer el
     // trauma y nunca desplaza el encuadre (breve, no mareante).
-    const trauma = session.juice.state.trauma;
+    const trauma = session.effects.state.trauma;
     if (trauma > 0) {
       const shake = trauma * trauma * SHAKE_MAX_OFFSET;
       const t = state.clock.elapsedTime;

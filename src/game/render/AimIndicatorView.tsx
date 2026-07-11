@@ -7,7 +7,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Group } from 'three';
-import type { GameSession } from '../session';
+import type { GameSession } from '@/game/session';
 import { aimDotMaterial, unitCircle } from './assets';
 
 const DOT_COUNT = 8;

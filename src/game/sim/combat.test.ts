@@ -13,7 +13,7 @@ import {
   RAM_SPEED_THRESHOLD,
   SHIELD_IFRAME_DURATION,
   SPELL_WALL_BOUNCES,
-} from '../content/constants';
+} from '@/game/content/constants';
 import {
   applyDamageToEnemy,
   applyDamageToHero,

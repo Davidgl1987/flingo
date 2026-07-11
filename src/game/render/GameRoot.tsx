@@ -17,23 +17,23 @@
 
 import { Canvas } from '@react-three/fiber';
 import { useCallback, useState } from 'react';
-import { getRoomPool } from '../content/rooms';
-import { AimInput } from '../input/AimInput';
-import { ParticleView } from '../juice/ParticleView';
-import { ShockwaveView } from '../juice/ShockwaveView';
-import { TrailView } from '../juice/TrailView';
-import { createDungeonGameSession, createGameSession, restartSession } from '../session';
-import type { GameSession } from '../session';
-import { forceBossPhase } from '../sim/boss';
-import type { RoomData } from '../sim/world';
-import { useUiStore } from '../store';
-import { DamageVignette } from '../ui/DamageVignette';
-import { FpsCounter } from '../ui/FpsCounter';
-import { GameOverModal } from '../ui/GameOverModal';
-import { HUD } from '../ui/HUD';
-import { PauseModal } from '../ui/PauseModal';
-import { UpgradeModal } from '../ui/UpgradeModal';
-import { VictoryModal } from '../ui/VictoryModal';
+import { getRoomPool } from '@/game/content/rooms';
+import { AimInput } from '@/game/input/AimInput';
+import { ParticleView } from '@/game/effects/ParticleView';
+import { ShockwaveView } from '@/game/effects/ShockwaveView';
+import { TrailView } from '@/game/effects/TrailView';
+import { createDungeonGameSession, createGameSession, restartSession } from '@/game/session';
+import type { GameSession } from '@/game/session';
+import { forceBossPhase } from '@/game/sim/boss';
+import type { RoomData } from '@/game/sim/world';
+import { useUiStore } from '@/game/store';
+import { DamageVignette } from '@/game/ui/DamageVignette';
+import { FpsCounter } from '@/game/ui/FpsCounter';
+import { GameOverModal } from '@/game/ui/GameOverModal';
+import { HUD } from '@/game/ui/HUD';
+import { PauseModal } from '@/game/ui/PauseModal';
+import { UpgradeModal } from '@/game/ui/UpgradeModal';
+import { VictoryModal } from '@/game/ui/VictoryModal';
 import { AimIndicatorView } from './AimIndicatorView';
 import { CameraRig } from './CameraRig';
 import { EnemyViews } from './EnemyView';
@@ -144,10 +144,10 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
         <EnemyViews session={session} />
         <ProjectileViews session={session} />
         <HeroView session={session} />
-        {/* Juice (GDD §12): partículas, estela y ondas expansivas, todos pools preasignados. */}
-        <ParticleView pool={session.juice.particles} />
-        <TrailView pool={session.juice.trail} />
-        <ShockwaveView pool={session.juice.shockwaves} />
+        {/* Effects (GDD §12): partículas, estela y ondas expansivas, todos pools preasignados. */}
+        <ParticleView pool={session.effects.particles} />
+        <TrailView pool={session.effects.trail} />
+        <ShockwaveView pool={session.effects.shockwaves} />
         <AimIndicatorView session={session} />
         <CameraRig session={session} />
         <AimInput session={session} />

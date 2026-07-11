@@ -5,14 +5,14 @@
  * `THREE.Object3D`/`THREE.Color` reutilizados (creados una vez en useMemo),
  * y `instanceMatrix`/`instanceColor` se marcan `needsUpdate` cada frame.
  *
- * La física/vida del pool la posee `ParticlePool` (juice/particles.ts, sin
+ * La física/vida del pool la posee `ParticlePool` (effects/particles.ts, sin
  * three.js); este componente es "render tonto" puro sobre esos datos.
  */
 
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { unitSphere } from '../render/assets';
+import { unitSphere } from '@/game/render/assets';
 import type { ParticlePool } from './particles';
 
 const particleMaterial = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false });

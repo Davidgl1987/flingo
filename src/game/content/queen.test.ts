@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import bossQueenJson from '../../levels/boss-queen.json';
+import bossQueenJson from '@/levels/boss-queen.json';
 import {
   HERO_RADIUS,
   QUEEN_CHASER_PER_WAVE_BY_PHASE,
@@ -37,13 +37,13 @@ import {
 } from './constants';
 import { getBossDef } from './bosses';
 import { getRoomPool } from './rooms';
-import { initBossEnemies, stepBosses } from '../sim/boss';
-import { applyDamageToEnemy, stepHeroEnemyContacts, stepQueenColumns } from '../sim/combat';
-import { generateDungeon } from '../sim/dungeon';
-import { createEventQueue, drainEvents, type GameEvent } from '../sim/events';
-import { parseRoomData } from '../sim/room-format';
-import type { EnemySpawn, RoomData, RoomTag } from '../sim/world';
-import { createWorld } from '../sim/world';
+import { initBossEnemies, stepBosses } from '@/game/sim/boss';
+import { applyDamageToEnemy, stepHeroEnemyContacts, stepQueenColumns } from '@/game/sim/combat';
+import { generateDungeon } from '@/game/sim/dungeon';
+import { createEventQueue, drainEvents, type GameEvent } from '@/game/sim/events';
+import { parseRoomData } from '@/game/sim/room-format';
+import type { EnemySpawn, RoomData, RoomTag } from '@/game/sim/world';
+import { createWorld } from '@/game/sim/world';
 
 const FIXED_DT = 1 / 60;
 

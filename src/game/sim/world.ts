@@ -12,7 +12,7 @@ import {
   PROJECTILE_POOL_SIZE,
   PUDDLE_POOL_SIZE,
   SHOOTER_CHASE_DURATION,
-} from '../content/constants';
+} from '@/game/content/constants';
 import { createRng, type Rng } from './rng';
 
 export interface Vec2 {

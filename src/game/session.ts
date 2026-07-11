@@ -4,32 +4,32 @@
  * en un ref/useState-inicial); NUNCA se usa como estado de React.
  */
 
-import { ROOMS_PER_RUN, UPGRADE_CHOICES } from './content/constants';
-import { createJuiceState, type JuiceState } from './juice/juiceState';
-import { ParticlePool } from './juice/particles';
-import { ShockwavePool } from './juice/shockwave';
-import { TrailPool } from './juice/trail';
-import { initBossEnemies } from './sim/boss';
-import { generateDungeon } from './sim/dungeon';
-import { createDungeonWorld } from './sim/dungeon-world';
-import { createEventQueue, type EventQueue } from './sim/events';
-import { applyUpgrade, rollUpgradeChoices, type UpgradeDef, type UpgradeId } from './sim/upgrades';
-import { createWorld, type RoomData, type World } from './sim/world';
+import { ROOMS_PER_RUN, UPGRADE_CHOICES } from '@/game/content/constants';
+import { createEffectsState, type EffectsState } from '@/game/effects/effectsState';
+import { ParticlePool } from '@/game/effects/particles';
+import { ShockwavePool } from '@/game/effects/shockwave';
+import { TrailPool } from '@/game/effects/trail';
+import { initBossEnemies } from '@/game/sim/boss';
+import { generateDungeon } from '@/game/sim/dungeon';
+import { createDungeonWorld } from '@/game/sim/dungeon-world';
+import { createEventQueue, type EventQueue } from '@/game/sim/events';
+import { applyUpgrade, rollUpgradeChoices, type UpgradeDef, type UpgradeId } from '@/game/sim/upgrades';
+import { createWorld, type RoomData, type World } from '@/game/sim/world';
 
-/** Estado de juice de la sesión: sobrevive a los reinicios de run (no se recrea en restartSession). */
-export interface JuiceSession {
+/** Estado de effects de la sesión: sobrevive a los reinicios de run (no se recrea en restartSession). */
+export interface EffectsSession {
   particles: ParticlePool;
   trail: TrailPool;
   shockwaves: ShockwavePool;
-  state: JuiceState;
+  state: EffectsState;
 }
 
-function createJuiceSession(): JuiceSession {
+function createEffectsSession(): EffectsSession {
   return {
     particles: new ParticlePool(),
     trail: new TrailPool(),
     shockwaves: new ShockwavePool(),
-    state: createJuiceState(),
+    state: createEffectsState(),
   };
 }
 
@@ -70,7 +70,7 @@ export interface GameSession {
    */
   forcedSeed: number | null;
   /** Partículas/estela/trauma/hit-stop (fase 4, GDD §12): independiente del mundo, sobrevive a reinicios de run. */
-  juice: JuiceSession;
+  effects: EffectsSession;
 }
 
 /** Sesión de sala única (playtest del editor, fases 1-2): sin mazmorra multi-sala. */
@@ -91,7 +91,7 @@ export function createGameSession(room: RoomData): GameSession {
     dungeonPool: null,
     seed: 1,
     forcedSeed: null,
-    juice: createJuiceSession(),
+    effects: createEffectsSession(),
   };
 }
 
@@ -124,7 +124,7 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
     dungeonPool: pool,
     seed,
     forcedSeed,
-    juice: createJuiceSession(),
+    effects: createEffectsSession(),
   };
 }
 
@@ -198,6 +198,6 @@ export function restartSession(session: GameSession): void {
   // Trauma/hit-stop no deben sobrevivir a un reinicio de run (evita un shake
   // heredado de la muerte al aparecer en la nueva run); los pools de
   // partículas/estela sí se conservan (son geometría pura, sin estado de sala).
-  session.juice.state.trauma = 0;
-  session.juice.state.hitStopRemaining = 0;
+  session.effects.state.trauma = 0;
+  session.effects.state.hitStopRemaining = 0;
 }

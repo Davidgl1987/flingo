@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react';
+import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
 // Los tipos de node:fs/node:path vienen de types/node-shim.d.ts (el proyecto
@@ -78,6 +79,11 @@ function editorRoomsEndpoint(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [react(), editorRoomsEndpoint()],
+  resolve: {
+    alias: {
+      '@': resolve(process.cwd(), 'src'),
+    },
+  },
   server: {
     host: true,
     // Dominios de túnel ngrok permitidos (Vite bloquea por defecto cualquier

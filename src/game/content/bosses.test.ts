@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import bossGuardianJson from '../../levels/boss-guardian.json';
+import bossGuardianJson from '@/levels/boss-guardian.json';
 import {
   GUARDIAN_BARREL_DAMAGE_FRACTION,
   GUARDIAN_BARREL_FALL_DURATION,
@@ -26,14 +26,14 @@ import {
   HERO_RADIUS,
 } from './constants';
 import { getBossDef, guardianBarrelSpawnPoints } from './bosses';
-import { initBossEnemies, stepBosses } from '../sim/boss';
-import { applyDamageToEnemy } from '../sim/combat';
-import { createEventQueue, drainEvents, type GameEvent } from '../sim/events';
-import { explodeBarrel, stepBarrels } from '../sim/hazards';
-import { stepHeroPhysics } from '../sim/physics';
-import { parseRoomData } from '../sim/room-format';
-import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '../sim/world';
-import { barrelInAir, createWorld } from '../sim/world';
+import { initBossEnemies, stepBosses } from '@/game/sim/boss';
+import { applyDamageToEnemy } from '@/game/sim/combat';
+import { createEventQueue, drainEvents, type GameEvent } from '@/game/sim/events';
+import { explodeBarrel, stepBarrels } from '@/game/sim/hazards';
+import { stepHeroPhysics } from '@/game/sim/physics';
+import { parseRoomData } from '@/game/sim/room-format';
+import type { EnemySpawn, HazardSpawn, RoomData, RoomTag } from '@/game/sim/world';
+import { barrelInAir, createWorld } from '@/game/sim/world';
 
 const FIXED_DT = 1 / 60;
 

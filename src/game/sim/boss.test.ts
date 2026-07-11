@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { getBossDef } from '../content/bosses';
+import { getBossDef } from '@/game/content/bosses';
 import { capBossHitDamage, initBossEnemies, isBoss, stepBossDoorSeal, stepBosses } from './boss';
 import { applyDamageToEnemy } from './combat';
 import { generateDungeon } from './dungeon';

@@ -7,17 +7,17 @@
  * - Squash & stretch (fase 4, SOLO render): estiramiento a lo largo de la
  *   velocidad cuando va rápido, aplastamiento breve al detectar una frenada
  *   brusca (impacto). La sim nunca se entera.
- * - Emisión de la estela (GDD §12): deposita puntos en session.juice.trail
+ * - Emisión de la estela (GDD §12): deposita puntos en session.effects.trail
  *   cuando supera el umbral de velocidad (el pool lo dibuja TrailView).
  */
 
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Mesh } from 'three';
-import { HERO_RADIUS, PIT_FALL_DURATION } from '../content/constants';
-import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '../juice/trail';
-import type { GameSession } from '../session';
-import type { WeaponMode } from '../sim/world';
+import { HERO_RADIUS, PIT_FALL_DURATION } from '@/game/content/constants';
+import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '@/game/effects/trail';
+import type { GameSession } from '@/game/session';
+import type { WeaponMode } from '@/game/sim/world';
 import { aimDotMaterial, blobShadowMaterial, heroMaterial, unitCircle, unitSphere, WEAPON_COLOR } from './assets';
 
 /** Frecuencia del parpadeo de invulnerabilidad (alternancias por segundo). */
@@ -77,7 +77,7 @@ export function HeroView({ session }: { session: GameSession }) {
     // en curso). Se dispara una sola vez por transición, en el frame en que
     // se detecta el cambio.
     if (prevWeaponMode.current !== null && prevWeaponMode.current !== hero.weaponMode) {
-      session.juice.particles.burst(
+      session.effects.particles.burst(
         x,
         z,
         WEAPON_SWITCH_BURST_COUNT,
@@ -121,7 +121,7 @@ export function HeroView({ session }: { session: GameSession }) {
       trailAccumulator.current += delta;
       while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
         trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
-        session.juice.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
+        session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
       }
     } else {
       trailAccumulator.current = 0;

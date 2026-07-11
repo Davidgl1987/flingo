@@ -5,8 +5,8 @@
  * parser del formato antes de confiar en ello.
  */
 
-import { parseRoomData } from '../game/sim/room-format';
-import type { RoomData } from '../game/sim/world';
+import { parseRoomData } from '@/game/sim/room-format';
+import type { RoomData } from '@/game/sim/world';
 
 const DRAFT_KEY = 'flingo-editor-draft';
 const PLAYTEST_KEY = 'flingo-editor-playtest';

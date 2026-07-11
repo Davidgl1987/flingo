@@ -11,11 +11,11 @@
 import { useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
 import * as THREE from 'three';
-import { MAX_DRAG_DISTANCE, MIN_LAUNCH_FORCE } from '../content/constants';
-import type { GameSession } from '../session';
-import { resolveWeaponRelease } from '../sim/combat';
-import { launchHero } from '../sim/launch';
-import { useUiStore } from '../store';
+import { MAX_DRAG_DISTANCE, MIN_LAUNCH_FORCE } from '@/game/content/constants';
+import type { GameSession } from '@/game/session';
+import { resolveWeaponRelease } from '@/game/sim/combat';
+import { launchHero } from '@/game/sim/launch';
+import { useUiStore } from '@/game/store';
 
 export function AimInput({ session }: { session: GameSession }) {
   const camera = useThree((state) => state.camera);

@@ -1,5 +1,5 @@
 /**
- * Tests headless del estado de juice (fase 4): el trauma decae, el hit-stop
+ * Tests headless del estado de effects (fase 4): el trauma decae, el hit-stop
  * escala el dt de la sim y se recupera solo. Sin three.js ni React.
  */
 
@@ -7,15 +7,15 @@ import { describe, expect, it } from 'vitest';
 import {
   addTrauma,
   consumeHitStop,
-  createJuiceState,
+  createEffectsState,
   decayTrauma,
   HIT_STOP_TIME_SCALE,
   triggerHitStop,
-} from './juiceState';
+} from './effectsState';
 
 describe('trauma', () => {
   it('addTrauma acumula y clampa a [0,1]', () => {
-    const state = createJuiceState();
+    const state = createEffectsState();
     addTrauma(state, 0.3);
     expect(state.trauma).toBeCloseTo(0.3);
     addTrauma(state, 0.9);
@@ -25,7 +25,7 @@ describe('trauma', () => {
   });
 
   it('decae exponencialmente con el tiempo y llega exactamente a 0', () => {
-    const state = createJuiceState();
+    const state = createEffectsState();
     addTrauma(state, 1);
     decayTrauma(state, 0.25);
     const after250ms = state.trauma;
@@ -42,12 +42,12 @@ describe('trauma', () => {
 
 describe('hit-stop', () => {
   it('sin hit-stop activo el factor es 1 (la sim corre a tiempo real)', () => {
-    const state = createJuiceState();
+    const state = createEffectsState();
     expect(consumeHitStop(state, 1 / 60)).toBe(1);
   });
 
   it('mientras dura devuelve la escala reducida y luego se recupera', () => {
-    const state = createJuiceState();
+    const state = createEffectsState();
     triggerHitStop(state, 0.08); // 80 ms
     // ~5 frames a 60 fps dentro de la ventana: escala reducida.
     let scaled = 0;
@@ -61,14 +61,14 @@ describe('hit-stop', () => {
   });
 
   it('no se acorta si ya hay un hit-stop más largo en curso', () => {
-    const state = createJuiceState();
+    const state = createEffectsState();
     triggerHitStop(state, 0.1);
     triggerHitStop(state, 0.02);
     expect(state.hitStopRemaining).toBeCloseTo(0.1);
   });
 
   it('la escala reduce de verdad el avance de la sim (dt escalado)', () => {
-    const state = createJuiceState();
+    const state = createEffectsState();
     triggerHitStop(state, 0.06);
     const dt = 1 / 60;
     let simTime = 0;
