@@ -94,9 +94,21 @@ Crear `src/game/features/enemies/`:
 - **Actualizar el árbol de `docs/ARCHITECTURE.md`** para reflejar la estructura nueva (el principio sim pura / render tonto no cambia).
 - Verificación extra: no hay ciclos de imports (`npx madge --circular src` o equivalente) y ningún archivo de sim importa react/three (`grep`).
 
-### Paso 7 — OPCIONAL (no ejecutar sin OK explícito de David)
+### Paso 7 — Estado por jefe extensible (opus — diseño de contrato de la sim; aprobado por David 2026-07-11)
 
-Sacar `QueenColumn` del tipo `World` hacia un estado por jefe extensible. Ya no es "mover archivos": cambia el contrato de la sim.
+Sacar `QueenColumn` del tipo `World` hacia un estado por-jefe que el core no conozca. Fugas a cerrar (estado real tras el paso 6):
+
+- `world/types.ts`: `interface QueenColumn` + campo `queenColumns: QueenColumn[]` en `World`.
+- `world/create.ts` y `dungeon/dungeon-world.ts`: inicializan `queenColumns: []`.
+- `world/step.ts`: llama a `stepQueenColumns(...)` directamente en el tick (el core invoca lógica de un jefe concreto).
+
+Diseño requerido:
+
+- `World` pasa a tener un único slot opaco de estado por jefe (p. ej. `bossState`); el core no nombra a ningún jefe. El tipo concreto (`QueenState` con sus columnas) vive en `queen/` con un **accessor tipado con guard** (`queenState(world)`), nada de `as` repartidos por los consumidores. Si la reina no se ha inicializado, el accessor devuelve estado vacío seguro (QueenColumnsView puede montar sin reina).
+- `interface QueenColumn` se muda a `queen/` (columns.ts o types propio).
+- La llamada de `step.ts` se generaliza: un hook opcional por jefe (en `BossDef` o vía `bosses/lifecycle.ts`) invocado desde el MISMO punto del tick — el orden de fases del tick no cambia ni un pelo.
+- Los tests de la reina solo cambian en la mecánica de construcción/acceso al estado (helpers `makeQueenWorldWith*`); si una aserción necesita cambiar, la extracción está mal planteada.
+- Verificación: typecheck, 269 tests en verde, build, greps de pureza (grep `queen` en `world/` y `engine/` → cero resultados salvo genéricos).
 
 ## Delegación
 
