@@ -35,6 +35,7 @@ import {
 } from '@/game/session/session';
 import type { RoomData } from '@/game/world/types';
 import { useUiStore } from '@/game/session/store';
+import { BossRewardModal } from '@/game/ui/BossRewardModal';
 import { DamageVignette } from '@/game/ui/DamageVignette';
 import { FpsCounter } from '@/game/ui/FpsCounter';
 import { GameOverModal } from '@/game/ui/GameOverModal';
@@ -141,9 +142,10 @@ export function GameRoot({
         {playtestRoom ? '← Volver al editor' : '✎ Editor'}
       </a>
       <PauseModal session={session} onRestart={handleRestart} />
+      <BossRewardModal session={session} />
       <NextDungeonModal session={session} onAdvance={handleAdvanceDungeon} />
-      <GameOverModal onRestart={handleRestart} onExitToTitle={onExitToTitle} />
-      <VictoryModal onRestart={handleRestart} onExitToTitle={onExitToTitle} />
+      <GameOverModal session={session} onRestart={handleRestart} onExitToTitle={onExitToTitle} />
+      <VictoryModal session={session} onRestart={handleRestart} onExitToTitle={onExitToTitle} />
     </div>
   );
 }

@@ -193,7 +193,7 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     expect(collect(events)).toContain('victory');
   });
 
-  it('limpiar la sala del jefe pone la fase en dungeon-cleared si NO es la mazmorra final (run multi-mazmorra)', () => {
+  it('limpiar la sala del jefe pone la fase en boss-reward si NO es la mazmorra final (run multi-mazmorra, docs/plans/ECONOMY_PLAN.md F3)', () => {
     const dungeon = generateDungeon(10, makePool());
     const world = createDungeonWorld(dungeon, 10);
     // Run multi-mazmorra (GDD §10): quedan más jefes por delante de esta mazmorra.
@@ -213,7 +213,9 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
 
     stepWorld(world, events);
 
-    expect(world.phase).toBe('dungeon-cleared');
+    expect(world.phase).toBe('boss-reward');
+    // El evento 'dungeon-cleared' se conserva aunque la fase real sea
+    // 'boss-reward' (los effects ya reaccionan a él, ver step.ts).
     expect(collect(events)).toContain('dungeon-cleared');
     expect(collect(events)).not.toContain('victory');
   });

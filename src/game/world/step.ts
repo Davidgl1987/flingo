@@ -115,13 +115,18 @@ function stepDungeonRoomClear(world: World, events: EventQueue): void {
       if (door.requiresKey) openConnection(world, door.connectionIndex);
     }
     // Run multi-mazmorra (GDD §10): si esta era la última mazmorra de la
-    // secuencia de jefes, fin de la run ('victory'); si no, hay más jefes por
-    // delante y la sesión (advanceToNextDungeon) encadena la siguiente mazmorra.
+    // secuencia de jefes, fin de la run ('victory', sin recompensa: no habría
+    // mazmorra siguiente donde gastarla — docs/plans/ECONOMY_PLAN.md decisión
+    // 1). Si no, hay más jefes por delante: recompensa gratis primero
+    // ('boss-reward'); `chooseBossReward` (session.ts) pasa a 'dungeon-cleared'
+    // tras la elección, que a su vez encadena la siguiente mazmorra
+    // (advanceToNextDungeon). Se conserva el evento 'dungeon-cleared' (los
+    // effects ya reaccionan a él) aunque la fase real sea 'boss-reward'.
     if (world.isFinalDungeon) {
       world.phase = 'victory';
       pushEvent(events, 'victory', world.hero.position.x, world.hero.position.y, 1);
     } else {
-      world.phase = 'dungeon-cleared';
+      world.phase = 'boss-reward';
       pushEvent(events, 'dungeon-cleared', world.hero.position.x, world.hero.position.y, 1);
     }
   }

@@ -57,6 +57,12 @@
   background: #202741;
 }
 
+.upgrade-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .upgrade-card-name {
   font-size: 17px;
   font-weight: 700;
@@ -191,15 +197,60 @@ details.pause-accordion .pause-legend {
 
 .pause-upgrade-list {
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   font-size: 13px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+}
+
+.pause-upgrade-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pause-upgrade-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .pause-upgrade-desc {
   color: #aab2d4;
+}
+
+/* ── Lista compacta de mejoras en resumen final (Victory/GameOver) ── */
+
+.final-upgrade-section {
+  margin: 0 0 18px;
+  text-align: left;
+}
+
+.final-upgrade-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.final-upgrade-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.final-upgrade-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pause-legend {

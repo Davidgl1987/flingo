@@ -1,0 +1,39 @@
+/* ── Badge de mejora + pips de nivel (docs/plans/ECONOMY_PLAN.md F3) ── */
+
+.upgrade-icon {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.upgrade-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.upgrade-pips-stack {
+  font-size: 12px;
+  font-weight: 700;
+  color: #aab2d4;
+}
+
+.upgrade-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid #39405c;
+  background: transparent;
+  flex: 0 0 auto;
+}
+
+.upgrade-pip-filled {
+  border-color: #54c7ff;
+  background: #54c7ff;
+}
+
+.upgrade-pip-preview {
+  border-color: #54c7ff;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #54c7ff;
+  opacity: 0.55;
+}

@@ -14,6 +14,7 @@ import { generateDungeon } from '@/game/features/dungeon/dungeon';
 import { createDungeonWorld } from '@/game/features/dungeon/dungeon-world';
 import { createEventQueue, type EventQueue } from '@/engine/events';
 import { createRng, type Rng } from '@/engine/rng';
+import { applyUpgrade, rollBossReward, type UpgradeDef } from '@/game/session/upgrades';
 import { createWorld } from '@/game/world/create';
 import type { BossId, RoomData, World } from '@/game/world/types';
 
@@ -76,6 +77,13 @@ export interface GameSession {
   bossSequence: BossId[];
   /** Índice del jefe/mazmorra actual dentro de `bossSequence` (0 = primera). */
   stageIndex: number;
+  /**
+   * Opciones de recompensa gratis calculadas al derrotar un jefe no-final
+   * (docs/plans/ECONOMY_PLAN.md F3, fase 'boss-reward'): vacío si aún no se
+   * han calculado para esta sala o tras elegir. Ver `ensureBossRewardChoices`
+   * y `chooseBossReward`.
+   */
+  bossRewardChoices: UpgradeDef[];
 }
 
 /** Sesión de sala única (playtest del editor, fases 1-2): sin mazmorra multi-sala. */
@@ -97,6 +105,7 @@ export function createGameSession(room: RoomData): GameSession {
     effects: createEffectsSession(),
     bossSequence: [],
     stageIndex: 0,
+    bossRewardChoices: [],
   };
 }
 
@@ -177,6 +186,7 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
     effects: createEffectsSession(),
     bossSequence,
     stageIndex,
+    bossRewardChoices: [],
   };
 }
 
@@ -227,11 +237,41 @@ export function restartSession(session: GameSession): void {
   session.heroPrevY = world.hero.position.y;
   session.aim.active = false;
   session.aim.force = 0;
+  // Recompensa de jefe (docs/plans/ECONOMY_PLAN.md F3): un reinicio no debe
+  // arrastrar opciones calculadas para la mazmorra anterior.
+  session.bossRewardChoices = [];
   // Trauma/hit-stop no deben sobrevivir a un reinicio de run (evita un shake
   // heredado de la muerte al aparecer en la nueva run); los pools de
   // partículas/estela sí se conservan (son geometría pura, sin estado de sala).
   session.effects.state.trauma = 0;
   session.effects.state.hitStopRemaining = 0;
+}
+
+/**
+ * Opciones de recompensa gratis al derrotar un jefe no-final (fase
+ * 'boss-reward', docs/plans/ECONOMY_PLAN.md F3): idempotente, calcula una vez
+ * por sala (`rollBossReward`, una mejora no maxeada por categoría de ataque).
+ *
+ * Caso borde: si todas las mejoras de ataque ya están al máximo, no hay nada
+ * que ofrecer — en vez de dejar la sim atascada en 'boss-reward' sin opciones,
+ * se avanza directamente a 'dungeon-cleared' (mismo desenlace que elegir una
+ * recompensa, sin recompensa que aplicar).
+ */
+export function ensureBossRewardChoices(session: GameSession): UpgradeDef[] {
+  if (session.bossRewardChoices.length === 0) {
+    session.bossRewardChoices = rollBossReward(session.world.hero, session.world.rng);
+    if (session.bossRewardChoices.length === 0) {
+      session.world.phase = 'dungeon-cleared';
+    }
+  }
+  return session.bossRewardChoices;
+}
+
+/** Aplica la recompensa de jefe elegida, vacía las opciones y avanza a 'dungeon-cleared' (sigue el flujo con NextDungeonModal). */
+export function chooseBossReward(session: GameSession, def: UpgradeDef): void {
+  applyUpgrade(session.world, def, session.events);
+  session.bossRewardChoices = [];
+  session.world.phase = 'dungeon-cleared';
 }
 
 /**
@@ -279,6 +319,9 @@ export function advanceToNextDungeon(session: GameSession): void {
   session.heroPrevY = world.hero.position.y;
   session.aim.active = false;
   session.aim.force = 0;
+  // Recompensa de jefe (docs/plans/ECONOMY_PLAN.md F3): ya se eligió (o se
+  // saltó) para poder llegar aquí; no debe sobrevivir a la mazmorra siguiente.
+  session.bossRewardChoices = [];
   session.effects.state.trauma = 0;
   session.effects.state.hitStopRemaining = 0;
 }

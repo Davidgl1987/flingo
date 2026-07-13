@@ -385,7 +385,7 @@ export interface BossState {
   readonly bossId: BossId;
 }
 
-export type GamePhase = 'playing' | 'paused' | 'dungeon-cleared' | 'game-over' | 'victory';
+export type GamePhase = 'playing' | 'paused' | 'boss-reward' | 'dungeon-cleared' | 'game-over' | 'victory';
 
 export interface RunStats {
   roomsCleared: number;
@@ -454,7 +454,8 @@ export interface World {
    * Run multi-mazmorra (GDD §10, feature de encadenado de jefes): true si esta
    * es la última mazmorra de la secuencia de jefes de la run. Al limpiar la
    * sala de jefe, `stepDungeonRoomClear` decide 'victory' (fin de la run) si
-   * es true, o 'dungeon-cleared' (hay más jefes) si no. Por defecto true en
+   * es true, o 'boss-reward' (recompensa gratis, hay más jefes por delante,
+   * docs/plans/ECONOMY_PLAN.md F3) si no. Por defecto true en
    * `createWorld`/`createDungeonWorld` (modo sala única/tests): la sesión
    * (`session.ts`) lo recalcula tras construir cada mundo de una run
    * multi-mazmorra.

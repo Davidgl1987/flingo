@@ -6,7 +6,16 @@
 
 import { describe, expect, it } from 'vitest';
 import { seriesRooms, testRoom } from '@/game/features/dungeon/rooms';
-import { advanceToNextDungeon, createDungeonGameSession, createGameSession, restartSession } from './session';
+import { applyUpgrade, UPGRADE_POOL } from './upgrades';
+import {
+  advanceToNextDungeon,
+  chooseBossReward,
+  createDungeonGameSession,
+  createGameSession,
+  ensureBossRewardChoices,
+  restartSession,
+  type GameSession,
+} from './session';
 
 describe('createDungeonGameSession (arranque de run completa)', () => {
   it('crea un mundo multi-sala con el pool de serie: dungeon activo, héroe en la sala de inicio', () => {
@@ -186,5 +195,74 @@ describe('restartSession (run multi-mazmorra, GDD §10)', () => {
     expect(session.bossSequence.length).toBe(2);
     const bossRoom = session.world.dungeon!.rooms.find((r) => r.room.id === session.world.dungeon!.bossRoomId)!;
     expect(bossRoom.room.boss).toBe(session.bossSequence[0]);
+  });
+});
+
+/** Maxea las 9 mejoras de ATAQUE (cuerpo/flecha/hechizo) del héroe de la sesión: deja rollBossReward sin nada que ofrecer. */
+function maxAllAttackUpgrades(session: GameSession): void {
+  for (const def of UPGRADE_POOL) {
+    if (def.category === 'consumible') continue;
+    for (let i = 0; i < def.maxLevel; i++) applyUpgrade(session.world, def, session.events);
+  }
+}
+
+describe('ensureBossRewardChoices / chooseBossReward (fase boss-reward, docs/plans/ECONOMY_PLAN.md F3)', () => {
+  it('es idempotente: llamadas repetidas devuelven las mismas opciones sin volver a tirar el rng', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    session.world.phase = 'boss-reward';
+
+    const first = ensureBossRewardChoices(session);
+    const second = ensureBossRewardChoices(session);
+
+    expect(second).toBe(first); // misma referencia: no se recalculó.
+    expect(second.map((d) => d.id)).toEqual(first.map((d) => d.id));
+    expect(first.length).toBeGreaterThan(0);
+    expect(first.length).toBeLessThanOrEqual(3);
+  });
+
+  it('chooseBossReward aplica el nivel de la mejora elegida, vacía las opciones y pasa a dungeon-cleared', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    session.world.phase = 'boss-reward';
+    const choices = ensureBossRewardChoices(session);
+    const picked = choices[0];
+    const levelBefore = session.world.hero.upgradeLevels[picked.id] ?? 0;
+
+    chooseBossReward(session, picked);
+
+    expect(session.world.hero.upgradeLevels[picked.id]).toBe(levelBefore + 1);
+    expect(session.bossRewardChoices).toEqual([]);
+    expect(session.world.phase).toBe('dungeon-cleared');
+  });
+
+  it('con todas las mejoras de ataque maxeadas, no deja la fase atascada: pasa a dungeon-cleared sin opciones', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    maxAllAttackUpgrades(session);
+    session.world.phase = 'boss-reward';
+
+    const choices = ensureBossRewardChoices(session);
+
+    expect(choices).toEqual([]);
+    expect(session.world.phase).toBe('dungeon-cleared');
+  });
+
+  it('restartSession vacía bossRewardChoices', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    session.world.phase = 'boss-reward';
+    ensureBossRewardChoices(session);
+    expect(session.bossRewardChoices.length).toBeGreaterThan(0);
+
+    restartSession(session);
+
+    expect(session.bossRewardChoices).toEqual([]);
+  });
+
+  it('advanceToNextDungeon vacía bossRewardChoices', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    // Deja alguna opción "pendiente" simulando que se llegó aquí sin pasar por chooseBossReward.
+    session.bossRewardChoices = [UPGRADE_POOL[0]];
+
+    advanceToNextDungeon(session);
+
+    expect(session.bossRewardChoices).toEqual([]);
   });
 });

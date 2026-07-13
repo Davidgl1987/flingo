@@ -25,6 +25,7 @@ import {
 import { resumeGame, type GameSession } from '@/game/session/session';
 import { getUpgradeLevel, UPGRADE_POOL } from '@/game/session/upgrades';
 import { useUiStore } from '@/game/session/store';
+import { UpgradeIcon, UpgradeLevelPips } from './UpgradeIcon';
 import './modals.css';
 
 const ENEMY_LEGEND: { label: string; color: string }[] = [
@@ -78,14 +79,19 @@ export function PauseModal({ session, onRestart }: { session: GameSession; onRes
             <p className="pause-empty">Ninguna todavía.</p>
           ) : (
             <ul className="pause-upgrade-list">
-              {acquiredUpgrades.map((def) => (
-                <li key={def.id}>
-                  <strong>
-                    {def.name} · nivel {getUpgradeLevel(hero, def.id)}
-                  </strong>
-                  <span className="pause-upgrade-desc"> — {def.description}</span>
-                </li>
-              ))}
+              {acquiredUpgrades.map((def) => {
+                const level = getUpgradeLevel(hero, def.id);
+                return (
+                  <li key={def.id} className="pause-upgrade-item">
+                    <UpgradeIcon icon={def.icon} size={24} />
+                    <div className="pause-upgrade-info">
+                      <strong>{def.name}</strong>
+                      <UpgradeLevelPips level={level} maxLevel={def.maxLevel} />
+                      <span className="pause-upgrade-desc">{def.description}</span>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
