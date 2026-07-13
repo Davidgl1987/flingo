@@ -245,7 +245,7 @@ describe('retroceso de proyectil', () => {
 });
 
 describe('cooldowns de armas', () => {
-  it('respeta el cooldown de la flecha (0.5 s, modulable por Pulso Firme)', () => {
+  it('respeta el cooldown de la flecha (0.5 s)', () => {
     const world = makeWorld();
     const events = createEventQueue(16);
     expect(fireProjectile(world, 'arrow', 1, 0, 1, events)).toBe(true);
@@ -255,12 +255,13 @@ describe('cooldowns de armas', () => {
     expect(fireProjectile(world, 'arrow', 1, 0, 1, events)).toBe(true);
   });
 
-  it('Pulso Firme (×0.72) acorta la recarga', () => {
+  it('respeta el cooldown del hechizo (1.0 s)', () => {
     const world = makeWorld();
     const events = createEventQueue(16);
-    world.hero.modifiers.reloadMultiplier = 0.72;
     expect(fireProjectile(world, 'spell', 1, 0, 1, events)).toBe(true);
-    world.time += 0.73; // < 1.0 pero > 0.72
+    expect(fireProjectile(world, 'spell', 1, 0, 1, events)).toBe(false);
+
+    world.time += 1.01;
     expect(fireProjectile(world, 'spell', 1, 0, 1, events)).toBe(true);
   });
 });

@@ -1,155 +1,278 @@
 /**
- * Mejoras (GDD §11): pool de 9, elección de 3 al azar (con RNG con semilla)
- * al limpiar una sala. Daño/escudo repetibles; el resto una vez; Corazón
- * Extra deja de ofrecerse al llegar a maxHp del héroe.
+ * Mejoras (GDD §11, docs/plans/ECONOMY_PLAN.md): pool de 12 mejoras por
+ * categorías (cuerpo/flecha/hechizo/consumible) con niveles y precio en
+ * monedas. Dos vías de obtención: recompensa gratis de jefe no-final
+ * (`rollBossReward`, una opción por categoría de ATAQUE) o compra en tienda
+ * (`tryPurchaseUpgrade`, todas las categorías) — ambas UI llegan en F3/F4;
+ * este módulo solo deja el modelo de datos y la economía testeados.
  */
 
 import { HERO_MAX_HP } from '@/game/features/hero/constants';
-import { STEADY_PULSE_RELOAD_MULTIPLIER } from '@/game/features/combat/constants';
 import { pushEvent, type EventQueue } from '@/engine/events';
 import type { Rng } from '@/engine/rng';
 import type { Hero, World } from '@/game/world/types';
 
+export type UpgradeCategory = 'cuerpo' | 'flecha' | 'hechizo' | 'consumible';
+
 export type UpgradeId =
-  | 'heavy-impact'
-  | 'extra-heart'
-  | 'more-slide'
-  | 'control-boots'
-  | 'explosive-ram'
-  | 'sharp-arrows'
-  | 'arcane-spell'
-  | 'steady-pulse'
-  | 'fragile-shield';
+  | 'cuerpo-dano'
+  | 'cuerpo-velocidad'
+  | 'cuerpo-firmeza'
+  | 'flecha-dano'
+  | 'flecha-multi'
+  | 'flecha-perfora'
+  | 'hechizo-dano'
+  | 'hechizo-multi'
+  | 'hechizo-rebote'
+  | 'escudo'
+  | 'corazon'
+  | 'iman';
 
 export interface UpgradeDef {
   id: UpgradeId;
   name: string;
   description: string;
-  /** true = puede repetirse en elecciones sucesivas (daño/escudo); false = solo una vez por run. */
-  repeatable: boolean;
-  /** Si se define, la mejora solo se ofrece mientras esto devuelva true para el héroe dado. */
+  category: UpgradeCategory;
+  /** Nivel máximo comprable/ofrecible; Infinity para stacks sin tope (escudo). */
+  maxLevel: number;
+  /** Id corto del badge visual (el SVG llega en fases F3/F5). */
+  icon: string;
+  /** Precio en monedas para comprar el nivel `level` (1-indexado). */
+  price: (level: number) => number;
+  /** Si se define, gating extra además de maxLevel (p.ej. corazón con vida llena al tope). */
   isAvailable?: (hero: Hero) => boolean;
-  apply: (hero: Hero) => void;
+  apply: (hero: Hero, level: number) => void;
+}
+
+/** Precio de las mejoras de cuerpo/flecha/hechizo: nivel × 10 (10/20/30). */
+function tieredPrice(level: number): number {
+  return level * 10;
+}
+
+/** Precio de Canto de Urraca (imán): 5 + nivel × 5 (10/15/20). */
+function magnetPrice(level: number): number {
+  return 5 + level * 5;
 }
 
 export const UPGRADE_POOL: UpgradeDef[] = [
+  // ── Cuerpo ────────────────────────────────────────────────────────────
   {
-    id: 'heavy-impact',
-    name: 'Impacto Pesado',
+    id: 'cuerpo-dano',
+    name: 'Erizo de Acero',
     description: '+1 daño de embestida.',
-    repeatable: true,
+    category: 'cuerpo',
+    maxLevel: 3,
+    icon: 'spikes',
+    price: tieredPrice,
     apply: (hero) => {
       hero.modifiers.ramDamageBonus += 1;
     },
   },
   {
-    id: 'extra-heart',
-    name: 'Corazón Extra',
-    description: '+1 vida máxima y cura 1.',
-    repeatable: false,
-    isAvailable: (hero) => hero.maxHp < HERO_MAX_HP,
+    id: 'cuerpo-velocidad',
+    name: 'Estela de Cometa',
+    description: '+1 u/s de velocidad de lanzamiento corporal.',
+    category: 'cuerpo',
+    maxLevel: 3,
+    icon: 'comet',
+    price: tieredPrice,
     apply: (hero) => {
-      hero.maxHp = Math.min(HERO_MAX_HP, hero.maxHp + 1);
-      hero.hp = Math.min(hero.maxHp, hero.hp + 1);
+      hero.modifiers.launchSpeedBonus += 1;
     },
   },
   {
-    id: 'more-slide',
-    name: 'Más Deslizamiento',
-    description: 'Conservas más velocidad al deslizar.',
-    repeatable: false,
+    id: 'cuerpo-firmeza',
+    name: 'Canto Rodado',
+    description: 'Menos retroceso al recibir daño.',
+    category: 'cuerpo',
+    maxLevel: 3,
+    icon: 'boulder',
+    price: tieredPrice,
     apply: (hero) => {
-      hero.modifiers.frictionMultiplier *= 0.8;
+      hero.modifiers.knockbackTakenMultiplier *= 0.8;
     },
   },
+  // ── Flecha ────────────────────────────────────────────────────────────
   {
-    id: 'control-boots',
-    name: 'Botas de Control',
-    description: 'Te frenas antes: más control, menos alcance.',
-    repeatable: false,
-    apply: (hero) => {
-      hero.modifiers.frictionMultiplier *= 1.25;
-    },
-  },
-  {
-    id: 'explosive-ram',
-    name: 'Choque Explosivo',
-    description: 'Tus embestidas dañan también a enemigos cercanos.',
-    repeatable: false,
-    apply: (hero) => {
-      hero.modifiers.explosiveRam = true;
-    },
-  },
-  {
-    id: 'sharp-arrows',
-    name: 'Flechas Afiladas',
+    id: 'flecha-dano',
+    name: 'Colmillo de Hierro',
     description: '+1 daño de flecha.',
-    repeatable: true,
+    category: 'flecha',
+    maxLevel: 3,
+    icon: 'fang',
+    price: tieredPrice,
     apply: (hero) => {
       hero.modifiers.arrowDamageBonus += 1;
     },
   },
   {
-    id: 'arcane-spell',
-    name: 'Hechizo Arcano',
-    description: '+1 daño de hechizo y proyectil más grande.',
-    repeatable: true,
+    id: 'flecha-multi',
+    name: 'Bandada',
+    description: '+1 flecha en ángulo.',
+    category: 'flecha',
+    maxLevel: 3,
+    icon: 'flock',
+    price: tieredPrice,
+    apply: (hero) => {
+      hero.modifiers.arrowCountBonus += 1;
+    },
+  },
+  {
+    id: 'flecha-perfora',
+    name: 'Aguja Fantasma',
+    description: '+1 enemigo atravesado por la flecha.',
+    category: 'flecha',
+    maxLevel: 3,
+    icon: 'needle',
+    price: tieredPrice,
+    apply: (hero) => {
+      hero.modifiers.arrowPierceBonus += 1;
+    },
+  },
+  // ── Hechizo ───────────────────────────────────────────────────────────
+  {
+    id: 'hechizo-dano',
+    name: 'Orbe Voraz',
+    description: '+1 daño de hechizo y proyectil más ancho.',
+    category: 'hechizo',
+    maxLevel: 3,
+    icon: 'orb',
+    price: tieredPrice,
     apply: (hero) => {
       hero.modifiers.spellDamageBonus += 1;
       hero.modifiers.spellRadiusBonus += 1;
     },
   },
   {
-    id: 'steady-pulse',
-    name: 'Pulso Firme',
-    description: 'Recargas de flecha y hechizo un 28% más rápidas.',
-    repeatable: false,
+    id: 'hechizo-multi',
+    name: 'Coro Arcano',
+    description: '+1 hechizo en ángulo.',
+    category: 'hechizo',
+    maxLevel: 3,
+    icon: 'choir',
+    price: tieredPrice,
     apply: (hero) => {
-      hero.modifiers.reloadMultiplier *= STEADY_PULSE_RELOAD_MULTIPLIER;
+      hero.modifiers.spellCountBonus += 1;
     },
   },
   {
-    id: 'fragile-shield',
-    name: 'Escudo Frágil',
+    id: 'hechizo-rebote',
+    name: 'Eco Errante',
+    description: '+1 rebote del hechizo.',
+    category: 'hechizo',
+    maxLevel: 3,
+    icon: 'echo',
+    price: tieredPrice,
+    apply: (hero) => {
+      hero.modifiers.spellBounceBonus += 1;
+    },
+  },
+  // ── Consumibles (solo tienda, GDD/plan decisión 2) ───────────────────
+  {
+    id: 'escudo',
+    name: 'Burbuja de Cuarzo',
     description: '+1 carga de escudo: bloquea el próximo golpe.',
-    repeatable: true,
+    category: 'consumible',
+    maxLevel: Infinity,
+    icon: 'bubble',
+    price: () => 8,
     apply: (hero) => {
       hero.modifiers.shieldCharges += 1;
     },
   },
+  {
+    id: 'corazon',
+    name: 'Ascua Vital',
+    description: 'Cura 1 corazón; con la vida llena, +1 vida máxima (tope 9).',
+    category: 'consumible',
+    maxLevel: HERO_MAX_HP,
+    icon: 'ember',
+    price: () => 12,
+    isAvailable: (hero) => hero.hp < hero.maxHp || hero.maxHp < HERO_MAX_HP,
+    apply: (hero) => {
+      if (hero.hp < hero.maxHp) {
+        hero.hp += 1;
+      } else {
+        hero.maxHp = Math.min(HERO_MAX_HP, hero.maxHp + 1);
+        hero.hp += 1;
+      }
+    },
+  },
+  {
+    id: 'iman',
+    name: 'Canto de Urraca',
+    description: 'Atrae monedas desde más lejos.',
+    category: 'consumible',
+    maxLevel: 3,
+    icon: 'magpie',
+    price: magnetPrice,
+    apply: (hero, level) => {
+      hero.modifiers.coinMagnetLevel = level;
+    },
+  },
 ];
 
-/**
- * Elige `count` mejoras distintas para ofrecer, respetando `repeatable` y
- * `isAvailable`. Determinista: consume `rng` (world.rng) en orden.
- * `offeredOnce` es el conjunto de IDs no-repetibles ya ofrecidos/aplicados
- * en esta run (el llamador lo mantiene y actualiza tras aplicar).
- */
-export function rollUpgradeChoices(
-  hero: Hero,
-  rng: Rng,
-  count: number,
-  offeredOnce: ReadonlySet<UpgradeId>,
-): UpgradeDef[] {
-  const eligible = UPGRADE_POOL.filter((def) => {
-    if (!def.repeatable && offeredOnce.has(def.id)) return false;
-    if (def.isAvailable && !def.isAvailable(hero)) return false;
-    return true;
-  });
-
-  const choices: UpgradeDef[] = [];
-  const pool = eligible.slice();
-  const n = Math.min(count, pool.length);
-  for (let i = 0; i < n; i++) {
-    const index = Math.floor(rng() * pool.length);
-    choices.push(pool[index]);
-    pool.splice(index, 1);
-  }
-  return choices;
+/** Nivel actual del héroe en una mejora (0 si nunca se aplicó). */
+export function getUpgradeLevel(hero: Hero, id: UpgradeId): number {
+  return hero.upgradeLevels[id] ?? 0;
 }
 
-/** Aplica una mejora elegida al héroe y emite el evento correspondiente. */
+/** true si la mejora puede ofrecerse/comprarse: nivel por debajo de `maxLevel` y `isAvailable` (si lo define) satisfecho. */
+export function canOfferUpgrade(def: UpgradeDef, hero: Hero): boolean {
+  if (getUpgradeLevel(hero, def.id) >= def.maxLevel) return false;
+  if (def.isAvailable && !def.isAvailable(hero)) return false;
+  return true;
+}
+
+/** Sube el nivel de la mejora en el héroe, aplica su efecto para ese nivel y emite el evento correspondiente. */
 export function applyUpgrade(world: World, def: UpgradeDef, events: EventQueue): void {
-  def.apply(world.hero);
-  pushEvent(events, 'upgrade-applied', world.hero.position.x, world.hero.position.y, 1);
+  const hero = world.hero;
+  const nextLevel = getUpgradeLevel(hero, def.id) + 1;
+  hero.upgradeLevels[def.id] = nextLevel;
+  def.apply(hero, nextLevel);
+  pushEvent(events, 'upgrade-applied', hero.position.x, hero.position.y, 1);
+}
+
+/** Categorías de ATAQUE que participan en la recompensa gratis de jefe (GDD/plan decisión 2: consumibles solo en tienda). */
+const BOSS_REWARD_CATEGORIES: UpgradeCategory[] = ['cuerpo', 'flecha', 'hechizo'];
+
+/**
+ * Recompensa gratis al derrotar un jefe no-final (GDD/plan): una mejora
+ * aleatoria no maxeada por cada categoría de ataque. Si una categoría ya está
+ * toda al máximo, se omite (el resultado puede tener menos de 3). Determinista:
+ * consume `rng` una vez por categoría con opciones elegibles, en el orden fijo
+ * cuerpo → flecha → hechizo.
+ */
+export function rollBossReward(hero: Hero, rng: Rng): UpgradeDef[] {
+  const rewards: UpgradeDef[] = [];
+  for (const category of BOSS_REWARD_CATEGORIES) {
+    const eligible = UPGRADE_POOL.filter((def) => def.category === category && canOfferUpgrade(def, hero));
+    if (eligible.length === 0) continue;
+    const index = Math.floor(rng() * eligible.length);
+    rewards.push(eligible[index]);
+  }
+  return rewards;
+}
+
+/**
+ * Compra una mejora en la tienda (F4): precio = `def.price(nivelActual+1)`.
+ * Sin efecto y devuelve false si la mejora no es ofrecible (maxLevel/isAvailable)
+ * o si no hay saldo suficiente. Si compra: descuenta `hero.coins`, resta el
+ * precio de `stats.score` (decisión 3 del plan: gastar RESTA puntuación,
+ * clamp a 0), aplica el nivel y emite `'upgrade-purchased'` además del
+ * `'upgrade-applied'` que ya emite `applyUpgrade`.
+ */
+export function tryPurchaseUpgrade(world: World, def: UpgradeDef, events: EventQueue): boolean {
+  const hero = world.hero;
+  if (!canOfferUpgrade(def, hero)) return false;
+
+  const nextLevel = getUpgradeLevel(hero, def.id) + 1;
+  const price = def.price(nextLevel);
+  if (hero.coins < price) return false;
+
+  hero.coins -= price;
+  world.stats.score = Math.max(0, world.stats.score - price);
+  applyUpgrade(world, def, events);
+  pushEvent(events, 'upgrade-purchased', hero.position.x, hero.position.y, price);
+  return true;
 }

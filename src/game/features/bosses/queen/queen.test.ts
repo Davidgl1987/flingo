@@ -526,7 +526,7 @@ describe('Reina: derrota y limpieza de sala (integración con stepWorld, modo sa
     expect(collectTypes(events)).toContain('boss-defeated');
 
     // La sala NO se da por limpiada mientras la larva siga viva.
-    expect(world.phase).not.toBe('room-cleared');
+    expect(world.phase).toBe('playing');
 
     // Mata también a la única larva viva: ahora sí, todos muertos.
     for (const larva of liveLarvae(world)) {
@@ -534,9 +534,9 @@ describe('Reina: derrota y limpieza de sala (integración con stepWorld, modo sa
     }
     // Confirma que collectDeadDrops (step.ts) no rompe nada aquí: este test
     // solo usa stepBosses/applyDamageToEnemy (no stepWorld), así que la
-    // transición a 'room-cleared' la valida stepSingleRoomClear en step.test.ts
-    // (fuera de alcance de este fichero); aquí basta con la propiedad de
-    // negocio: sin más larvas vivas, allDead(world.enemies) sería true.
+    // puntuación de sala limpiada la valida stepSingleRoomClear en
+    // items.test.ts (fuera de alcance de este fichero); aquí basta con la
+    // propiedad de negocio: sin más larvas vivas, allDead(world.enemies) sería true.
     const stillAlive = world.enemies.filter((e) => e.hp > 0);
     expect(stillAlive.length).toBe(0);
   });

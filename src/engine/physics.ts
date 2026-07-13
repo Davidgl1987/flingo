@@ -236,14 +236,11 @@ export function stepHeroPhysics(world: World, events: EventQueue): void {
     collideCircleAabb(position, velocity, hero.radius, obstacles[i].aabb, events);
   }
 
-  const frictionMultiplier = hero.modifiers.frictionMultiplier;
-  const baseDecay =
-    frictionMultiplier === 1 ? FRICTION_DECAY_PER_TICK : Math.pow(FRICTION_DECAY_PER_TICK, frictionMultiplier);
   // Fricción extra a baja velocidad (punto 8 de playtest): calculada sobre la
   // velocidad ANTES de aplicar el decaimiento de este tick, un único
   // Math.hypot + Math.exp escalares, sin asignaciones.
   const speedBefore = Math.hypot(velocity.x, velocity.y);
-  const decay = baseDecay * lowSpeedExtraDecay(speedBefore);
+  const decay = FRICTION_DECAY_PER_TICK * lowSpeedExtraDecay(speedBefore);
   velocity.x *= decay;
   velocity.y *= decay;
   if (velocity.x * velocity.x + velocity.y * velocity.y < STOP_THRESHOLD * STOP_THRESHOLD) {

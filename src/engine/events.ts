@@ -29,6 +29,8 @@ export type GameEventType =
   | 'item-pickup'
   | 'room-cleared'
   | 'upgrade-applied'
+  /** Compra en tienda (docs/plans/ECONOMY_PLAN.md, F1 economía/F4 tienda): intensity = precio pagado. */
+  | 'upgrade-purchased'
   | 'room-entered'
   | 'doors-open'
   | 'door-locked'

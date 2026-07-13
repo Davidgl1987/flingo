@@ -229,6 +229,8 @@ export function createDungeonWorld(dungeon: DungeonMap, seed: number = dungeon.s
       lastSpellTime: -10,
       hasKey: false,
       modifiers: createDefaultModifiers(),
+      upgradeLevels: {},
+      coins: 0,
       trailDwell: 0,
     },
     enemies,

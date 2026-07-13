@@ -12,7 +12,7 @@ import { useEffect, useRef } from 'react';
 import { FIXED_DT } from '@/engine/physics';
 import { consumeHitStop, decayTrauma } from '@/game/features/effects/effectsState';
 import { reactToEvent } from '@/game/features/effects/reactToEvent';
-import { ensureUpgradeChoices, type GameSession } from '@/game/session/session';
+import type { GameSession } from '@/game/session/session';
 import { drainEvents, type GameEvent } from '@/engine/events';
 import { stepWorld } from '@/game/world/step';
 import type { GamePhase } from '@/game/world/types';
@@ -111,10 +111,6 @@ export function useGameLoop(session: GameSession): void {
       }
     });
 
-    if (world.phase === 'room-cleared') {
-      ensureUpgradeChoices(session);
-    }
-
     const hero = world.hero;
     const snap = lastSynced.current;
     const { roomIndex, totalRooms } = computeRoomProgress(world);
@@ -128,7 +124,7 @@ export function useGameLoop(session: GameSession): void {
     if (
       hero.hp !== snap.hp ||
       hero.maxHp !== snap.maxHp ||
-      world.stats.coinsCollected !== snap.coins ||
+      hero.coins !== snap.coins ||
       hero.hasKey !== snap.hasKey ||
       world.phase !== snap.phase ||
       world.stats.roomsCleared !== snap.roomsCleared ||
@@ -138,7 +134,7 @@ export function useGameLoop(session: GameSession): void {
     ) {
       snap.hp = hero.hp;
       snap.maxHp = hero.maxHp;
-      snap.coins = world.stats.coinsCollected;
+      snap.coins = hero.coins;
       snap.hasKey = hero.hasKey;
       snap.phase = world.phase;
       snap.roomsCleared = world.stats.roomsCleared;
@@ -148,7 +144,9 @@ export function useGameLoop(session: GameSession): void {
       useUiStore.getState().syncFromWorld({
         hp: hero.hp,
         maxHp: hero.maxHp,
-        coins: world.stats.coinsCollected,
+        // Monedero gastable (docs/plans/ECONOMY_PLAN.md), no el total histórico
+        // recogido (ese vive en world.stats.coinsCollected, para la puntuación).
+        coins: hero.coins,
         hasKey: hero.hasKey,
         phase: world.phase,
         roomsCleared: world.stats.roomsCleared,

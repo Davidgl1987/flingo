@@ -1,6 +1,8 @@
 /**
  * Tests de objetos (GDD §9): recogida de moneda/poción/llave y drop de
- * moneda al morir un enemigo. También la transición a room-cleared.
+ * monedas al morir un enemigo (docs/plans/ECONOMY_PLAN.md: N monedas por
+ * dureza, esparcidas). También la puntuación al limpiar la sala (modo sala
+ * única): ya NO cambia de fase (la mejora-por-sala desaparece).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -33,10 +35,11 @@ function makeWorld(items: ItemSpawn[] = [], enemies: EnemySpawn[] = []): World {
 }
 
 describe('moneda', () => {
-  it('se recoge al contacto: +1 moneda, +1 punto, item desactivado', () => {
+  it('se recoge al contacto: +1 monedero, +1 total recogido, +1 punto, item desactivado', () => {
     const world = makeWorld([{ id: 'c1', kind: 'coin', position: { x: 0.3, y: 0 } }]);
     const events = createEventQueue(16);
     stepItems(world, events);
+    expect(world.hero.coins).toBe(1);
     expect(world.stats.coinsCollected).toBe(1);
     expect(world.stats.score).toBe(1);
     expect(world.items[0].active).toBe(false);
@@ -83,7 +86,7 @@ describe('llave', () => {
 });
 
 describe('drop de moneda al morir un enemigo', () => {
-  it('el enemigo muerto suelta una moneda en su posición (una sola vez)', () => {
+  it('un dummy (dureza 1) suelta 1 moneda esparcida cerca de su posición (una sola vez)', () => {
     const world = makeWorld([], [{ id: 'e1', kind: 'dummy', position: { x: 5, y: 5 } }]);
     const events = createEventQueue(64);
     applyDamageToEnemy(world, world.enemies[0], 99, 1, 0, events);
@@ -91,8 +94,13 @@ describe('drop de moneda al morir un enemigo', () => {
     stepWorld(world, events);
     const coins = world.items.filter((i) => i.kind === 'coin' && i.active);
     expect(coins).toHaveLength(1);
-    // La posición de la moneda incluye el desplazamiento del knockback (0.18).
-    expect(coins[0].position.x).toBeCloseTo(world.enemies[0].position.x, 6);
+    // Esparcida en un anillo de radio ~0.25-0.6 u alrededor del cadáver (ver COIN_DROP_MIN/MAX_RADIUS).
+    const dist = Math.hypot(
+      coins[0].position.x - world.enemies[0].position.x,
+      coins[0].position.y - world.enemies[0].position.y,
+    );
+    expect(dist).toBeGreaterThanOrEqual(0.25 - 1e-6);
+    expect(dist).toBeLessThanOrEqual(0.6 + 1e-6);
 
     // Ticks posteriores no duplican el drop.
     stepWorld(world, events);
@@ -100,14 +108,32 @@ describe('drop de moneda al morir un enemigo', () => {
     expect(world.items.filter((i) => i.kind === 'coin' && i.active)).toHaveLength(1);
   });
 
-  it('matar al último enemigo pasa a room-cleared con +50 de puntuación', () => {
+  it('un shooter (dureza 3) suelta 3 monedas', () => {
+    const world = makeWorld([], [{ id: 'e1', kind: 'shooter', position: { x: 5, y: 5 } }]);
+    const events = createEventQueue(64);
+    applyDamageToEnemy(world, world.enemies[0], 99, 1, 0, events);
+
+    stepWorld(world, events);
+    expect(world.items.filter((i) => i.kind === 'coin' && i.active)).toHaveLength(3);
+  });
+
+  it('un jefe (dureza 10) suelta 10 monedas', () => {
+    const world = makeWorld([], [{ id: 'b1', kind: 'boss', position: { x: 5, y: 5 } }]);
+    const events = createEventQueue(64);
+    applyDamageToEnemy(world, world.enemies[0], 999, 1, 0, events, true);
+
+    stepWorld(world, events);
+    expect(world.items.filter((i) => i.kind === 'coin' && i.active)).toHaveLength(10);
+  });
+
+  it('matar al último enemigo puntúa +50 sin cambiar de fase (docs/plans/ECONOMY_PLAN.md)', () => {
     const world = makeWorld([], [{ id: 'e1', kind: 'dummy', position: { x: 5, y: 5 } }]);
     const events = createEventQueue(64);
     applyDamageToEnemy(world, world.enemies[0], 99, 1, 0, events);
     drainEvents(events, () => {});
 
     stepWorld(world, events);
-    expect(world.phase).toBe('room-cleared');
+    expect(world.phase).toBe('playing');
     expect(world.stats.roomsCleared).toBe(1);
     expect(world.stats.score).toBeGreaterThanOrEqual(50);
 
@@ -116,19 +142,15 @@ describe('drop de moneda al morir un enemigo', () => {
     expect(types).toContain('room-cleared');
   });
 
-  it('la sim se pausa en room-cleared (el mundo no avanza hasta reanudar)', () => {
+  it('la sim NO se pausa al limpiar la sala: sigue avanzando en el mismo tick de después', () => {
     const world = makeWorld([], [{ id: 'e1', kind: 'dummy', position: { x: 5, y: 5 } }]);
     const events = createEventQueue(64);
     applyDamageToEnemy(world, world.enemies[0], 99, 1, 0, events);
     stepWorld(world, events);
-    expect(world.phase).toBe('room-cleared');
+    expect(world.phase).toBe('playing');
 
     world.hero.velocity.x = 5;
     const xBefore = world.hero.position.x;
-    stepWorld(world, events);
-    expect(world.hero.position.x).toBe(xBefore); // pausada
-
-    world.phase = 'playing'; // (equivale a elegir mejora)
     stepWorld(world, events);
     expect(world.hero.position.x).toBeGreaterThan(xBefore);
   });

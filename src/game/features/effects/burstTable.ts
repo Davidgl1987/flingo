@@ -48,6 +48,9 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   'item-pickup': { color: '#ffd166', size: 0.07, count: 9, life: 0.28, speed: 1.8, trauma: 0 },
   'room-cleared': NONE,
   'upgrade-applied': { color: '#54c7ff', size: 0.09, count: 14, life: 0.4, speed: 2.0, trauma: 0 },
+  // Compra en tienda (docs/plans/ECONOMY_PLAN.md, F1/F4): dorado como las
+  // monedas que gasta, burst algo más contenido que la propia mejora aplicada.
+  'upgrade-purchased': { color: '#ffd166', size: 0.08, count: 10, life: 0.35, speed: 1.8, trauma: 0 },
   'room-entered': NONE,
   'doors-open': NONE,
   'door-locked': NONE,

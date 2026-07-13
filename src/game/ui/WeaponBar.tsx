@@ -29,7 +29,6 @@ const MODES: { mode: WeaponMode; label: string; icon: string }[] = [
 function cooldownProgress(session: GameSession, mode: WeaponMode): number {
   const world = session.world;
   const hero = world.hero;
-  const reload = hero.modifiers.reloadMultiplier;
   let elapsed: number;
   let total: number;
   if (mode === 'body') {
@@ -37,10 +36,10 @@ function cooldownProgress(session: GameSession, mode: WeaponMode): number {
     total = BODY_LAUNCH_COOLDOWN;
   } else if (mode === 'arrow') {
     elapsed = world.time - hero.lastArrowTime;
-    total = ARROW_COOLDOWN * reload;
+    total = ARROW_COOLDOWN;
   } else {
     elapsed = world.time - hero.lastSpellTime;
-    total = SPELL_COOLDOWN * reload;
+    total = SPELL_COOLDOWN;
   }
   if (total <= 0) return 1;
   const t = elapsed / total;

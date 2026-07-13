@@ -23,7 +23,7 @@ import {
   setCameraDistanceScale,
 } from '@/game/render/cameraSettings';
 import { resumeGame, type GameSession } from '@/game/session/session';
-import { UPGRADE_POOL } from '@/game/session/upgrades';
+import { getUpgradeLevel, UPGRADE_POOL } from '@/game/session/upgrades';
 import { useUiStore } from '@/game/session/store';
 import './modals.css';
 
@@ -45,7 +45,11 @@ const HAZARD_LEGEND: { label: string; color: string }[] = [
 
 export function PauseModal({ session, onRestart }: { session: GameSession; onRestart: () => void }) {
   const phase = useUiStore((s) => s.phase);
-  const acquiredUpgrades = useUiStore((s) => s.acquiredUpgrades);
+  // Leídas directamente de la sim (no del store zustand): las mejoras no
+  // cambian cada frame, pero tampoco justifican duplicar estado — este modal
+  // solo se muestra en 'paused', así que basta con leer al abrir.
+  const hero = session.world.hero;
+  const acquiredUpgrades = UPGRADE_POOL.filter((def) => getUpgradeLevel(hero, def.id) > 0);
   // Estado local SOLO para reflejar la posición del slider en el input (no es
   // estado de juego, no pasa por zustand ni por la sim): el valor real que
   // lee CameraRig vive en `cameraSettings.distanceScale` (fuera de React).
@@ -74,15 +78,14 @@ export function PauseModal({ session, onRestart }: { session: GameSession; onRes
             <p className="pause-empty">Ninguna todavía.</p>
           ) : (
             <ul className="pause-upgrade-list">
-              {acquiredUpgrades.map((id, i) => {
-                const def = UPGRADE_POOL.find((u) => u.id === id);
-                return (
-                  <li key={`${id}-${i}`}>
-                    <strong>{def?.name ?? id}</strong>
-                    {def && <span className="pause-upgrade-desc"> — {def.description}</span>}
-                  </li>
-                );
-              })}
+              {acquiredUpgrades.map((def) => (
+                <li key={def.id}>
+                  <strong>
+                    {def.name} · nivel {getUpgradeLevel(hero, def.id)}
+                  </strong>
+                  <span className="pause-upgrade-desc"> — {def.description}</span>
+                </li>
+              ))}
             </ul>
           )}
         </section>

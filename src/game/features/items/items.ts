@@ -64,6 +64,7 @@ function tryPickup(world: World, item: Item, events: EventQueue): void {
     case 'coin':
       world.stats.coinsCollected += 1;
       world.stats.score += 1;
+      hero.coins += 1;
       break;
     case 'potion':
       hero.hp = Math.min(hero.maxHp, hero.hp + POTION_HEAL);

@@ -27,6 +27,7 @@ import { stepHeroEnemyContacts, stepProjectiles } from '@/game/features/combat/c
 import { openConnection } from '@/game/features/dungeon/dungeon-world';
 import { pushEvent, type EventQueue } from '@/engine/events';
 import { stepBarrels, stepEnemyHazards, stepHeroHazards, stepPuddles } from '@/game/features/hazards/hazards';
+import { COIN_DROPS_BY_KIND, COIN_DROP_MAX_RADIUS, COIN_DROP_MIN_RADIUS } from '@/game/features/items/constants';
 import { dropCoinAt, stepItems } from '@/game/features/items/items';
 import type { GamePhase, World } from './types';
 
@@ -39,14 +40,23 @@ function currentPhase(world: World): GamePhase {
   return world.phase;
 }
 
-/** Enemigos con hp<=0 en el tick anterior, para no soltar moneda dos veces por el mismo cadáver. */
+/**
+ * Enemigos con hp<=0 en el tick anterior, para no soltar moneda dos veces por
+ * el mismo cadáver. Suelta `COIN_DROPS_BY_KIND[enemy.kind]` monedas esparcidas
+ * en un anillo alrededor del cadáver (offsets deterministas vía `world.rng`).
+ */
 function collectDeadDrops(world: World, alreadyDropped: Set<string>): void {
   const enemies = world.enemies;
   for (let i = 0; i < enemies.length; i++) {
     const enemy = enemies[i];
     if (enemy.hp <= 0 && !alreadyDropped.has(enemy.id)) {
       alreadyDropped.add(enemy.id);
-      dropCoinAt(world, enemy.position.x, enemy.position.y);
+      const count = COIN_DROPS_BY_KIND[enemy.kind];
+      for (let n = 0; n < count; n++) {
+        const angle = world.rng() * Math.PI * 2;
+        const radius = COIN_DROP_MIN_RADIUS + world.rng() * (COIN_DROP_MAX_RADIUS - COIN_DROP_MIN_RADIUS);
+        dropCoinAt(world, enemy.position.x + Math.cos(angle) * radius, enemy.position.y + Math.sin(angle) * radius);
+      }
     }
   }
 }
@@ -59,10 +69,15 @@ function allDead(enemies: World['enemies']): boolean {
   return true;
 }
 
-/** Modo sala única (world.dungeon === null, tests de fase 1-2): comportamiento histórico sin cambios. */
+/**
+ * Modo sala única (world.dungeon === null, tests de fase 1-2): limpiar la sala
+ * puntúa y emite el evento, sin cambiar de fase (docs/plans/ECONOMY_PLAN.md:
+ * la mejora-por-sala desaparece, la partida sigue en 'playing'). Sin fase
+ * propia que lo bloquee, se guarda con `roomsCleared === 0`: en este modo solo
+ * existe UNA sala, así que basta para no puntuar de nuevo cada tick siguiente.
+ */
 function stepSingleRoomClear(world: World, events: EventQueue): void {
-  if (world.enemies.length > 0 && allDead(world.enemies)) {
-    world.phase = 'room-cleared';
+  if (world.stats.roomsCleared === 0 && world.enemies.length > 0 && allDead(world.enemies)) {
     world.stats.roomsCleared += 1;
     world.stats.score += ROOM_CLEAR_SCORE;
     pushEvent(events, 'room-cleared', world.hero.position.x, world.hero.position.y, 1);
@@ -109,12 +124,6 @@ function stepDungeonRoomClear(world: World, events: EventQueue): void {
       world.phase = 'dungeon-cleared';
       pushEvent(events, 'dungeon-cleared', world.hero.position.x, world.hero.position.y, 1);
     }
-    return;
-  }
-
-  // Solo se ofrece mejora si el héroe sigue físicamente en la sala recién limpiada.
-  if (world.currentRoomId === runtime.id) {
-    world.phase = 'room-cleared';
   }
 }
 
@@ -188,8 +197,9 @@ function stepRoomTransition(world: World, events: EventQueue): void {
 }
 
 export function stepWorld(world: World, events: EventQueue): void {
-  // La sim se pausa con un modal abierto (mejoras) o tras la muerte/victoria:
-  // solo avanza el reloj para que los timers de UI no se congelen raro al volver.
+  // La sim se pausa con un modal abierto (pausa/mazmorra superada) o tras la
+  // muerte/victoria: solo avanza el reloj para que los timers de UI no se
+  // congelen raro al volver.
   if (world.phase !== 'playing') {
     world.time += FIXED_DT;
     return;

@@ -7,7 +7,7 @@
  * slot libre y lo muta.
  */
 
-import { ARROW_COOLDOWN, ARROW_DAMAGE, ARROW_PIERCE_COUNT, ARROW_SPEED, CONTACT_DAMAGE, CONTACT_DAMAGE_COOLDOWN, ENEMY_HIT_FLASH_DURATION, ENEMY_KNOCKBACK_OFFSET, ENEMY_KNOCKBACK_SPEED, EXPLOSIVE_RAM_RADIUS, HERO_IFRAME_DURATION, PROJECTILE_FORCE_SPEED_MAX, PROJECTILE_FORCE_SPEED_MIN, PROJECTILE_LIFETIME, PROJECTILE_RADIUS, PROJECTILE_RECOIL, RAM_DAMAGE_BASE, RAM_DAMAGE_PER_SPEED, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_BOUNCE_FACTOR, SPELL_COOLDOWN, SPELL_DAMAGE, SPELL_RADIUS_UPGRADED, SPELL_SPEED, SPELL_WALL_BOUNCES, SPIKE_DANGEROUS_DOT_THRESHOLD } from './constants';
+import { ARROW_COOLDOWN, ARROW_DAMAGE, ARROW_PIERCE_COUNT, ARROW_SPEED, CONTACT_DAMAGE, CONTACT_DAMAGE_COOLDOWN, ENEMY_HIT_FLASH_DURATION, ENEMY_KNOCKBACK_OFFSET, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FORCE_SPEED_MAX, PROJECTILE_FORCE_SPEED_MIN, PROJECTILE_LIFETIME, PROJECTILE_RADIUS, PROJECTILE_RECOIL, RAM_DAMAGE_BASE, RAM_DAMAGE_PER_SPEED, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_BOUNCE_FACTOR, SPELL_COOLDOWN, SPELL_DAMAGE, SPELL_RADIUS_UPGRADED, SPELL_SPEED, SPELL_WALL_BOUNCES, SPIKE_DANGEROUS_DOT_THRESHOLD } from './constants';
 import { BODY_LAUNCH_COOLDOWN } from '@/game/features/hero/constants';
 import { collideCircleAabb, collideInnerBounds } from '@/engine/physics';
 import { pushEvent, type EventQueue } from '@/engine/events';
@@ -26,9 +26,9 @@ function acquireProjectile(world: World): Projectile | null {
 
 /**
  * Dispara flecha o hechizo desde el héroe: velocidad = dir × velocidadBase ×
- * (0.7 + fuerza × 0.5), con retroceso al héroe. Respeta cooldowns propios
- * (modulados por Pulso Firme) y rechaza fuerzas por debajo del mínimo lo hace
- * el llamador (mismo umbral que el lanzamiento corporal).
+ * (0.7 + fuerza × 0.5), con retroceso al héroe. Respeta el cooldown propio de
+ * cada arma; rechazar fuerzas por debajo del mínimo lo hace el llamador
+ * (mismo umbral que el lanzamiento corporal).
  */
 export function fireProjectile(
   world: World,
@@ -39,11 +39,10 @@ export function fireProjectile(
   events: EventQueue,
 ): boolean {
   const hero = world.hero;
-  const reload = hero.modifiers.reloadMultiplier;
   if (mode === 'arrow') {
-    if (world.time - hero.lastArrowTime < ARROW_COOLDOWN * reload) return false;
+    if (world.time - hero.lastArrowTime < ARROW_COOLDOWN) return false;
   } else {
-    if (world.time - hero.lastSpellTime < SPELL_COOLDOWN * reload) return false;
+    if (world.time - hero.lastSpellTime < SPELL_COOLDOWN) return false;
   }
 
   const slot = acquireProjectile(world);
@@ -399,9 +398,6 @@ export function stepHeroEnemyContacts(
 
     if (dmg > 0) {
       applyDamageToEnemy(world, enemy, dmg, dx, dy, events);
-      if (hero.modifiers.explosiveRam) {
-        applyExplosiveRam(world, enemy.position.x, enemy.position.y, enemy.id, events);
-      }
       // Rebote suave del héroe al embestir (conserva parte de la tangencial vía physics ya aplicado
       // en pared; aquí solo invertimos la componente normal como un choque elástico ligero).
       const dist = Math.sqrt(distSq) || 1;
@@ -419,25 +415,6 @@ export function stepHeroEnemyContacts(
         applyDamageToHero(world, CONTACT_DAMAGE, events);
       }
     }
-  }
-}
-
-/** Choque Explosivo: la embestida daña también a enemigos cercanos al impacto (excluye al ya golpeado). */
-function applyExplosiveRam(
-  world: World,
-  cx: number,
-  cy: number,
-  excludeId: string,
-  events: EventQueue,
-): void {
-  for (let i = 0; i < world.enemies.length; i++) {
-    const other = world.enemies[i];
-    if (other.id === excludeId || other.hp <= 0) continue;
-    const dx = other.position.x - cx;
-    const dy = other.position.y - cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > EXPLOSIVE_RAM_RADIUS) continue;
-    applyDamageToEnemy(world, other, 1, dx || 1, dy, events);
   }
 }
 

@@ -58,10 +58,14 @@ export function createDefaultModifiers(): HeroModifiers {
     arrowDamageBonus: 0,
     spellDamageBonus: 0,
     spellRadiusBonus: 0,
-    reloadMultiplier: 1,
-    frictionMultiplier: 1,
-    explosiveRam: false,
     shieldCharges: 0,
+    launchSpeedBonus: 0,
+    knockbackTakenMultiplier: 1,
+    arrowCountBonus: 0,
+    arrowPierceBonus: 0,
+    spellCountBonus: 0,
+    spellBounceBonus: 0,
+    coinMagnetLevel: 0,
   };
 }
 
@@ -244,6 +248,8 @@ export function createWorld(room: RoomData, seed = 1): World {
       lastSpellTime: -10,
       hasKey: false,
       modifiers: createDefaultModifiers(),
+      upgradeLevels: {},
+      coins: 0,
       trailDwell: 0,
     },
     enemies,

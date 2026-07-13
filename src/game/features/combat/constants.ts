@@ -42,8 +42,6 @@ export const PROJECTILE_FORCE_SPEED_MAX = 1.2;
 /** Radio de colisión de flecha/hechizo; el hechizo crece con Hechizo Arcano. */
 export const PROJECTILE_RADIUS = 0.18;
 export const SPELL_RADIUS_UPGRADED = 0.25;
-/** Multiplicador de recarga flecha/hechizo con la mejora Pulso Firme. */
-export const STEADY_PULSE_RELOAD_MULTIPLIER = 0.72;
 
 // ── Pool preasignado de proyectiles ───────────────────────────────────────
 
@@ -66,5 +64,3 @@ export const ENEMY_KNOCKBACK_OFFSET = 0.18;
 export const ENEMY_HIT_FLASH_DURATION = 0.15;
 /** Spike: producto escalar mínimo entre la normal de contacto y su cara peligrosa para considerarlo frontal. */
 export const SPIKE_DANGEROUS_DOT_THRESHOLD = 0.25;
-/** Radio de la explosión de Choque Explosivo (embestida con daño en área). */
-export const EXPLOSIVE_RAM_RADIUS = 1.6;

@@ -132,18 +132,32 @@ export interface RoomData {
 
 export type WeaponMode = 'body' | 'arrow' | 'spell';
 
-/** Modificadores acumulados por mejoras (GDD §11): todo empieza en su valor neutro. */
+/**
+ * Modificadores acumulados por mejoras (GDD §11, docs/plans/ECONOMY_PLAN.md):
+ * todo empieza en su valor neutro. Los campos `*Bonus`/`*Level` los suma
+ * `apply` de cada `UpgradeDef` (session/upgrades.ts); esta interfaz vive en
+ * world/ (capa inferior) y no conoce el pool de mejoras concreto.
+ */
 export interface HeroModifiers {
   ramDamageBonus: number;
   arrowDamageBonus: number;
   spellDamageBonus: number;
   spellRadiusBonus: number;
-  /** Multiplicador de recarga flecha/hechizo (1 = normal, 0.72 con Pulso Firme). */
-  reloadMultiplier: number;
-  /** Multiplicador del factor de fricción (mayor = frena antes; menor = desliza más). */
-  frictionMultiplier: number;
-  explosiveRam: boolean;
   shieldCharges: number;
+  /** +1 u/s de velocidad de lanzamiento corporal por nivel (Estela de Cometa). Neutro: 0. */
+  launchSpeedBonus: number;
+  /** Multiplicador del retroceso recibido al ser dañado (Canto Rodado): 1 = normal, más bajo = menos empuje. */
+  knockbackTakenMultiplier: number;
+  /** +1 flecha extra en ángulo por nivel (Bandada). Neutro: 0. */
+  arrowCountBonus: number;
+  /** +1 enemigo atravesado por la flecha por nivel, sobre el pierce base (Aguja Fantasma). Neutro: 0. */
+  arrowPierceBonus: number;
+  /** +1 hechizo extra en ángulo por nivel (Coro Arcano). Neutro: 0. */
+  spellCountBonus: number;
+  /** +1 rebote extra del hechizo por nivel, sobre el rebote base (Eco Errante). Neutro: 0. */
+  spellBounceBonus: number;
+  /** Nivel actual de Canto de Urraca (imán de monedas); 0 = sin imán. */
+  coinMagnetLevel: number;
 }
 
 export interface Hero {
@@ -161,6 +175,15 @@ export interface Hero {
   lastSpellTime: number;
   hasKey: boolean;
   modifiers: HeroModifiers;
+  /**
+   * Nivel actual por mejora (docs/plans/ECONOMY_PLAN.md): gating de máximos y
+   * cálculo de precio del siguiente nivel. Clave = `UpgradeId` (session/upgrades.ts);
+   * se tipa como `string` aquí para no acoplar world/ (capa inferior) al pool
+   * de mejoras concreto, que vive en session/.
+   */
+  upgradeLevels: Partial<Record<string, number>>;
+  /** Monedero gastable (docs/plans/ECONOMY_PLAN.md): persiste entre mazmorras de la misma run, se pierde al morir/reiniciar. */
+  coins: number;
   /**
    * Reina (rediseño 2026-07-10, GDD §15.3): acumulador de tiempo continuo que
    * el héroe lleva LENTO sobre el rastro de la Reina (charco con `slows`).
@@ -362,7 +385,7 @@ export interface BossState {
   readonly bossId: BossId;
 }
 
-export type GamePhase = 'playing' | 'paused' | 'room-cleared' | 'dungeon-cleared' | 'game-over' | 'victory';
+export type GamePhase = 'playing' | 'paused' | 'dungeon-cleared' | 'game-over' | 'victory';
 
 export interface RunStats {
   roomsCleared: number;

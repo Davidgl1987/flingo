@@ -1,8 +1,10 @@
 /**
- * Store zustand SOLO para estado de UI de baja frecuencia (HP, monedas,
- * avisos, fase de juego, llave, mejoras). Prohibido usarlo para nada que
- * cambie cada frame (cooldowns/barras de recarga se leen directamente de la
- * sim vía rAF, nunca vía este store).
+ * Store zustand SOLO para estado de UI de baja frecuencia (HP, monedero,
+ * avisos, fase de juego, llave). Prohibido usarlo para nada que cambie cada
+ * frame (cooldowns/barras de recarga se leen directamente de la sim vía rAF,
+ * nunca vía este store). Las mejoras acumuladas (nivel por `UpgradeId`) no
+ * viven aquí: se leen directamente de `session.world.hero.upgradeLevels`
+ * donde hacen falta (ej. PauseModal), sin duplicar estado.
  *
  * Se sincroniza desde fuera (GameRoot/HUD) al drenar la cola de eventos y al
  * observar cambios de `world.phase`; nunca desde dentro del hot loop de sim.
@@ -11,11 +13,11 @@
 import { create } from 'zustand';
 import { HERO_START_HP } from '@/game/features/hero/constants';
 import type { GamePhase } from '@/game/world/types';
-import type { UpgradeId } from './upgrades';
 
 interface UiState {
   hp: number;
   maxHp: number;
+  /** Monedero gastable (docs/plans/ECONOMY_PLAN.md), no el total histórico recogido. */
   coins: number;
   hasKey: boolean;
   phase: GamePhase;
@@ -25,8 +27,6 @@ interface UiState {
   roomIndex: number | null;
   totalRooms: number | null;
   currentRoomName: string;
-  /** Mejoras aplicadas hasta ahora en la run (para el resumen de pausa/fin). */
-  acquiredUpgrades: UpgradeId[];
   /** Aviso transitorio (ej. "tiro demasiado flojo"). */
   notice: string | null;
   /** Cambia con cada aviso para retrigger aunque el texto se repita. */
@@ -45,7 +45,6 @@ interface UiState {
     totalRooms: number | null;
     currentRoomName: string;
   }) => void;
-  addUpgrade: (id: UpgradeId) => void;
   resetRun: () => void;
 }
 
@@ -60,7 +59,6 @@ const initialState = {
   roomIndex: null as number | null,
   totalRooms: null as number | null,
   currentRoomName: '',
-  acquiredUpgrades: [] as UpgradeId[],
   notice: null as string | null,
   noticeSeq: 0,
 };
@@ -70,6 +68,5 @@ export const useUiStore = create<UiState>((set) => ({
   showNotice: (text) => set((s) => ({ notice: text, noticeSeq: s.noticeSeq + 1 })),
   clearNotice: () => set({ notice: null }),
   syncFromWorld: (snapshot) => set(snapshot),
-  addUpgrade: (id) => set((s) => ({ acquiredUpgrades: [...s.acquiredUpgrades, id] })),
   resetRun: () => set({ ...initialState }),
 }));

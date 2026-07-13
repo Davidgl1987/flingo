@@ -111,7 +111,7 @@ describe('bossSequence (run multi-mazmorra, GDD §10)', () => {
 });
 
 describe('advanceToNextDungeon (run multi-mazmorra, GDD §10)', () => {
-  it('conserva hp/maxHp/modifiers y stats acumulados; hasKey false; offeredUpgrades intactas; avanza al jefe del siguiente stage', () => {
+  it('conserva hp/maxHp/modifiers/coins/upgradeLevels y stats acumulados; hasKey false; avanza al jefe del siguiente stage', () => {
     const session = createDungeonGameSession(seriesRooms, 42);
     expect(session.bossSequence.length).toBe(2);
     const secondBoss = session.bossSequence[1];
@@ -121,11 +121,12 @@ describe('advanceToNextDungeon (run multi-mazmorra, GDD §10)', () => {
     session.world.hero.maxHp = 5;
     session.world.hero.modifiers.ramDamageBonus = 3;
     session.world.hero.hasKey = true;
+    session.world.hero.coins = 37;
+    session.world.hero.upgradeLevels['cuerpo-dano'] = 2;
     session.world.stats.roomsCleared = 4;
     session.world.stats.coinsCollected = 7;
     session.world.stats.damageDealt = 55.5;
     session.world.stats.score = 120;
-    session.offeredUpgrades.add('extra-heart');
 
     advanceToNextDungeon(session);
 
@@ -134,11 +135,12 @@ describe('advanceToNextDungeon (run multi-mazmorra, GDD §10)', () => {
     expect(session.world.hero.maxHp).toBe(5);
     expect(session.world.hero.modifiers.ramDamageBonus).toBe(3);
     expect(session.world.hero.hasKey).toBe(false);
+    expect(session.world.hero.coins).toBe(37);
+    expect(session.world.hero.upgradeLevels['cuerpo-dano']).toBe(2);
     expect(session.world.stats.roomsCleared).toBe(4);
     expect(session.world.stats.coinsCollected).toBe(7);
     expect(session.world.stats.damageDealt).toBe(55.5);
     expect(session.world.stats.score).toBe(120);
-    expect(session.offeredUpgrades.has('extra-heart')).toBe(true);
 
     const nextBossRoom = session.world.dungeon!.rooms.find((r) => r.room.id === session.world.dungeon!.bossRoomId)!;
     expect(nextBossRoom.room.boss).toBe(secondBoss);
@@ -146,12 +148,29 @@ describe('advanceToNextDungeon (run multi-mazmorra, GDD §10)', () => {
     expect(session.world.isFinalDungeon).toBe(true);
   });
 
-  it('no muta los modifiers del mundo anterior (copia el objeto, no la referencia)', () => {
+  it('no muta los modifiers ni upgradeLevels del mundo anterior (copia el objeto, no la referencia)', () => {
     const session = createDungeonGameSession(seriesRooms, 42);
+    session.world.hero.upgradeLevels['flecha-dano'] = 1;
     const prevModifiers = session.world.hero.modifiers;
+    const prevUpgradeLevels = session.world.hero.upgradeLevels;
     advanceToNextDungeon(session);
     expect(session.world.hero.modifiers).not.toBe(prevModifiers);
     expect(session.world.hero.modifiers).toEqual(prevModifiers);
+    expect(session.world.hero.upgradeLevels).not.toBe(prevUpgradeLevels);
+    expect(session.world.hero.upgradeLevels).toEqual(prevUpgradeLevels);
+  });
+});
+
+describe('restartSession y muerte: economía (GDD §10, docs/plans/ECONOMY_PLAN.md)', () => {
+  it('restartSession NO conserva coins ni upgradeLevels (héroe nuevo de fábrica)', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    session.world.hero.coins = 50;
+    session.world.hero.upgradeLevels['cuerpo-dano'] = 3;
+
+    restartSession(session);
+
+    expect(session.world.hero.coins).toBe(0);
+    expect(session.world.hero.upgradeLevels).toEqual({});
   });
 });
 

@@ -218,7 +218,7 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     expect(collect(events)).not.toContain('victory');
   });
 
-  it('la mejora solo se ofrece si el héroe sigue en la sala recién limpiada', () => {
+  it('limpiar una sala normal (no jefe) NO cambia de fase (docs/plans/ECONOMY_PLAN.md: desaparece la mejora-por-sala)', () => {
     const dungeon = generateDungeon(11, makePool());
     const world = createDungeonWorld(dungeon, 11);
     const events = createEventQueue(64);
@@ -240,6 +240,6 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     stepWorld(world, events);
 
     expect(combatRuntime.cleared).toBe(true);
-    expect(world.phase).toBe('room-cleared');
+    expect(world.phase).toBe('playing');
   });
 });

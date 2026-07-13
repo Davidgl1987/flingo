@@ -41,7 +41,6 @@ import { GameOverModal } from '@/game/ui/GameOverModal';
 import { HUD } from '@/game/ui/HUD';
 import { NextDungeonModal } from '@/game/ui/NextDungeonModal';
 import { PauseModal } from '@/game/ui/PauseModal';
-import { UpgradeModal } from '@/game/ui/UpgradeModal';
 import { VictoryModal } from '@/game/ui/VictoryModal';
 import { AimIndicatorView } from '@/game/features/hero/AimIndicatorView';
 import { CameraRig } from './CameraRig';
@@ -141,7 +140,6 @@ export function GameRoot({
       <a className="editor-link" href="#/editor">
         {playtestRoom ? '← Volver al editor' : '✎ Editor'}
       </a>
-      <UpgradeModal session={session} />
       <PauseModal session={session} onRestart={handleRestart} />
       <NextDungeonModal session={session} onAdvance={handleAdvanceDungeon} />
       <GameOverModal onRestart={handleRestart} onExitToTitle={onExitToTitle} />

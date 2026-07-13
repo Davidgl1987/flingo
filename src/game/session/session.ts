@@ -4,7 +4,7 @@
  * en un ref/useState-inicial); NUNCA se usa como estado de React.
  */
 
-import { ROOMS_PER_RUN, UPGRADE_CHOICES } from '@/game/world/constants';
+import { ROOMS_PER_RUN } from '@/game/world/constants';
 import { createEffectsState, type EffectsState } from '@/game/features/effects/effectsState';
 import { ParticlePool } from '@/game/features/effects/particles';
 import { ShockwavePool } from '@/game/features/effects/shockwave';
@@ -14,7 +14,6 @@ import { generateDungeon } from '@/game/features/dungeon/dungeon';
 import { createDungeonWorld } from '@/game/features/dungeon/dungeon-world';
 import { createEventQueue, type EventQueue } from '@/engine/events';
 import { createRng, type Rng } from '@/engine/rng';
-import { applyUpgrade, rollUpgradeChoices, type UpgradeDef, type UpgradeId } from './upgrades';
 import { createWorld } from '@/game/world/create';
 import type { BossId, RoomData, World } from '@/game/world/types';
 
@@ -56,10 +55,6 @@ export interface GameSession {
   /** Posición del héroe en el tick anterior, para interpolación de render. */
   heroPrevX: number;
   heroPrevY: number;
-  /** IDs de mejoras no-repetibles ya ofrecidas/aplicadas en esta run. */
-  offeredUpgrades: Set<UpgradeId>;
-  /** Las 3 opciones actuales del modal de mejora (recalculadas al limpiar sala). */
-  upgradeChoices: UpgradeDef[];
   /** Sala original con la que se creó el mundo (modo sala única: playtest del editor). */
   room: RoomData;
   /** Pool de salas y semilla usados para (re)generar la mazmorra (modo run completa); null en modo sala única. */
@@ -95,8 +90,6 @@ export function createGameSession(room: RoomData): GameSession {
     renderAlpha: 1,
     heroPrevX: world.hero.position.x,
     heroPrevY: world.hero.position.y,
-    offeredUpgrades: new Set(),
-    upgradeChoices: [],
     room,
     dungeonPool: null,
     seed: 1,
@@ -130,7 +123,7 @@ function designBossesInPool(pool: readonly RoomData[]): BossId[] {
   return bosses;
 }
 
-/** Baraja (Fisher-Yates a través de splice, mismo estilo que `rollUpgradeChoices`) consumiendo `rng` en orden. */
+/** Baraja (Fisher-Yates a través de splice, mismo estilo que `rollBossReward`) consumiendo `rng` en orden. */
 function shuffleBosses(bosses: readonly BossId[], rng: Rng): BossId[] {
   const pool = bosses.slice();
   const shuffled: BossId[] = [];
@@ -177,8 +170,6 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
     renderAlpha: 1,
     heroPrevX: world.hero.position.x,
     heroPrevY: world.hero.position.y,
-    offeredUpgrades: new Set(),
-    upgradeChoices: [],
     room: world.room,
     dungeonPool: pool,
     seed,
@@ -187,29 +178,6 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
     bossSequence,
     stageIndex,
   };
-}
-
-/** Calcula las 3 opciones de mejora al entrar en fase 'room-cleared'; idempotente si ya hay opciones calculadas para esta sala. */
-export function ensureUpgradeChoices(session: GameSession): UpgradeDef[] {
-  if (session.upgradeChoices.length === 0) {
-    session.upgradeChoices = rollUpgradeChoices(
-      session.world.hero,
-      session.world.rng,
-      UPGRADE_CHOICES,
-      session.offeredUpgrades,
-    );
-  }
-  return session.upgradeChoices;
-}
-
-/** Aplica la mejora elegida, marca las no-repetibles como ofrecidas y reanuda el juego. */
-export function chooseUpgrade(session: GameSession, def: UpgradeDef): void {
-  applyUpgrade(session.world, def, session.events);
-  if (!def.repeatable) {
-    session.offeredUpgrades.add(def.id);
-  }
-  session.upgradeChoices = [];
-  session.world.phase = 'playing';
 }
 
 /**
@@ -259,8 +227,6 @@ export function restartSession(session: GameSession): void {
   session.heroPrevY = world.hero.position.y;
   session.aim.active = false;
   session.aim.force = 0;
-  session.offeredUpgrades = new Set();
-  session.upgradeChoices = [];
   // Trauma/hit-stop no deben sobrevivir a un reinicio de run (evita un shake
   // heredado de la muerte al aparecer en la nueva run); los pools de
   // partículas/estela sí se conservan (son geometría pura, sin estado de sala).
@@ -272,10 +238,10 @@ export function restartSession(session: GameSession): void {
  * Avanza a la siguiente mazmorra de la run (GDD §10, run multi-mazmorra):
  * jefe derrotado pero quedan más en `bossSequence` (fase 'dungeon-cleared').
  * A diferencia de `restartSession`, NO es un reinicio: traspasa el progreso
- * del héroe (hp/maxHp/modificadores) y las estadísticas ACUMULADAS del mundo
- * anterior al nuevo, no reinicia `offeredUpgrades` (las mejoras no-repetibles
- * siguen agotadas hasta morir) y no conserva `hasKey` (cada mazmorra tiene su
- * propia llave — `createDungeonWorld` ya la deja en false).
+ * del héroe (hp/maxHp/modificadores/monedero/niveles de mejora, docs/plans/ECONOMY_PLAN.md)
+ * y las estadísticas ACUMULADAS del mundo anterior al nuevo, y no conserva
+ * `hasKey` (cada mazmorra tiene su propia llave — `createDungeonWorld` ya la
+ * deja en false).
  *
  * No-op si no queda un stage siguiente (llamador solo debe invocarla desde la
  * fase 'dungeon-cleared', que ya garantiza que hay más jefes por delante).
@@ -294,12 +260,15 @@ export function advanceToNextDungeon(session: GameSession): void {
   initBossEnemies(world);
   world.isFinalDungeon = session.stageIndex >= session.bossSequence.length - 1;
 
-  // Traspaso de progreso entre mazmorras encadenadas: vida y modificadores del
-  // héroe, y estadísticas ACUMULADAS de toda la run (no se reinician por
-  // mazmorra). `hasKey` NO se traspasa: cada mazmorra tiene su propia llave.
+  // Traspaso de progreso entre mazmorras encadenadas: vida, modificadores,
+  // monedero y niveles de mejora del héroe (docs/plans/ECONOMY_PLAN.md), y
+  // estadísticas ACUMULADAS de toda la run (no se reinician por mazmorra).
+  // `hasKey` NO se traspasa: cada mazmorra tiene su propia llave.
   world.hero.hp = prevWorld.hero.hp;
   world.hero.maxHp = prevWorld.hero.maxHp;
   world.hero.modifiers = { ...prevWorld.hero.modifiers };
+  world.hero.coins = prevWorld.hero.coins;
+  world.hero.upgradeLevels = { ...prevWorld.hero.upgradeLevels };
   world.stats = { ...prevWorld.stats };
 
   session.room = world.room;
@@ -310,7 +279,6 @@ export function advanceToNextDungeon(session: GameSession): void {
   session.heroPrevY = world.hero.position.y;
   session.aim.active = false;
   session.aim.force = 0;
-  // offeredUpgrades NO se resetea (persisten hasta morir, GDD §10).
   session.effects.state.trauma = 0;
   session.effects.state.hitStopRemaining = 0;
 }
