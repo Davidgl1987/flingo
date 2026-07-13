@@ -35,7 +35,11 @@ export function launchHero(
   if (world.time - hero.lastLaunchTime < BODY_LAUNCH_COOLDOWN) {
     return false;
   }
-  const speed = launchSpeed(force);
+  // Estela de Cometa (docs/plans/ECONOMY_PLAN.md F2): bono PLANO de u/s sobre
+  // la velocidad interpolada por fuerza, a cualquier fuerza. Se suma aquí (no
+  // dentro de `launchSpeed`, que queda pura/testeada solo con la fuerza) para
+  // no tocar su firma.
+  const speed = launchSpeed(force) + hero.modifiers.launchSpeedBonus;
   hero.velocity.x = dirX * speed;
   hero.velocity.y = dirY * speed;
   hero.lastLaunchTime = world.time;

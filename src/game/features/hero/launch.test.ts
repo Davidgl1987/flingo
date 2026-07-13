@@ -68,6 +68,20 @@ describe('launchHero', () => {
     expect(world.hero.velocity.x).toBe(0);
   });
 
+  it('Estela de Cometa (launchSpeedBonus) suma velocidad plana a cualquier fuerza', () => {
+    const withoutBonus = createWorld(makeRoom());
+    const withBonus = createWorld(makeRoom());
+    withBonus.hero.modifiers.launchSpeedBonus = 2;
+    const events = createEventQueue(8);
+
+    launchHero(withoutBonus, 1, 0, 0.5, events);
+    launchHero(withBonus, 1, 0, 0.5, events);
+
+    const speedWithout = Math.hypot(withoutBonus.hero.velocity.x, withoutBonus.hero.velocity.y);
+    const speedWith = Math.hypot(withBonus.hero.velocity.x, withBonus.hero.velocity.y);
+    expect(speedWith).toBeCloseTo(speedWithout + 2, 9);
+  });
+
   it('respeta el cooldown de 0.2 s', () => {
     const world = createWorld(makeRoom());
     const events = createEventQueue(64);

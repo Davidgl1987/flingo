@@ -4,9 +4,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ARROW_PIERCE_COUNT, CONTACT_DAMAGE_COOLDOWN, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_WALL_BOUNCES } from './constants';
+import { ARROW_PIERCE_COUNT, CONTACT_DAMAGE_COOLDOWN, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FAN_ANGLE_STEP, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_WALL_BOUNCES } from './constants';
 import { MAX_SPEED } from '@/engine/physics';
-import { applyDamageToEnemy, applyDamageToHero, fireProjectile, isSpikeContactDangerous, ramDamage, stepHeroEnemyContacts, stepProjectiles } from './combat';
+import { applyDamageToEnemy, applyDamageToHero, applyKnockbackToHero, fireProjectile, isSpikeContactDangerous, ramDamage, stepHeroEnemyContacts, stepProjectiles } from './combat';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
 import { createWorld } from '@/game/world/create';
 import type { EnemySpawn, RoomData, World } from '@/game/world/types';
@@ -263,6 +263,120 @@ describe('cooldowns de armas', () => {
 
     world.time += 1.01;
     expect(fireProjectile(world, 'spell', 1, 0, 1, events)).toBe(true);
+  });
+});
+
+describe('multidisparo en ángulo (Bandada/Coro Arcano, docs/plans/ECONOMY_PLAN.md F2)', () => {
+  it('arrowCountBonus=2 dispara 3 flechas en abanico simétrico (-12/0/+12) con un solo cooldown', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    world.hero.modifiers.arrowCountBonus = 2;
+
+    expect(fireProjectile(world, 'arrow', 1, 0, 1, events)).toBe(true);
+    const active = world.projectiles.filter((p) => p.active);
+    expect(active).toHaveLength(3);
+
+    const angles = active.map((p) => Math.atan2(p.velocity.y, p.velocity.x)).sort((a, b) => a - b);
+    expect(angles[0]).toBeCloseTo(-PROJECTILE_FAN_ANGLE_STEP, 5);
+    expect(angles[1]).toBeCloseTo(0, 5);
+    expect(angles[2]).toBeCloseTo(PROJECTILE_FAN_ANGLE_STEP, 5);
+
+    // Un solo cooldown consumido: el siguiente disparo inmediato se rechaza.
+    expect(fireProjectile(world, 'arrow', 1, 0, 1, events)).toBe(false);
+
+    // Un solo evento 'launch' por disparo, no uno por proyectil.
+    const launches: string[] = [];
+    drainEvents(events, (e: GameEvent) => launches.push(e.type));
+    expect(launches.filter((t) => t === 'launch')).toHaveLength(1);
+  });
+
+  it('spellCountBonus=1 dispara 2 hechizos separados ±6°', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    world.hero.modifiers.spellCountBonus = 1;
+
+    expect(fireProjectile(world, 'spell', 1, 0, 1, events)).toBe(true);
+    const active = world.projectiles.filter((p) => p.active);
+    expect(active).toHaveLength(2);
+
+    const angles = active.map((p) => Math.atan2(p.velocity.y, p.velocity.x)).sort((a, b) => a - b);
+    expect(angles[0]).toBeCloseTo(-PROJECTILE_FAN_ANGLE_STEP / 2, 5);
+    expect(angles[1]).toBeCloseTo(PROJECTILE_FAN_ANGLE_STEP / 2, 5);
+  });
+
+  it('mismo daño y velocidad por proyectil del abanico', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    world.hero.modifiers.arrowCountBonus = 2;
+    fireProjectile(world, 'arrow', 1, 0, 1, events);
+    const active = world.projectiles.filter((p) => p.active);
+    const damages = new Set(active.map((p) => p.damage));
+    const speeds = new Set(active.map((p) => Math.hypot(p.velocity.x, p.velocity.y).toFixed(6)));
+    expect(damages.size).toBe(1);
+    expect(speeds.size).toBe(1);
+  });
+
+  it('pool casi lleno: dispara solo los proyectiles del abanico que caben, sin lanzar error', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    world.hero.modifiers.arrowCountBonus = 2; // pediría 3
+    // Deja un único slot libre en el pool.
+    for (let i = 0; i < world.projectiles.length - 1; i++) world.projectiles[i].active = true;
+
+    expect(() => fireProjectile(world, 'arrow', 1, 0, 1, events)).not.toThrow();
+    expect(world.projectiles.filter((p) => p.active)).toHaveLength(world.projectiles.length);
+  });
+});
+
+describe('perforación y rebotes: presupuesto base + bono (docs/plans/ECONOMY_PLAN.md F2)', () => {
+  it('Aguja Fantasma: la flecha nace con pierceLeft = ARROW_PIERCE_COUNT + arrowPierceBonus', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    world.hero.modifiers.arrowPierceBonus = 2;
+    fireProjectile(world, 'arrow', 1, 0, 1, events);
+    const arrow = world.projectiles.find((p) => p.active);
+    expect(arrow!.pierceLeft).toBe(ARROW_PIERCE_COUNT + 2);
+  });
+
+  it('Eco Errante: el hechizo nace con bouncesLeft = SPELL_WALL_BOUNCES + spellBounceBonus', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    world.hero.modifiers.spellBounceBonus = 2;
+    fireProjectile(world, 'spell', 1, 0, 1, events);
+    const spell = world.projectiles.find((p) => p.active);
+    expect(spell!.bouncesLeft).toBe(SPELL_WALL_BOUNCES + 2);
+  });
+
+  it('sin bono, los presupuestos base existentes siguen intactos', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    fireProjectile(world, 'arrow', 1, 0, 1, events);
+    expect(world.projectiles.find((p) => p.active)!.pierceLeft).toBe(ARROW_PIERCE_COUNT);
+  });
+});
+
+describe('applyKnockbackToHero (Canto Rodado, docs/plans/ECONOMY_PLAN.md F2)', () => {
+  it('con knockbackTakenMultiplier=0.8, el empujón recibido es el 80%', () => {
+    const world = makeWorld();
+    world.hero.modifiers.knockbackTakenMultiplier = 0.8;
+    applyKnockbackToHero(world, 10, 0);
+    expect(world.hero.velocity.x).toBeCloseTo(8, 9);
+    expect(world.hero.velocity.y).toBeCloseTo(0, 9);
+  });
+
+  it('con multiplier neutro (1), el empuje no cambia', () => {
+    const world = makeWorld();
+    applyKnockbackToHero(world, 3, 4);
+    expect(world.hero.velocity.x).toBeCloseTo(3, 9);
+    expect(world.hero.velocity.y).toBeCloseTo(4, 9);
+  });
+
+  it('el retroceso de disparar (recoil) NO pasa por el multiplicador de knockback recibido', () => {
+    const world = makeWorld();
+    const events = createEventQueue(16);
+    world.hero.modifiers.knockbackTakenMultiplier = 0.1; // casi anulado, si aplicara aquí el recoil sería ínfimo
+    fireProjectile(world, 'arrow', 1, 0, 1, events);
+    expect(world.hero.velocity.x).toBeLessThan(-1); // recoil normal, sin reducir
   });
 });
 

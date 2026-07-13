@@ -23,7 +23,7 @@
  *   antes de volver a patrullar, GDD §15.2).
  */
 
-import { applyDamageToHero } from '@/game/features/combat/combat';
+import { applyDamageToHero, applyKnockbackToHero } from '@/game/features/combat/combat';
 import { pushEvent, type EventQueue } from '@/engine/events';
 import { explodeBarrel } from '@/game/features/hazards/hazards';
 import { dropPotionAt } from '@/game/features/items/items';
@@ -263,8 +263,7 @@ export function guardianStepPattern(world: World, boss: Enemy, dt: number, event
         const damage = Math.min(rawDamage, Math.max(1, Math.floor(cap)));
         const wasHit = applyDamageToHero(world, damage, events);
         if (!wasHit) {
-          hero.velocity.x = boss.facing.x * GUARDIAN_CHARGE_KNOCKBACK_SPEED;
-          hero.velocity.y = boss.facing.y * GUARDIAN_CHARGE_KNOCKBACK_SPEED;
+          applyKnockbackToHero(world, boss.facing.x * GUARDIAN_CHARGE_KNOCKBACK_SPEED, boss.facing.y * GUARDIAN_CHARGE_KNOCKBACK_SPEED);
         }
         boss.bossTelegraphKind = GUARDIAN_CHARGE_HIT_FLAG;
       }

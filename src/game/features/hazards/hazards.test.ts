@@ -145,6 +145,16 @@ describe('pinchos', () => {
     expect(world.hero.velocity.x).toBeCloseTo(SPIKES_PUSH_SPEED, 5); // empuje +x (alejándose)
   });
 
+  it('Canto Rodado (knockbackTakenMultiplier=0.8): el empujón de los pinchos es el 80%', () => {
+    const world = makeWorld([SPIKES]);
+    const events = createEventQueue(16);
+    world.hero.position.x = 0.5;
+    world.hero.position.y = 0;
+    world.hero.modifiers.knockbackTakenMultiplier = 0.8;
+    stepHeroHazards(world, FIXED_DT, events);
+    expect(world.hero.velocity.x).toBeCloseTo(SPIKES_PUSH_SPEED * 0.8, 5);
+  });
+
   it('dañan a los enemigos de forma periódica (cada 0.5 s)', () => {
     const world = makeWorld([SPIKES], [{ id: 'e1', kind: 'chaser', position: { x: 0.4, y: 0 } }]);
     const events = createEventQueue(16);

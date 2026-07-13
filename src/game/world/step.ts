@@ -231,7 +231,7 @@ export function stepWorld(world: World, events: EventQueue): void {
   // solo se garantiza que héroe/enemigos no se atraviesen ni se apilen.
   stepBodySeparation(world);
 
-  stepItems(world, events);
+  stepItems(world, FIXED_DT, events);
 
   collectDeadDrops(world, world.deadEnemiesDropped);
 

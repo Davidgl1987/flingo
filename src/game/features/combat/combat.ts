@@ -7,7 +7,7 @@
  * slot libre y lo muta.
  */
 
-import { ARROW_COOLDOWN, ARROW_DAMAGE, ARROW_PIERCE_COUNT, ARROW_SPEED, CONTACT_DAMAGE, CONTACT_DAMAGE_COOLDOWN, ENEMY_HIT_FLASH_DURATION, ENEMY_KNOCKBACK_OFFSET, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FORCE_SPEED_MAX, PROJECTILE_FORCE_SPEED_MIN, PROJECTILE_LIFETIME, PROJECTILE_RADIUS, PROJECTILE_RECOIL, RAM_DAMAGE_BASE, RAM_DAMAGE_PER_SPEED, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_BOUNCE_FACTOR, SPELL_COOLDOWN, SPELL_DAMAGE, SPELL_RADIUS_UPGRADED, SPELL_SPEED, SPELL_WALL_BOUNCES, SPIKE_DANGEROUS_DOT_THRESHOLD } from './constants';
+import { ARROW_COOLDOWN, ARROW_DAMAGE, ARROW_PIERCE_COUNT, ARROW_SPEED, CONTACT_DAMAGE, CONTACT_DAMAGE_COOLDOWN, ENEMY_HIT_FLASH_DURATION, ENEMY_KNOCKBACK_OFFSET, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FAN_ANGLE_STEP, PROJECTILE_FORCE_SPEED_MAX, PROJECTILE_FORCE_SPEED_MIN, PROJECTILE_LIFETIME, PROJECTILE_RADIUS, PROJECTILE_RECOIL, RAM_DAMAGE_BASE, RAM_DAMAGE_PER_SPEED, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_BOUNCE_FACTOR, SPELL_COOLDOWN, SPELL_DAMAGE, SPELL_RADIUS_UPGRADED, SPELL_SPEED, SPELL_WALL_BOUNCES, SPIKE_DANGEROUS_DOT_THRESHOLD } from './constants';
 import { BODY_LAUNCH_COOLDOWN } from '@/game/features/hero/constants';
 import { collideCircleAabb, collideInnerBounds } from '@/engine/physics';
 import { pushEvent, type EventQueue } from '@/engine/events';
@@ -29,6 +29,13 @@ function acquireProjectile(world: World): Projectile | null {
  * (0.7 + fuerza × 0.5), con retroceso al héroe. Respeta el cooldown propio de
  * cada arma; rechazar fuerzas por debajo del mínimo lo hace el llamador
  * (mismo umbral que el lanzamiento corporal).
+ *
+ * Multidisparo en ángulo (Bandada/Coro Arcano, docs/plans/ECONOMY_PLAN.md F2):
+ * `1 + arrowCountBonus`/`1 + spellCountBonus` proyectiles en abanico simétrico
+ * centrado en (dirX,dirY), separados PROJECTILE_FAN_ANGLE_STEP entre
+ * adyacentes. Un solo cooldown, un solo retroceso y un solo evento 'launch'
+ * por disparo (no por proyectil); si el pool se queda sin slots libres a
+ * mitad del abanico, se disparan los que quepan sin error.
  */
 export function fireProjectile(
   world: World,
@@ -45,40 +52,61 @@ export function fireProjectile(
     if (world.time - hero.lastSpellTime < SPELL_COOLDOWN) return false;
   }
 
-  const slot = acquireProjectile(world);
-  if (!slot) return false;
+  const countBonus = mode === 'arrow' ? hero.modifiers.arrowCountBonus : hero.modifiers.spellCountBonus;
+  const count = 1 + Math.max(0, countBonus);
 
   const baseSpeed = mode === 'arrow' ? ARROW_SPEED : SPELL_SPEED;
   const speedScale =
     PROJECTILE_FORCE_SPEED_MIN + (PROJECTILE_FORCE_SPEED_MAX - PROJECTILE_FORCE_SPEED_MIN) * force;
   const speed = baseSpeed * speedScale;
 
-  slot.active = true;
-  slot.kind = mode;
-  slot.owner = 'hero';
-  slot.position.x = hero.position.x;
-  slot.position.y = hero.position.y;
-  slot.velocity.x = dirX * speed;
-  slot.velocity.y = dirY * speed;
-  slot.ttl = PROJECTILE_LIFETIME;
-  slot.hitEnemyIds.length = 0;
+  let fired = 0;
+  for (let i = 0; i < count; i++) {
+    const slot = acquireProjectile(world);
+    if (!slot) break; // pool lleno: se dispara lo que quepa del abanico
+
+    // Ángulo simétrico respecto al centro del abanico (p.ej. 3 proyectiles → -12°/0°/+12°).
+    const angle = (i - (count - 1) / 2) * PROJECTILE_FAN_ANGLE_STEP;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const rDirX = dirX * cos - dirY * sin;
+    const rDirY = dirX * sin + dirY * cos;
+
+    slot.active = true;
+    slot.kind = mode;
+    slot.owner = 'hero';
+    slot.position.x = hero.position.x;
+    slot.position.y = hero.position.y;
+    slot.velocity.x = rDirX * speed;
+    slot.velocity.y = rDirY * speed;
+    slot.ttl = PROJECTILE_LIFETIME;
+    slot.hitEnemyIds.length = 0;
+
+    if (mode === 'arrow') {
+      slot.radius = PROJECTILE_RADIUS;
+      slot.damage = ARROW_DAMAGE + hero.modifiers.arrowDamageBonus;
+      slot.bouncesLeft = 0;
+      slot.pierceLeft = ARROW_PIERCE_COUNT + hero.modifiers.arrowPierceBonus;
+    } else {
+      slot.radius =
+        hero.modifiers.spellRadiusBonus > 0 ? SPELL_RADIUS_UPGRADED : PROJECTILE_RADIUS;
+      slot.damage = SPELL_DAMAGE + hero.modifiers.spellDamageBonus;
+      slot.bouncesLeft = SPELL_WALL_BOUNCES + hero.modifiers.spellBounceBonus;
+      slot.pierceLeft = 0;
+    }
+    fired++;
+  }
+
+  if (fired === 0) return false;
 
   if (mode === 'arrow') {
-    slot.radius = PROJECTILE_RADIUS;
-    slot.damage = ARROW_DAMAGE + hero.modifiers.arrowDamageBonus;
-    slot.bouncesLeft = 0;
-    slot.pierceLeft = ARROW_PIERCE_COUNT;
     hero.lastArrowTime = world.time;
   } else {
-    slot.radius =
-      hero.modifiers.spellRadiusBonus > 0 ? SPELL_RADIUS_UPGRADED : PROJECTILE_RADIUS;
-    slot.damage = SPELL_DAMAGE + hero.modifiers.spellDamageBonus;
-    slot.bouncesLeft = SPELL_WALL_BOUNCES;
-    slot.pierceLeft = 0;
     hero.lastSpellTime = world.time;
   }
 
   // Retroceso: empuja al héroe hacia atrás (dirección opuesta al disparo).
+  // Uno solo por disparo, independientemente de cuántos proyectiles salieron.
   const recoil = PROJECTILE_RECOIL * (0.75 + force * 0.35);
   hero.velocity.x -= dirX * recoil;
   hero.velocity.y -= dirY * recoil;
@@ -303,6 +331,22 @@ export function applyDamageToEnemy(
 }
 
 /**
+ * Punto centralizado del retroceso RECIBIDO por el héroe al ser dañado
+ * (contacto de enemigo, golpes de jefe, hazards que empujan —
+ * docs/plans/ECONOMY_PLAN.md F2, Canto Rodado): fija la velocidad del héroe
+ * al vector (vx,vy) escalado por `knockbackTakenMultiplier` (1 = normal, más
+ * bajo = menos empuje). NO es para el retroceso de disparar (`fireProjectile`
+ * empuja al propio héroe hacia atrás por su propia acción, no por daño
+ * recibido, y no pasa por aquí).
+ */
+export function applyKnockbackToHero(world: World, vx: number, vy: number): void {
+  const hero = world.hero;
+  const mult = hero.modifiers.knockbackTakenMultiplier;
+  hero.velocity.x = vx * mult;
+  hero.velocity.y = vy * mult;
+}
+
+/**
  * Aplica daño al héroe respetando escudo e i-frames. Si el escudo tiene
  * cargas, bloquea el golpe por completo y consume una carga (con i-frames
  * cortos propios); si no, resta HP y activa i-frames largos.
@@ -384,14 +428,18 @@ export function stepHeroEnemyContacts(
         contactCooldowns.set(enemy.id, world.time);
         applyDamageToHero(world, CONTACT_DAMAGE, events);
       }
-      // Rebote del héroe contra la púa (empuje hacia fuera).
+      // Rebote del héroe contra la púa (empuje hacia fuera). Es una reflexión
+      // de la velocidad actual, no un vector de knockback fijo, así que no
+      // pasa por `applyKnockbackToHero` (pensado para asignación absoluta);
+      // aun así respeta `knockbackTakenMultiplier` escalando el empuje añadido.
       const dist = Math.sqrt(distSq) || 1;
       const nx = dx / dist;
       const ny = dy / dist;
       const vn = hero.velocity.x * nx + hero.velocity.y * ny;
       if (vn > 0) {
-        hero.velocity.x -= 1.6 * vn * nx;
-        hero.velocity.y -= 1.6 * vn * ny;
+        const mult = hero.modifiers.knockbackTakenMultiplier;
+        hero.velocity.x -= 1.6 * vn * nx * mult;
+        hero.velocity.y -= 1.6 * vn * ny * mult;
       }
       continue;
     }

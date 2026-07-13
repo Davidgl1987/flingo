@@ -8,10 +8,13 @@
 import { describe, expect, it } from 'vitest';
 import { applyDamageToEnemy } from '@/game/features/combat/combat';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
+import { COIN_MAGNET_RADIUS_BY_LEVEL } from './constants';
 import { stepItems } from './items';
 import { stepWorld } from '@/game/world/step';
 import { createWorld } from '@/game/world/create';
 import type { EnemySpawn, ItemSpawn, RoomData, World } from '@/game/world/types';
+
+const FIXED_DT = 1 / 60;
 
 function makeRoom(partial: Partial<RoomData> = {}): RoomData {
   return {
@@ -38,7 +41,7 @@ describe('moneda', () => {
   it('se recoge al contacto: +1 monedero, +1 total recogido, +1 punto, item desactivado', () => {
     const world = makeWorld([{ id: 'c1', kind: 'coin', position: { x: 0.3, y: 0 } }]);
     const events = createEventQueue(16);
-    stepItems(world, events);
+    stepItems(world, FIXED_DT, events);
     expect(world.hero.coins).toBe(1);
     expect(world.stats.coinsCollected).toBe(1);
     expect(world.stats.score).toBe(1);
@@ -52,7 +55,7 @@ describe('moneda', () => {
   it('fuera de alcance no se recoge', () => {
     const world = makeWorld([{ id: 'c1', kind: 'coin', position: { x: 5, y: 5 } }]);
     const events = createEventQueue(16);
-    stepItems(world, events);
+    stepItems(world, FIXED_DT, events);
     expect(world.stats.coinsCollected).toBe(0);
     expect(world.items[0].active).toBe(true);
   });
@@ -63,14 +66,14 @@ describe('poción', () => {
     const world = makeWorld([{ id: 'p1', kind: 'potion', position: { x: 0.3, y: 0 } }]);
     const events = createEventQueue(16);
     world.hero.hp = 3;
-    stepItems(world, events);
+    stepItems(world, FIXED_DT, events);
     expect(world.hero.hp).toBe(4);
   });
 
   it('no supera la vida máxima', () => {
     const world = makeWorld([{ id: 'p1', kind: 'potion', position: { x: 0.3, y: 0 } }]);
     const events = createEventQueue(16);
-    stepItems(world, events);
+    stepItems(world, FIXED_DT, events);
     expect(world.hero.hp).toBe(world.hero.maxHp);
   });
 });
@@ -80,7 +83,7 @@ describe('llave', () => {
     const world = makeWorld([{ id: 'k1', kind: 'key', position: { x: 0.3, y: 0 } }]);
     const events = createEventQueue(16);
     expect(world.hero.hasKey).toBe(false);
-    stepItems(world, events);
+    stepItems(world, FIXED_DT, events);
     expect(world.hero.hasKey).toBe(true);
   });
 });
@@ -153,5 +156,55 @@ describe('drop de moneda al morir un enemigo', () => {
     const xBefore = world.hero.position.x;
     stepWorld(world, events);
     expect(world.hero.position.x).toBeGreaterThan(xBefore);
+  });
+});
+
+describe('imán de monedas (Canto de Urraca, docs/plans/ECONOMY_PLAN.md F2)', () => {
+  it('sin nivel de imán, una moneda fuera de alcance de recogida no se mueve', () => {
+    const world = makeWorld([{ id: 'c1', kind: 'coin', position: { x: 2, y: 0 } }]);
+    const events = createEventQueue(16);
+    for (let i = 0; i < 30; i++) stepItems(world, FIXED_DT, events);
+    expect(world.items[0].position.x).toBeCloseTo(2, 9);
+    expect(world.items[0].position.y).toBeCloseTo(0, 9);
+  });
+
+  it('con nivel 1, una moneda dentro del radio (2.5 u) se acerca al héroe tras un tick y acaba recogida tras varios', () => {
+    const world = makeWorld([{ id: 'c1', kind: 'coin', position: { x: 2, y: 0 } }]);
+    const events = createEventQueue(16);
+    world.hero.modifiers.coinMagnetLevel = 1;
+    expect(COIN_MAGNET_RADIUS_BY_LEVEL[1]).toBe(2.5);
+
+    stepItems(world, FIXED_DT, events);
+    // Un tick a COIN_MAGNET_SPEED=7 u/s: 2 - 7/60 ≈ 1.883, se acercó pero no llegó.
+    expect(world.items[0].position.x).toBeLessThan(2);
+    expect(world.items[0].position.x).toBeGreaterThan(1.8);
+    expect(world.items[0].active).toBe(true);
+
+    for (let i = 0; i < 30; i++) stepItems(world, FIXED_DT, events);
+    expect(world.items[0].active).toBe(false); // ya la recogió por contacto al acercarse
+  });
+
+  it('con nivel 1, una moneda fuera del radio (2.5 u) no se mueve', () => {
+    const world = makeWorld([{ id: 'c1', kind: 'coin', position: { x: 10, y: 0 } }]);
+    const events = createEventQueue(16);
+    world.hero.modifiers.coinMagnetLevel = 1;
+
+    for (let i = 0; i < 30; i++) stepItems(world, FIXED_DT, events);
+    expect(world.items[0].position.x).toBeCloseTo(10, 9);
+    expect(world.items[0].active).toBe(true);
+  });
+
+  it('subir de nivel amplía el radio: una moneda a 4 u solo se atrae con nivel 2+', () => {
+    const world = makeWorld([{ id: 'c1', kind: 'coin', position: { x: 4, y: 0 } }]);
+    const events = createEventQueue(16);
+    world.hero.modifiers.coinMagnetLevel = 1;
+
+    stepItems(world, FIXED_DT, events);
+    expect(world.items[0].position.x).toBeCloseTo(4, 9); // fuera del radio de nivel 1 (2.5 u)
+
+    world.hero.modifiers.coinMagnetLevel = 2;
+    expect(COIN_MAGNET_RADIUS_BY_LEVEL[2]).toBe(4);
+    stepItems(world, FIXED_DT, events);
+    expect(world.items[0].position.x).toBeLessThan(4); // dentro del radio de nivel 2, ya se acerca
   });
 });

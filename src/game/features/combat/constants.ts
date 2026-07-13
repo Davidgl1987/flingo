@@ -42,6 +42,12 @@ export const PROJECTILE_FORCE_SPEED_MAX = 1.2;
 /** Radio de colisión de flecha/hechizo; el hechizo crece con Hechizo Arcano. */
 export const PROJECTILE_RADIUS = 0.18;
 export const SPELL_RADIUS_UPGRADED = 0.25;
+/**
+ * Ángulo entre proyectiles adyacentes del multidisparo en abanico (Bandada /
+ * Coro Arcano, docs/plans/ECONOMY_PLAN.md F2): 12° en radianes, simétrico
+ * respecto a la dirección de apuntado (p.ej. 3 proyectiles → -12/0/+12).
+ */
+export const PROJECTILE_FAN_ANGLE_STEP = (12 * Math.PI) / 180;
 
 // ── Pool preasignado de proyectiles ───────────────────────────────────────
 

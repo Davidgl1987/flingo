@@ -8,7 +8,7 @@
 
 import { BARREL_BLAST_RADIUS, BARREL_DAMAGE, BOOST_ACCELERATION, BOOST_MIN_SPEED, MUD_SLOW_FACTOR_PER_TICK, PIT_DAMAGE, PIT_FALL_DURATION, PIT_FORGIVENESS_MARGIN, SPIKES_ENEMY_DAMAGE_INTERVAL, SPIKES_DAMAGE, SPIKES_PUSH_SPEED } from './constants';
 import { QUEEN_TRAIL_CROSS_SPEED, QUEEN_TRAIL_DOT_GRACE, QUEEN_TRAIL_SLOW_FACTOR } from '@/game/features/bosses/queen/constants';
-import { applyDamageToEnemy, applyDamageToHero } from '@/game/features/combat/combat';
+import { applyDamageToEnemy, applyDamageToHero, applyKnockbackToHero } from '@/game/features/combat/combat';
 import { pushEvent, type EventQueue } from '@/engine/events';
 import { barrelInAir, type Barrel, type HazardSpawn, type World } from '@/game/world/types';
 
@@ -92,8 +92,7 @@ export function stepHeroHazards(world: World, dt: number, events: EventQueue): v
           const ny = dy / len;
           const wasHit = applyDamageToHero(world, SPIKES_DAMAGE, events);
           if (!wasHit) {
-            hero.velocity.x = nx * SPIKES_PUSH_SPEED;
-            hero.velocity.y = ny * SPIKES_PUSH_SPEED;
+            applyKnockbackToHero(world, nx * SPIKES_PUSH_SPEED, ny * SPIKES_PUSH_SPEED);
             pushEvent(events, 'spikes-hit', hero.position.x, hero.position.y, SPIKES_DAMAGE);
           }
         }

@@ -5,7 +5,7 @@
  * enemy.hp <= 0 recién cruzado a través del evento 'enemy-died').
  */
 
-import { ITEM_PICKUP_RADIUS, POTION_HEAL } from './constants';
+import { COIN_MAGNET_RADIUS_BY_LEVEL, COIN_MAGNET_SPEED, ITEM_PICKUP_RADIUS, POTION_HEAL } from './constants';
 import { pushEvent, type EventQueue } from '@/engine/events';
 import type { Item, World } from '@/game/world/types';
 
@@ -78,12 +78,37 @@ function tryPickup(world: World, item: Item, events: EventQueue): void {
   pushEvent(events, 'item-pickup', item.position.x, item.position.y, 1, item.kind);
 }
 
-/** Recorre los items activos de la sala y resuelve recogida por contacto con el héroe. */
-export function stepItems(world: World, events: EventQueue): void {
+/**
+ * Imán de monedas (Canto de Urraca, docs/plans/ECONOMY_PLAN.md F2): si el
+ * héroe tiene `coinMagnetLevel > 0`, acerca la moneda a velocidad constante
+ * `COIN_MAGNET_SPEED` cuando está dentro del radio de su nivel
+ * (`COIN_MAGNET_RADIUS_BY_LEVEL`). Clampa el paso para no pasarse de largo
+ * del héroe; la recogida real sigue ocurriendo en `tryPickup` por contacto
+ * normal cuando la moneda llega.
+ */
+function stepCoinMagnet(world: World, item: Item, dt: number): void {
+  const hero = world.hero;
+  const level = Math.min(hero.modifiers.coinMagnetLevel, COIN_MAGNET_RADIUS_BY_LEVEL.length - 1);
+  if (level <= 0) return;
+  const radius = COIN_MAGNET_RADIUS_BY_LEVEL[level];
+
+  const dx = hero.position.x - item.position.x;
+  const dy = hero.position.y - item.position.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist <= 1e-6 || dist > radius) return;
+
+  const step = Math.min(dist, COIN_MAGNET_SPEED * dt);
+  item.position.x += (dx / dist) * step;
+  item.position.y += (dy / dist) * step;
+}
+
+/** Recorre los items activos de la sala y resuelve recogida por contacto con el héroe (con imán de monedas, si el héroe lo tiene). */
+export function stepItems(world: World, dt: number, events: EventQueue): void {
   const items = world.items;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (!item.active) continue;
+    if (item.kind === 'coin') stepCoinMagnet(world, item, dt);
     tryPickup(world, item, events);
   }
 }
