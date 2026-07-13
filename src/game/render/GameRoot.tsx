@@ -26,13 +26,20 @@ import { TrailView } from '@/game/features/effects/TrailView';
 import { forceBossPhase } from '@/game/features/bosses/lifecycle';
 import { QueenColumnsView, QueenTethersView } from '@/game/features/bosses/queen/QueenColumnsView';
 import { EnemyViews } from '@/game/features/enemies/EnemyViews';
-import { createDungeonGameSession, createGameSession, restartSession, type GameSession } from '@/game/session/session';
+import {
+  advanceToNextDungeon,
+  createDungeonGameSession,
+  createGameSession,
+  restartSession,
+  type GameSession,
+} from '@/game/session/session';
 import type { RoomData } from '@/game/world/types';
 import { useUiStore } from '@/game/session/store';
 import { DamageVignette } from '@/game/ui/DamageVignette';
 import { FpsCounter } from '@/game/ui/FpsCounter';
 import { GameOverModal } from '@/game/ui/GameOverModal';
 import { HUD } from '@/game/ui/HUD';
+import { NextDungeonModal } from '@/game/ui/NextDungeonModal';
 import { PauseModal } from '@/game/ui/PauseModal';
 import { UpgradeModal } from '@/game/ui/UpgradeModal';
 import { VictoryModal } from '@/game/ui/VictoryModal';
@@ -53,7 +60,13 @@ function SimDriver({ session }: { session: GameSession }) {
   return null;
 }
 
-export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | null }) {
+export function GameRoot({
+  playtestRoom = null,
+  onExitToTitle,
+}: {
+  playtestRoom?: RoomData | null;
+  onExitToTitle?: () => void;
+}) {
   // useState con inicializador: la sesión se crea una sola vez y nunca causa re-render.
   const [session] = useState(() => {
     if (playtestRoom) return createGameSession(playtestRoom);
@@ -72,6 +85,14 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
   const handleRestart = useCallback(() => {
     restartSession(session);
     useUiStore.getState().resetRun();
+    setRunSeq((n) => n + 1);
+  }, [session]);
+
+  // Run multi-mazmorra (GDD §10): jefe derrotado pero quedan más por delante
+  // (fase 'dungeon-cleared'). A diferencia de handleRestart, NO se llama a
+  // resetRun (hp/monedas/mejoras deben sobrevivir a la nueva mazmorra).
+  const handleAdvanceDungeon = useCallback(() => {
+    advanceToNextDungeon(session);
     setRunSeq((n) => n + 1);
   }, [session]);
 
@@ -122,8 +143,9 @@ export function GameRoot({ playtestRoom = null }: { playtestRoom?: RoomData | nu
       </a>
       <UpgradeModal session={session} />
       <PauseModal session={session} onRestart={handleRestart} />
-      <GameOverModal onRestart={handleRestart} />
-      <VictoryModal onRestart={handleRestart} />
+      <NextDungeonModal session={session} onAdvance={handleAdvanceDungeon} />
+      <GameOverModal onRestart={handleRestart} onExitToTitle={onExitToTitle} />
+      <VictoryModal onRestart={handleRestart} onExitToTitle={onExitToTitle} />
     </div>
   );
 }

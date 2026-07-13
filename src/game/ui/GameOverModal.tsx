@@ -6,7 +6,7 @@
 import { useUiStore } from '@/game/session/store';
 import './modals.css';
 
-export function GameOverModal({ onRestart }: { onRestart: () => void }) {
+export function GameOverModal({ onRestart, onExitToTitle }: { onRestart: () => void; onExitToTitle?: () => void }) {
   const phase = useUiStore((s) => s.phase);
   const roomsCleared = useUiStore((s) => s.roomsCleared);
   const coins = useUiStore((s) => s.coins);
@@ -32,9 +32,16 @@ export function GameOverModal({ onRestart }: { onRestart: () => void }) {
             <dd>{score}</dd>
           </div>
         </dl>
-        <button type="button" className="modal-primary-btn" onClick={onRestart}>
-          Reintentar
-        </button>
+        <div className="pause-actions">
+          <button type="button" className="modal-primary-btn" onClick={onRestart}>
+            Reintentar
+          </button>
+          {onExitToTitle && (
+            <button type="button" className="modal-secondary-btn" onClick={onExitToTitle}>
+              Menú principal
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

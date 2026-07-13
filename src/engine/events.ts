@@ -33,6 +33,12 @@ export type GameEventType =
   | 'doors-open'
   | 'door-locked'
   | 'victory'
+  /**
+   * Run multi-mazmorra (GDD §10): se limpia la sala de un jefe que NO es el
+   * último de la secuencia — quedan más mazmorras/jefes por delante. Distinto
+   * de 'victory' (fin real de la run, último jefe derrotado).
+   */
+  | 'dungeon-cleared'
   // ── Jefes (GDD §15) ──────────────────────────────────────────────────────
   /** Se sella la puerta de la sala de jefe al entrar (GDD §15.1 punto 7). */
   | 'boss-door-sealed'

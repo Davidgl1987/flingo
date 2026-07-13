@@ -149,5 +149,19 @@ describe('generateDungeon', () => {
       const map = generateDungeon(42, pool);
       expect(map.bossRoomId).toBe('boss-1');
     });
+
+    it('con `bossId` explícito (run multi-mazmorra), la sala de jefe resultante SIEMPRE tiene ese boss', () => {
+      const pool = [
+        ...makeVariedPool().filter((r) => !r.tags.includes('jefe')),
+        makeTestRoom('boss-guardian', ['jefe'], 13, 'guardian'),
+        makeTestRoom('boss-queen', ['jefe'], 13, 'queen'),
+      ];
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const mapGuardian = generateDungeon(seed, pool, 6, 'guardian');
+        expect(mapGuardian.bossRoomId).toBe('boss-guardian');
+        const mapQueen = generateDungeon(seed, pool, 6, 'queen');
+        expect(mapQueen.bossRoomId).toBe('boss-queen');
+      }
+    });
   });
 });

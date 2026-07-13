@@ -119,6 +119,12 @@ export function useGameLoop(session: GameSession): void {
     const snap = lastSynced.current;
     const { roomIndex, totalRooms } = computeRoomProgress(world);
     const currentRoomName = world.room.name;
+    // GDD/combat.ts acumula `stats.score` con daños fraccionarios (factor de
+    // jefes fuera de ventana, ver applyDamageToEnemy). Se redondea SOLO aquí,
+    // en el punto de sincronización a UI: la acumulación interna del mundo no
+    // se toca, y la comparación de cambio usa el valor ya redondeado para no
+    // re-renderizar por ruido decimal que el jugador nunca vería.
+    const score = Math.round(world.stats.score);
     if (
       hero.hp !== snap.hp ||
       hero.maxHp !== snap.maxHp ||
@@ -126,7 +132,7 @@ export function useGameLoop(session: GameSession): void {
       hero.hasKey !== snap.hasKey ||
       world.phase !== snap.phase ||
       world.stats.roomsCleared !== snap.roomsCleared ||
-      world.stats.score !== snap.score ||
+      score !== snap.score ||
       roomIndex !== snap.roomIndex ||
       currentRoomName !== snap.currentRoomName
     ) {
@@ -136,7 +142,7 @@ export function useGameLoop(session: GameSession): void {
       snap.hasKey = hero.hasKey;
       snap.phase = world.phase;
       snap.roomsCleared = world.stats.roomsCleared;
-      snap.score = world.stats.score;
+      snap.score = score;
       snap.roomIndex = roomIndex;
       snap.currentRoomName = currentRoomName;
       useUiStore.getState().syncFromWorld({
@@ -146,7 +152,7 @@ export function useGameLoop(session: GameSession): void {
         hasKey: hero.hasKey,
         phase: world.phase,
         roomsCleared: world.stats.roomsCleared,
-        score: world.stats.score,
+        score,
         roomIndex,
         totalRooms,
         currentRoomName,

@@ -193,6 +193,31 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     expect(collect(events)).toContain('victory');
   });
 
+  it('limpiar la sala del jefe pone la fase en dungeon-cleared si NO es la mazmorra final (run multi-mazmorra)', () => {
+    const dungeon = generateDungeon(10, makePool());
+    const world = createDungeonWorld(dungeon, 10);
+    // Run multi-mazmorra (GDD §10): quedan más jefes por delante de esta mazmorra.
+    world.isFinalDungeon = false;
+    const events = createEventQueue(64);
+
+    world.currentRoomId = dungeon.bossRoomId;
+    const runtime = world.roomRuntimes.get(dungeon.bossRoomId)!;
+    runtime.visited = true;
+    world.hero.position.x = (runtime.bounds.minX + runtime.bounds.maxX) / 2;
+    world.hero.position.y = (runtime.bounds.minY + runtime.bounds.maxY) / 2;
+    world.hero.velocity.x = 0;
+    world.hero.velocity.y = 0;
+    for (const enemy of world.enemies) {
+      if (enemy.roomId === dungeon.bossRoomId) enemy.hp = 0;
+    }
+
+    stepWorld(world, events);
+
+    expect(world.phase).toBe('dungeon-cleared');
+    expect(collect(events)).toContain('dungeon-cleared');
+    expect(collect(events)).not.toContain('victory');
+  });
+
   it('la mejora solo se ofrece si el héroe sigue en la sala recién limpiada', () => {
     const dungeon = generateDungeon(11, makePool());
     const world = createDungeonWorld(dungeon, 11);

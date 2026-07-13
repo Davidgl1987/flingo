@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { seriesRooms, testRoom } from '@/game/features/dungeon/rooms';
-import { createDungeonGameSession, createGameSession, restartSession } from './session';
+import { advanceToNextDungeon, createDungeonGameSession, createGameSession, restartSession } from './session';
 
 describe('createDungeonGameSession (arranque de run completa)', () => {
   it('crea un mundo multi-sala con el pool de serie: dungeon activo, héroe en la sala de inicio', () => {
@@ -69,5 +69,103 @@ describe('createDungeonGameSession (arranque de run completa)', () => {
     const session = createGameSession(testRoom);
     expect(session.world.dungeon).toBeNull();
     expect(session.dungeonPool).toBeNull();
+    // Modo sala única: sin secuencia de jefes, mundo tratado como final.
+    expect(session.bossSequence).toEqual([]);
+    expect(session.stageIndex).toBe(0);
+    expect(session.world.isFinalDungeon).toBe(true);
+  });
+});
+
+describe('bossSequence (run multi-mazmorra, GDD §10)', () => {
+  it('contiene exactamente los jefes de diseño del pool de serie, uno cada uno (sin test-boss)', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    expect([...session.bossSequence].sort()).toEqual(['guardian', 'queen']);
+    expect(session.bossSequence).not.toContain('test-boss');
+  });
+
+  it('es determinista con la misma semilla forzada', () => {
+    const a = createDungeonGameSession(seriesRooms, 999);
+    const b = createDungeonGameSession(seriesRooms, 999);
+    expect(a.bossSequence).toEqual(b.bossSequence);
+  });
+
+  it('el orden puede variar entre semillas distintas', () => {
+    const orders = new Set<string>();
+    for (let seed = 0; seed < 30; seed++) {
+      orders.add(createDungeonGameSession(seriesRooms, seed).bossSequence.join(','));
+    }
+    expect(orders.size).toBeGreaterThan(1);
+  });
+
+  it('la mazmorra del primer stage tiene la sala del primer jefe de la secuencia', () => {
+    const session = createDungeonGameSession(seriesRooms, 7);
+    const bossRoom = session.world.dungeon!.rooms.find((r) => r.room.id === session.world.dungeon!.bossRoomId)!;
+    expect(bossRoom.room.boss).toBe(session.bossSequence[0]);
+  });
+
+  it('isFinalDungeon es true en el stage 0 solo si hay un único jefe en la secuencia', () => {
+    const session = createDungeonGameSession(seriesRooms, 7);
+    expect(session.bossSequence.length).toBe(2);
+    expect(session.world.isFinalDungeon).toBe(false);
+  });
+});
+
+describe('advanceToNextDungeon (run multi-mazmorra, GDD §10)', () => {
+  it('conserva hp/maxHp/modifiers y stats acumulados; hasKey false; offeredUpgrades intactas; avanza al jefe del siguiente stage', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    expect(session.bossSequence.length).toBe(2);
+    const secondBoss = session.bossSequence[1];
+
+    // Progreso simulado en la primera mazmorra.
+    session.world.hero.hp = 2;
+    session.world.hero.maxHp = 5;
+    session.world.hero.modifiers.ramDamageBonus = 3;
+    session.world.hero.hasKey = true;
+    session.world.stats.roomsCleared = 4;
+    session.world.stats.coinsCollected = 7;
+    session.world.stats.damageDealt = 55.5;
+    session.world.stats.score = 120;
+    session.offeredUpgrades.add('extra-heart');
+
+    advanceToNextDungeon(session);
+
+    expect(session.stageIndex).toBe(1);
+    expect(session.world.hero.hp).toBe(2);
+    expect(session.world.hero.maxHp).toBe(5);
+    expect(session.world.hero.modifiers.ramDamageBonus).toBe(3);
+    expect(session.world.hero.hasKey).toBe(false);
+    expect(session.world.stats.roomsCleared).toBe(4);
+    expect(session.world.stats.coinsCollected).toBe(7);
+    expect(session.world.stats.damageDealt).toBe(55.5);
+    expect(session.world.stats.score).toBe(120);
+    expect(session.offeredUpgrades.has('extra-heart')).toBe(true);
+
+    const nextBossRoom = session.world.dungeon!.rooms.find((r) => r.room.id === session.world.dungeon!.bossRoomId)!;
+    expect(nextBossRoom.room.boss).toBe(secondBoss);
+    // Con 2 jefes en la secuencia, el stage 1 (índice 1) es el último.
+    expect(session.world.isFinalDungeon).toBe(true);
+  });
+
+  it('no muta los modifiers del mundo anterior (copia el objeto, no la referencia)', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    const prevModifiers = session.world.hero.modifiers;
+    advanceToNextDungeon(session);
+    expect(session.world.hero.modifiers).not.toBe(prevModifiers);
+    expect(session.world.hero.modifiers).toEqual(prevModifiers);
+  });
+});
+
+describe('restartSession (run multi-mazmorra, GDD §10)', () => {
+  it('vuelve a stageIndex 0 y re-baraja bossSequence', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    advanceToNextDungeon(session);
+    expect(session.stageIndex).toBe(1);
+
+    restartSession(session);
+
+    expect(session.stageIndex).toBe(0);
+    expect(session.bossSequence.length).toBe(2);
+    const bossRoom = session.world.dungeon!.rooms.find((r) => r.room.id === session.world.dungeon!.bossRoomId)!;
+    expect(bossRoom.room.boss).toBe(session.bossSequence[0]);
   });
 });

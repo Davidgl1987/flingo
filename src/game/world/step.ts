@@ -99,8 +99,16 @@ function stepDungeonRoomClear(world: World, events: EventQueue): void {
     for (const door of runtime.doors) {
       if (door.requiresKey) openConnection(world, door.connectionIndex);
     }
-    world.phase = 'victory';
-    pushEvent(events, 'victory', world.hero.position.x, world.hero.position.y, 1);
+    // Run multi-mazmorra (GDD §10): si esta era la última mazmorra de la
+    // secuencia de jefes, fin de la run ('victory'); si no, hay más jefes por
+    // delante y la sesión (advanceToNextDungeon) encadena la siguiente mazmorra.
+    if (world.isFinalDungeon) {
+      world.phase = 'victory';
+      pushEvent(events, 'victory', world.hero.position.x, world.hero.position.y, 1);
+    } else {
+      world.phase = 'dungeon-cleared';
+      pushEvent(events, 'dungeon-cleared', world.hero.position.x, world.hero.position.y, 1);
+    }
     return;
   }
 

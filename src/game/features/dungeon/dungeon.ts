@@ -23,7 +23,7 @@
 import { DOOR_WIDTH, ROOMS_PER_RUN, WALL_THICKNESS } from '@/game/world/constants';
 import { type Rng, createRng } from '@/engine/rng';
 import type { AABB, Vec2 } from '@/engine/geometry';
-import type { DoorSide, DoorSlot, RoomData, RoomTag } from '@/game/world/types';
+import type { BossId, DoorSide, DoorSlot, RoomData, RoomTag } from '@/game/world/types';
 
 /** Hueco entre salas contiguas (además del grosor de muro de cada una). */
 export const ROOM_GAP = WALL_THICKNESS;
@@ -155,16 +155,24 @@ function pickRoomForRole(
   role: RoomTag,
   used: Set<string>,
   rng: Rng,
+  bossId?: BossId,
 ): RoomData | null {
   let candidates = pool.filter((r) => r.tags.includes(role) && !used.has(r.id));
   if (role === 'jefe') {
-    // GDD §15.1 punto 9: un pool de jefes, uno por partida — solo salas con
-    // `boss` (framework de Fase B0) cuentan como sala de jefe "de verdad".
-    // Si el pool aún no tiene ninguna (solo B0 implementado, sin B1-B4), cae
-    // a cualquier sala 'jefe' sin `boss` (boss-den.json, sala de combate
-    // duro heredada) para no romper la generación de mazmorras existente.
-    const withBoss = candidates.filter((r) => r.boss !== undefined);
-    candidates = withBoss.length > 0 ? withBoss : candidates;
+    if (bossId !== undefined) {
+      // Run multi-mazmorra (GDD §10): esta mazmorra es la del jefe `bossId`
+      // concreto (uno por stage de la secuencia, ver session.ts) — solo cuenta
+      // la sala que lo referencia, nunca otra.
+      candidates = candidates.filter((r) => r.boss === bossId);
+    } else {
+      // GDD §15.1 punto 9: un pool de jefes, uno por partida — solo salas con
+      // `boss` (framework de Fase B0) cuentan como sala de jefe "de verdad".
+      // Si el pool aún no tiene ninguna (solo B0 implementado, sin B1-B4), cae
+      // a cualquier sala 'jefe' sin `boss` (boss-den.json, sala de combate
+      // duro heredada) para no romper la generación de mazmorras existente.
+      const withBoss = candidates.filter((r) => r.boss !== undefined);
+      candidates = withBoss.length > 0 ? withBoss : candidates;
+    }
   }
   if (candidates.length === 0) return null;
   const index = Math.floor(rng() * candidates.length);
@@ -244,10 +252,12 @@ function tryMaterialize(
   pool: readonly RoomData[],
   topology: Topology,
   rng: Rng,
+  bossId?: BossId,
 ): DungeonMap | null {
   const used = new Set<string>();
   const chosen: (RoomData | null)[] = topology.nodes.map((node) => {
-    const picked = pickRoomForRole(pool, node.role, used, rng) ?? pickRoomForRole(pool, 'combate', used, rng);
+    const picked =
+      pickRoomForRole(pool, node.role, used, rng, bossId) ?? pickRoomForRole(pool, 'combate', used, rng);
     if (picked) used.add(picked.id);
     return picked;
   });
@@ -514,17 +524,23 @@ const MAX_GENERATION_ATTEMPTS = 24;
  * Garantiza las validaciones del GDD §10.2; si el pool no permite
  * materializar la topología tras varios intentos, cae al layout de
  * emergencia (siempre válido).
+ *
+ * `bossId` (run multi-mazmorra, GDD §10): si se da, la sala de jefe se elige
+ * solo entre las salas 'jefe' cuyo `boss === bossId` (ver `pickRoomForRole`).
+ * Sin él, se conserva el comportamiento histórico (sortea entre todas las
+ * salas 'jefe' con `boss` definido).
  */
 export function generateDungeon(
   seed: number,
   pool: readonly RoomData[],
   roomCount: number = ROOMS_PER_RUN,
+  bossId?: BossId,
 ): DungeonMap {
   const rng = createRng(seed);
   const topology = buildTopology(roomCount);
 
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
-    const map = tryMaterialize(pool, topology, rng);
+    const map = tryMaterialize(pool, topology, rng, bossId);
     if (map) {
       map.seed = seed;
       const validation = validateDungeon(map);

@@ -1,12 +1,15 @@
 /**
- * Modal de victoria (GDD §10.3): limpiar la sala del jefe. Estadísticas +
- * reinicio inmediato (nueva semilla, GDD §10.2). Usable con el pulgar.
+ * Modal de victoria (GDD §10, run multi-mazmorra): fin de juego real — se
+ * muestra tras limpiar la sala del ÚLTIMO jefe de `bossSequence`
+ * (`world.isFinalDungeon`, ver step.ts::stepDungeonRoomClear). Estadísticas +
+ * reinicio inmediato (nueva run, nueva semilla) o vuelta al menú. Usable con
+ * el pulgar.
  */
 
 import { useUiStore } from '@/game/session/store';
 import './modals.css';
 
-export function VictoryModal({ onRestart }: { onRestart: () => void }) {
+export function VictoryModal({ onRestart, onExitToTitle }: { onRestart: () => void; onExitToTitle?: () => void }) {
   const phase = useUiStore((s) => s.phase);
   const roomsCleared = useUiStore((s) => s.roomsCleared);
   const coins = useUiStore((s) => s.coins);
@@ -18,7 +21,7 @@ export function VictoryModal({ onRestart }: { onRestart: () => void }) {
     <div className="modal-backdrop">
       <div className="modal victory-modal">
         <h2 className="modal-title">¡Victoria!</h2>
-        <p className="modal-subtitle">Has derrotado al jefe de la mazmorra</p>
+        <p className="modal-subtitle">Has derrotado a todos los jefes</p>
         <dl className="game-over-stats">
           <div className="game-over-stat">
             <dt>Salas limpiadas</dt>
@@ -33,9 +36,16 @@ export function VictoryModal({ onRestart }: { onRestart: () => void }) {
             <dd>{score}</dd>
           </div>
         </dl>
-        <button type="button" className="modal-primary-btn" onClick={onRestart}>
-          Jugar otra run
-        </button>
+        <div className="pause-actions">
+          <button type="button" className="modal-primary-btn" onClick={onRestart}>
+            Jugar otra run
+          </button>
+          {onExitToTitle && (
+            <button type="button" className="modal-secondary-btn" onClick={onExitToTitle}>
+              Menú principal
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

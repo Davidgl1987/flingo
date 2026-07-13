@@ -1,0 +1,103 @@
+/* ── Pantalla de presentación (móvil primero, ambiente de mazmorra oscura) ── */
+
+.title-screen {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 15%, rgba(84, 199, 255, 0.14), transparent 60%),
+    radial-gradient(ellipse 100% 70% at 50% 100%, rgba(255, 209, 102, 0.08), transparent 55%),
+    linear-gradient(180deg, #0b0d14 0%, #10131e 55%, #05060a 100%);
+}
+
+/* Halo suave que respira detrás del título: gracia visual barata en CSS puro. */
+.title-screen-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(560px, 90vw);
+  height: min(560px, 90vw);
+  transform: translate(-50%, -60%);
+  background: radial-gradient(circle, rgba(84, 199, 255, 0.16) 0%, transparent 70%);
+  animation: title-screen-breathe 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes title-screen-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate(-50%, -60%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -60%) scale(1.08);
+  }
+}
+
+.title-screen-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+  width: min(360px, 100%);
+  text-align: center;
+}
+
+.title-screen-title {
+  margin: 0;
+  font-size: clamp(48px, 15vw, 72px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #f4f7ff;
+  text-shadow:
+    0 0 18px rgba(84, 199, 255, 0.55),
+    0 0 48px rgba(84, 199, 255, 0.3),
+    0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+.title-screen-subtitle {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #aab2d4;
+}
+
+.title-screen-play-btn {
+  width: 100%;
+  min-height: 64px;
+  border-radius: 18px;
+  border: none;
+  background: #54c7ff;
+  color: #0b0d14;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(84, 199, 255, 0.35);
+}
+
+.title-screen-play-btn:active {
+  background: #7fd6ff;
+  box-shadow: 0 4px 16px rgba(84, 199, 255, 0.3);
+}
+
+.title-screen-editor-link {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  right: 12px;
+  font-size: 12px;
+  color: #aab2d4;
+  text-decoration: none;
+  background: rgba(18, 21, 34, 0.7);
+  border: 1px solid #39405c;
+  border-radius: 999px;
+  padding: 6px 12px;
+  pointer-events: auto;
+  z-index: 5;
+}

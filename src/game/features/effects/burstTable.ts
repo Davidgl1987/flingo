@@ -52,6 +52,10 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   'doors-open': NONE,
   'door-locked': NONE,
   victory: { color: '#ffd166', size: 0.15, count: 40, life: 0.8, speed: 3.0, trauma: 0.3 },
+  // Run multi-mazmorra (GDD §10): mismo lenguaje visual que 'victory' (dorado)
+  // pero más contenido — es un hito intermedio (jefe derrotado, quedan más),
+  // no el clímax de la run.
+  'dungeon-cleared': { color: '#ffd166', size: 0.12, count: 24, life: 0.6, speed: 2.4, trauma: 0.2 },
   // ── Jefes (GDD §15) ──────────────────────────────────────────────────────
   'boss-door-sealed': NONE,
   'boss-phase-changed': { color: '#fff2c9', size: 0.12, count: 18, life: 0.4, speed: 2.6, trauma: 0.25 },

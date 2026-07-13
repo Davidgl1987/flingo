@@ -254,6 +254,7 @@ export function createDungeonWorld(dungeon: DungeonMap, seed: number = dungeon.s
     currentRoomId: dungeon.startRoomId,
     wallVersion: 0,
     lockedNoticeCooldownUntil: 0,
+    isFinalDungeon: true,
   };
 
   // Salas limpiadas de entrada (sin enemigos): sus conexiones sin llave nacen
