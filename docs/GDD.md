@@ -16,7 +16,7 @@ Eres una bola héroe en una mazmorra vista desde arriba. No caminas: **te lanzas
 4. **Juice constante.** Cada impacto, muerte y rebote se siente: sacudida, partículas, flash, pausa de impacto.
 5. **Contenido editable.** Las salas se crean en un editor visual y se combinan proceduralmente en mazmorras.
 
-**Sesión objetivo:** una run = ~6 salas encadenadas, muerte permanente, mejoras entre salas, jefe final.
+**Sesión objetivo:** una run encadena varias mazmorras de ~6 salas cada una (una por cada jefe del pool, en orden aleatorio), muerte permanente, mejoras ganadas al derrotar jefes y compradas en tienda, jefe final de la run da la victoria.
 
 ---
 
@@ -24,8 +24,10 @@ Eres una bola héroe en una mazmorra vista desde arriba. No caminas: **te lanzas
 
 ```
 Apuntar (arrastrar) → Soltar (lanzarse/disparar) → Resolver física (rebotes, impactos, daño)
-→ Repetir hasta limpiar la sala → Elegir 1 de 3 mejoras → Cruzar puerta a la siguiente sala
-→ ... → Sala del jefe → Victoria (o muerte en cualquier punto → Game Over → nueva run)
+→ Repetir hasta limpiar la sala (abre puertas, sin elección de mejora) → Cruzar puerta a la siguiente sala
+→ ... → (opcional: visitar la sala de tienda para comprar mejoras con las monedas recogidas)
+→ Sala del jefe → jefe NO final: elige 1 de hasta 3 mejoras gratis → siguiente mazmorra (nuevo mapa, progreso conservado)
+→ ... → jefe final → Victoria (o muerte en cualquier punto → Game Over → nueva run)
 ```
 
 No hay turnos: el mundo es en tiempo real. Los enemigos se mueven siempre, también mientras apuntas. Apuntar no pausa ni ralentiza el juego (y al menos un enemigo se vuelve *más* agresivo cuando te ve apuntar).
@@ -105,7 +107,7 @@ El mismo gesto (arrastrar y soltar) tiene tres modos, seleccionables en cualquie
 
 ## 7. Enemigos
 
-Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos rodean obstáculos con inteligencia (no se atascan contra rocas, no caen solos a los fosos y **no pisan pinchos ni barriles sin explotar**: los esquivan al navegar). Que un enemigo muera por un hazard solo debe poder ocurrir si el jugador lo provoca (knockback, explosión encadenada) — nunca por decisión propia de la IA. Todos reciben knockback al ser golpeados. Al morir sueltan una moneda y estallan en partículas.
+Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos rodean obstáculos con inteligencia (no se atascan contra rocas, no caen solos a los fosos y **no pisan pinchos ni barriles sin explotar**: los esquivan al navegar). Que un enemigo muera por un hazard solo debe poder ocurrir si el jugador lo provoca (knockback, explosión encadenada) — nunca por decisión propia de la IA. Todos reciben knockback al ser golpeados. Al morir sueltan monedas (según su dureza, ver §9) y estallan en partículas.
 
 ### 7.1 Dummy (rojo) — el básico
 - 2 HP. Lento.
@@ -160,9 +162,11 @@ Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos r
 
 ## 9. Objetos
 
-- **Moneda:** se recoge al contacto. Cuenta para la puntuación. Los enemigos sueltan una al morir; también se colocan sueltas en salas.
+- **Moneda:** se recoge al contacto. Suma al **monedero** gastable del héroe (se pierde al morir, viaja intacto entre mazmorras de la misma run) y +1 a la **puntuación**. Los enemigos sueltan monedas al morir, en una cantidad según su dureza: Dummy 1, Chaser/Trail 2, Spike/Shooter 3, jefe 10 (esparcidas alrededor del cadáver). También se colocan monedas sueltas en las salas. La mejora **Canto de Urraca** (imán, §11) las atrae desde más lejos según su nivel.
 - **Poción:** cura 1 corazón al recogerla (con su efecto visual de curación).
 - **Llave:** objeto de progresión — abre la puerta del jefe. Se coloca en una sala concreta de la mazmorra ("sala de la llave"), custodiada.
+
+**Economía de la puntuación** *(decisión de David, 2026-07-13)*: recoger una moneda suma +1 a la puntuación como siempre, pero **comprar una mejora en la tienda resta su precio a la puntuación** (con tope en 0, nunca baja de cero). La puntuación final de la run premia terminar sin gastar: acumular monedero sin tocarlo puntúa más que vaciarlo en mejoras.
 
 ---
 
@@ -172,41 +176,71 @@ Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos r
 
 - Una sala es un recinto rectangular con paredes, de dimensiones variables (mínimo 5×5 u, lados impares; referencia 9×9 a 9×13).
 - Contenido de una sala: punto de inicio del jugador (para la sala inicial), enemigos con sus rutas, hazards, objetos, y **huecos de puerta** en los bordes (norte/sur/este/oeste, hasta 2 por lado, con posición a lo largo del borde).
-- Etiquetas de sala: **inicio**, **combate**, **llave**, **recompensa**, **jefe** — definen su papel en la mazmorra.
+- Etiquetas de sala: **inicio**, **combate**, **llave**, **recompensa**, **jefe**, **tienda** — definen su papel en la mazmorra.
 
 ### 10.2 Mazmorra procedural
 
-- Una run encadena **~6 salas** elegidas de un pool (salas hechas a mano en el editor + salas incluidas de serie): inicio → combates → sala de la llave → … → jefe.
+- Cada **mazmorra** encadena **~6 salas** elegidas de un pool (salas hechas a mano en el editor + salas incluidas de serie): inicio → combates → sala de la llave → … → jefe, más la sala de tienda colgada aparte (ver "Tienda" más abajo).
+- Una **run** encadena **varias mazmorras**, una por cada jefe del pool de jefes en orden aleatorio (§15.1, punto 9): al derrotar el jefe de una mazmorra que no es la última, se genera la siguiente mazmorra (mapa nuevo, misma regla de ~6 salas) y el héroe conserva vida, mejoras y monedero (§10.3).
 - Las salas se conectan por puertas alineadas formando un **mapa con al menos un ciclo** (que se pueda rodear, no un pasillo lineal), y el jefe como callejón final.
 - **Reglas de validación del mapa:** todo alcanzable; el jefe solo accesible con la llave; la llave alcanzable sin pasar por el jefe; sin solapes de salas.
 - **Flujo de puertas:** las puertas de una sala se abren al limpiarla (matar a todos sus enemigos). Cruzar una puerta te lleva físicamente a la sala contigua (mundo continuo, sin pantalla de carga). Aviso con el nombre de la sala al entrar.
-- **Limpiar una sala** = eliminar todos sus enemigos → suena la recompensa, se abren puertas y se ofrece la **elección de mejora** (solo si estás en la sala recién limpiada).
+- **Limpiar una sala** = eliminar todos sus enemigos → suena la recompensa y se abren sus puertas (salvo la del jefe, que exige la llave). Limpiar una sala **no** ofrece elección de mejora — las mejoras se ganan de otras dos formas, ver §11 y "Tienda" más abajo.
 
 ### 10.3 Victoria y derrota
 
-- **Victoria:** limpiar la sala del jefe. Pantalla de victoria con estadísticas.
-- **Derrota:** morir en cualquier sala. Sin checkpoints: la run se reinicia entera (permadeath).
-- **Puntuación:** daño infligido, salas limpiadas (+50), monedas y mejoras suman puntos.
+- **Derrotar al jefe de una mazmorra:**
+  - Si **no** es el jefe final de la run: se ofrece la recompensa gratis de jefe (§11) y, tras elegirla (o si no hay nada que ofrecer), la run avanza a la **siguiente mazmorra** — vida, mejoras y monedero del héroe se conservan; la llave no (cada mazmorra tiene la suya).
+  - Si es el jefe final de la run (última mazmorra de la secuencia): **Victoria** directa, sin recompensa (no habría mazmorra siguiente donde gastarla). Pantalla de victoria con estadísticas.
+- **Derrota:** morir en cualquier sala, de cualquier mazmorra de la run. Sin checkpoints: la run entera se reinicia desde la primera mazmorra (permadeath) — el monedero y las mejoras acumuladas se pierden.
+- **Puntuación:** daño infligido, salas limpiadas (+50), monedas recogidas y mejoras suman puntos; comprar en la tienda resta puntuación (§9).
+
+### 10.4 Tienda
+
+*Sección nueva (decisión de David, 2026-07-13).*
+
+- Cada mazmorra tiene **una sala de tienda**, colgada como callejón sin salida fuera del camino obligatorio (bucle de salas ↔ jefe): el jugador la encuentra sin desviarse mucho, pero nunca es de paso obligado.
+- Dentro vive un **tendero placeholder** (marcador de posición a la espera de un NPC futuro con arte y personalidad propios). Tocarlo abre el **modal de tienda**; no se "recoge", así que el modal es reabrible el resto de la mazmorra.
+- El modal muestra un **stock de 4 mejoras** sorteadas del pool completo (todas las categorías, incluidos los consumibles) al generar la mazmorra — el stock no se vuelve a sortear al reabrir la tienda, solo cambian los precios/niveles a medida que compras.
+- Cada mejora del stock se compra con el **precio de su siguiente nivel**: descuenta monedas del monedero y resta esa misma cantidad a la puntuación (§9). Sin saldo suficiente, o con la mejora ya al máximo, no se puede comprar.
+- **Precios de referencia:** mejoras de cuerpo/flecha/hechizo, 10/20/30 según el nivel (nivel × 10); Burbuja de Cuarzo (escudo) 8 fijo; Ascua Vital (corazón) 12 fijo; Canto de Urraca (imán) 10/15/20 según el nivel.
+- "Salir" cierra el modal y devuelve el control al jugador sin perder el stock ni las compras ya hechas.
 
 ---
 
 ## 11. Mejoras (upgrades)
 
-Al limpiar una sala se ofrecen **3 mejoras al azar** de este pool (las de daño/escudo pueden repetirse; el resto solo se ofrece una vez; corazón extra deja de salir al llegar a 9):
+*Sección reescrita (decisión de David, 2026-07-13): ya no se ofrece mejora al limpiar una sala. Las mejoras se ganan de dos formas — gratis al derrotar un jefe, o comprándolas en la tienda (§10.4) — y tienen **niveles** en vez de ser un pick único.*
 
-| Mejora | Efecto |
-|---|---|
-| **Impacto Pesado** | +1 daño de embestida (acumulable) |
-| **Corazón Extra** | +1 vida máxima y cura 1 |
-| **Más Deslizamiento** | Conservas más velocidad (llegas más lejos, menos control) |
-| **Botas de Control** | Te frenas antes (más control, menos alcance) |
-| **Choque Explosivo** | Tus embestidas dañan también a enemigos cercanos al impacto |
-| **Flechas Afiladas** | +1 daño de flecha (acumulable) |
-| **Hechizo Arcano** | +1 daño de hechizo y proyectil más grande (acumulable) |
-| **Pulso Firme** | Recargas de flecha y hechizo un 28% más rápidas |
-| **Escudo Frágil** | +1 carga de escudo: bloquea el próximo golpe (acumulable) |
+### Cómo se obtienen
 
-Las mejoras de fricción (Deslizamiento/Botas) son **una elección de estilo de juego**, no mejoras puras: cambian cómo se siente el héroe.
+- **Recompensa gratis de jefe no final:** al derrotar un jefe que no es el último de la run, se ofrece **1 elección entre hasta 3 tarjetas**, una mejora aleatoria no maximizada por cada **categoría de ataque** (cuerpo, flecha, hechizo — los consumibles no entran aquí, solo se compran). Si alguna categoría ya está toda al máximo se omite, así que puede haber menos de 3 opciones. El jefe final de la run no ofrece nada: da la victoria directamente (§10.3).
+- **Tienda:** cualquier mejora del pool completo (incluidos los consumibles) se puede comprar con monedas, con precio creciente por nivel (§10.4).
+
+### Persistencia
+
+Las mejoras y sus niveles **persisten entre las mazmorras de una misma run** (igual que el monedero) y **se pierden por completo al morir** (nueva run, todo a nivel 0).
+
+### Pool de mejoras (12)
+
+Cada mejora tiene un **máximo de nivel**, un icono/badge propio y pips de nivel (●●○) visibles en el modal de recompensa de jefe, en la tienda y en el resumen de pausa/fin de run.
+
+| Categoría | Mejora | Efecto por nivel | Máx. nivel |
+|---|---|---|---|
+| Cuerpo | **Erizo de Acero** | +1 daño de embestida | 3 |
+| Cuerpo | **Estela de Cometa** | +1 u/s de velocidad de lanzamiento corporal | 3 |
+| Cuerpo | **Canto Rodado** | Menos retroceso al recibir daño | 3 |
+| Flecha | **Colmillo de Hierro** | +1 daño de flecha | 3 |
+| Flecha | **Bandada** | +1 flecha en ángulo por disparo | 3 |
+| Flecha | **Aguja Fantasma** | +1 enemigo atravesado por la flecha (base 1 → máx 4) | 3 |
+| Hechizo | **Orbe Voraz** | +1 daño de hechizo y proyectil más ancho | 3 |
+| Hechizo | **Coro Arcano** | +1 hechizo en ángulo por disparo | 3 |
+| Hechizo | **Eco Errante** | +1 rebote del hechizo (base 1 → máx 4) | 3 |
+| Consumible | **Burbuja de Cuarzo** (escudo) | +1 carga de escudo: bloquea el próximo golpe | sin tope (acumula cargas) |
+| Consumible | **Ascua Vital** (corazón) | Cura 1 corazón; con la vida llena, +1 vida máxima (tope 9) | hasta 9 de vida máxima |
+| Consumible | **Canto de Urraca** (imán) | Atrae monedas desde más lejos | 3 |
+
+Las mejoras de **cuerpo/flecha/hechizo** solo se ofrecen como recompensa de jefe; los **consumibles** (escudo, corazón, imán) solo se compran en tienda.
 
 ---
 
@@ -234,7 +268,7 @@ Todo evento del juego tiene respuesta audiovisual inmediata. Mínimos exigidos:
 - 3 botones de arma abajo al centro con barra de recarga visual.
 - Botón de pausa arriba a la derecha.
 
-**Modales:** elección de mejora (3 tarjetas grandes), pausa (mejoras acumuladas + leyenda), fin de run (estadísticas + reinicio). Todos usables con el pulgar.
+**Modales:** recompensa de jefe (hasta 3 tarjetas grandes de mejora gratis), tienda (stock con precios, comprar/salir), mazmorra superada (avanzar a la siguiente mazmorra de la run), pausa (mejoras acumuladas + leyenda), fin de run (estadísticas + reinicio). Todos usables con el pulgar.
 
 ---
 
@@ -282,8 +316,8 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 5. **El jefe usa la sala como arma.** Las mismas piezas que el jugador usa contra los enemigos normales (rocas para rebotar, barriles, fosos, pinchos) el jefe las convierte en amenaza propia. El diseño de la arena es parte del combate, no decoración de fondo.
 6. **Ningún ataque de jefe mata de un golpe con vida llena.** Techo de daño de un único impacto: 60 % de la vida máxima del héroe en la fase 1 (escala un poco en fases posteriores, nunca hasta el 100 %). Perder debe sentirse "me confié", nunca "no pude hacer nada".
 7. **La puerta de la sala del jefe se sella al entrar** y solo se abre al vencerlo — no hay ir y volver a por mejoras a mitad combate. Si mueres, la run entera se reinicia como siempre (sin checkpoint intra-jefe): coherente con la permadeath del resto del juego.
-8. **La derrota del jefe es el clímax audiovisual de la run**: la mayor combinación de partículas, sacudida de cámara y pausa de impacto de todo el juego, una cosecha grande de monedas, y la puerta trasera que da la victoria. No se ofrece mejora tras un jefe (es el final de la run).
-9. **Un pool de cuatro jefes, uno por partida.** Los jefes de esta sección entran como salas de la etiqueta "jefe" en el pool de la mazmorra procedural: cada run sortea uno. No es una progresión secuencial dentro de una misma partida — son variantes con la misma dificultad aproximada, para que cada run se sienta distinta. Cada jefe enseña un pilar distinto: rebote/embestida (Guardián), gestión de espacio (Reina), dominio de las 3 armas (Prisma), esquive puro (Tormenta). (Encadenar varios jefes en progresión de dificultad queda como ampliación futura, no de este alcance.)
+8. **La derrota del jefe es el clímax audiovisual de la mazmorra**: la mayor combinación de partículas, sacudida de cámara y pausa de impacto de todo el juego, una cosecha grande de monedas, y la puerta trasera que abre paso. Si el jefe **no** es el último de la run, además se ofrece la recompensa gratis de mejora (§11) antes de pasar a la mazmorra siguiente; el jefe final de la run no ofrece mejora — da la victoria directamente (§10.3), porque no habría mazmorra donde usarla.
+9. **Un pool de cuatro jefes, uno por mazmorra, encadenados dentro de la misma run** *(actualizado; antes cada run sorteaba un único jefe)*: los jefes de esta sección entran como salas de la etiqueta "jefe" en el pool de la mazmorra procedural. Una run baraja los jefes de diseño DISPONIBLES en el pool y encadena una mazmorra por cada uno, en ese orden — el jugador se enfrenta a todos antes de que la run termine, cada vez con una mazmorra nueva alrededor (hoy Guardián y Reina; Prisma y Tormenta entran solos al implementarse, Fases B3-B4 de docs/plans/BOSSES_PLAN.md). Cada jefe enseña un pilar distinto: rebote/embestida (Guardián), gestión de espacio (Reina), dominio de las 3 armas (Prisma), esquive puro (Tormenta).
 
 ### 15.2 Guardián de Canto — el jefe de embestida
 
@@ -374,4 +408,6 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 
 **Hazards:** foso 1 daño, margen de perdón 0.18 u, caída ~1.05 s · pinchos 1 daño + empuje 5.2 u/s · barril daño 3, radio 2.0 · barro ×0.92/tick · boost +8 u/s²
 
-**Mundo:** ~6 salas/run · puerta 2.0 u de ancho · muro 0.42 u · mejoras: 3 opciones por sala limpiada
+**Mundo:** ~6 salas/mazmorra · puerta 2.0 u de ancho · muro 0.42 u · una mazmorra por jefe de la run, encadenadas en orden aleatorio
+
+**Economía (§9, §10.4, §11):** drops de moneda al morir por dureza — Dummy 1, Chaser/Trail 2, Spike/Shooter 3, jefe 10 (esparcidas radio 0.25–0.6 u) · recompensa de jefe no final: 1 de hasta 3 (una por categoría de ataque) · stock de tienda: 4 mejoras sorteadas por mazmorra · precio cuerpo/flecha/hechizo: nivel × 10 (10/20/30) · precio escudo 8 fijo · precio corazón 12 fijo · precio imán 5 + nivel × 5 (10/15/20) · imán: radio por nivel 2.5/4/6 u, velocidad de atracción 7 u/s · comprar resta el precio a la puntuación (clamp 0)
