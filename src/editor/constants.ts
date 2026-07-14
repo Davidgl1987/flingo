@@ -25,7 +25,15 @@ export const HAZARD_COLOR: Record<HazardKind, string> = {
   slow: '#6b4a2f',
   boost: '#3fd0ff',
 };
-export const ITEM_COLOR: Record<ItemKind, string> = { coin: '#ffd166', potion: '#ff6bcb', key: '#ffe082' };
+export const ITEM_COLOR: Record<ItemKind, string> = {
+  coin: '#ffd166',
+  potion: '#ff6bcb',
+  key: '#ffe082',
+  // 'shopkeeper' no es colocable desde el editor por ahora (docs/plans/ECONOMY_PLAN.md
+  // F4: la sala de tienda de serie ya lo trae en su JSON, mismo espíritu que
+  // 'boss' en ENEMY_COLOR); el color solo satisface la exhaustividad del Record.
+  shopkeeper: '#7bd88f',
+};
 export const SIDE_LABEL: Record<DoorSide, string> = { north: 'Norte', south: 'Sur', east: 'Este', west: 'Oeste' };
 
 export const HAZARD_DEFAULT_SIZE: Record<HazardKind, { width: number; height: number }> = {

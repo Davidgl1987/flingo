@@ -42,6 +42,7 @@ import { GameOverModal } from '@/game/ui/GameOverModal';
 import { HUD } from '@/game/ui/HUD';
 import { NextDungeonModal } from '@/game/ui/NextDungeonModal';
 import { PauseModal } from '@/game/ui/PauseModal';
+import { ShopModal } from '@/game/ui/ShopModal';
 import { VictoryModal } from '@/game/ui/VictoryModal';
 import { AimIndicatorView } from '@/game/features/hero/AimIndicatorView';
 import { CameraRig } from './CameraRig';
@@ -144,6 +145,7 @@ export function GameRoot({
       <PauseModal session={session} onRestart={handleRestart} />
       <BossRewardModal session={session} />
       <NextDungeonModal session={session} onAdvance={handleAdvanceDungeon} />
+      <ShopModal session={session} />
       <GameOverModal session={session} onRestart={handleRestart} onExitToTitle={onExitToTitle} />
       <VictoryModal session={session} onRestart={handleRestart} onExitToTitle={onExitToTitle} />
     </div>

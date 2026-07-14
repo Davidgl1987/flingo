@@ -38,18 +38,21 @@ function makeVariedPool(): RoomData[] {
     makeTestRoom('combat-4', ['combate'], 9),
     makeTestRoom('key-1', ['llave'], 9),
     makeTestRoom('boss-1', ['jefe'], 13),
+    makeTestRoom('shop-1', ['tienda'], 9),
   ];
 }
 
 describe('generateDungeon', () => {
-  it('produce ~6 salas (o roomCount pedido) con inicio/llave/jefe únicos', () => {
+  it('produce ~6 salas (o roomCount pedido) + 1 tienda, con inicio/llave/jefe/tienda únicos', () => {
     const pool = makeVariedPool();
     const map = generateDungeon(42, pool);
 
-    expect(map.rooms.length).toBe(6);
+    // roomCount pedido (6, por defecto) + 1 tienda ADICIONAL (docs/plans/ECONOMY_PLAN.md F4).
+    expect(map.rooms.length).toBe(7);
     expect(map.rooms.filter((r) => r.room.tags.includes('inicio')).length).toBe(1);
     expect(map.rooms.filter((r) => r.room.tags.includes('llave')).length).toBe(1);
     expect(map.rooms.filter((r) => r.room.tags.includes('jefe')).length).toBe(1);
+    expect(map.rooms.filter((r) => r.room.tags.includes('tienda')).length).toBe(1);
   });
 
   it('todo alcanzable, jefe requiere llave, llave alcanzable sin pasar por el jefe, sin solapes', () => {
@@ -129,6 +132,41 @@ describe('generateDungeon', () => {
     const map = generateDungeon(1, pool);
     const validation = validateDungeon(map);
     expect(validation.valid).toBe(true);
+  });
+
+  describe('sala de tienda (docs/plans/ECONOMY_PLAN.md F4)', () => {
+    it('incluye exactamente una sala tienda, conectada a una vecina y alcanzable', () => {
+      const pool = makeVariedPool();
+      const map = generateDungeon(2024, pool);
+
+      const shopRooms = map.rooms.filter((r) => r.room.tags.includes('tienda'));
+      expect(shopRooms.length).toBe(1);
+      const shopId = shopRooms[0].room.id;
+
+      const shopConnections = map.connections.filter((c) => c.roomAId === shopId || c.roomBId === shopId);
+      expect(shopConnections.length).toBe(1); // callejón sin salida: una sola puerta
+      expect(shopConnections[0].requiresKey).toBe(false); // no es la sala del jefe, no exige llave
+
+      const validation = validateDungeon(map);
+      expect(validation.valid).toBe(true);
+    });
+
+    it('el layout de emergencia también incluye una sala de tienda con tendero', () => {
+      // Pool insuficiente (sin llave ni tienda): fuerza el fallback.
+      const pool = [
+        makeTestRoom('start-1', ['inicio']),
+        makeTestRoom('combat-1', ['combate']),
+        makeTestRoom('boss-1', ['jefe']),
+      ];
+      const map = generateDungeon(1, pool);
+
+      const shopRooms = map.rooms.filter((r) => r.room.tags.includes('tienda'));
+      expect(shopRooms.length).toBe(1);
+      expect(shopRooms[0].room.items.some((i) => i.kind === 'shopkeeper')).toBe(true);
+
+      const validation = validateDungeon(map);
+      expect(validation.valid).toBe(true);
+    });
   });
 
   describe('selección de sala de jefe (GDD §15, Fase B0)', () => {

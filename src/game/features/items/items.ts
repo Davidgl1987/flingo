@@ -72,10 +72,47 @@ function tryPickup(world: World, item: Item, events: EventQueue): void {
     case 'key':
       hero.hasKey = true;
       break;
+    case 'shopkeeper':
+      // No se recoge: el contacto con el tendero se resuelve en
+      // `stepShopkeeperContact` (stepItems lo desvía ahí para este kind,
+      // nunca llega a tryPickup).
+      break;
   }
   // label = tipo de objeto ('coin'/'potion'/'key'): permite a effects/HUD dar
   // feedback de color propio (dorado/rosa/azul) sin tener que re-derivarlo.
   pushEvent(events, 'item-pickup', item.position.x, item.position.y, 1, item.kind);
+}
+
+/**
+ * Contacto con el tendero de la tienda (docs/plans/ECONOMY_PLAN.md F4): al
+ * tocarlo en fase 'playing' abre la fase 'shopping' (ShopModal, GameRoot) y
+ * emite 'shop-opened'. El item NUNCA se desactiva (no es recogible, es
+ * reabrible el resto de la mazmorra).
+ *
+ * Anti-reapertura instantánea: `world.shopGreeterArmed` se pone a false al
+ * abrir y solo vuelve a true cuando el héroe SALE del radio de contacto —
+ * así cerrar la tienda con el héroe aún pegado al tendero no la reabre en el
+ * mismo tick. Vive fuera de `tryPickup` (en vez de resolverse dentro de su
+ * `case 'shopkeeper'`) porque `tryPickup` retorna pronto fuera de alcance y
+ * este contacto necesita actuar también en ese caso (para rearmar el flag);
+ * reutiliza el mismo radio de contacto (`rr`) que el resto de items.
+ */
+function stepShopkeeperContact(world: World, item: Item, events: EventQueue): void {
+  const hero = world.hero;
+  const dx = hero.position.x - item.position.x;
+  const dy = hero.position.y - item.position.y;
+  const rr = hero.radius + ITEM_PICKUP_RADIUS;
+  const inContact = dx * dx + dy * dy <= rr * rr;
+
+  if (!inContact) {
+    world.shopGreeterArmed = true;
+    return;
+  }
+  if (world.phase === 'playing' && world.shopGreeterArmed) {
+    world.shopGreeterArmed = false;
+    world.phase = 'shopping';
+    pushEvent(events, 'shop-opened', item.position.x, item.position.y, 1);
+  }
 }
 
 /**
@@ -108,6 +145,10 @@ export function stepItems(world: World, dt: number, events: EventQueue): void {
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (!item.active) continue;
+    if (item.kind === 'shopkeeper') {
+      stepShopkeeperContact(world, item, events);
+      continue;
+    }
     if (item.kind === 'coin') stepCoinMagnet(world, item, dt);
     tryPickup(world, item, events);
   }

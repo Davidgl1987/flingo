@@ -15,6 +15,7 @@ import combatArenaJson from '@/game/features/dungeon/levels/combat-arena.json';
 import combatCrossroadsJson from '@/game/features/dungeon/levels/combat-crossroads.json';
 import combatSpikefieldJson from '@/game/features/dungeon/levels/combat-spikefield.json';
 import keyVaultJson from '@/game/features/dungeon/levels/key-vault.json';
+import shopRefugeJson from '@/game/features/dungeon/levels/shop-refuge.json';
 import startHallJson from '@/game/features/dungeon/levels/start-hall.json';
 import { parseRoomData } from './room-format';
 import type { RoomData } from '@/game/world/types';
@@ -91,6 +92,7 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
   combatSpikefieldJson,
   combatArenaJson,
   keyVaultJson,
+  shopRefugeJson,
   boossDenJson,
   bossGuardianJson,
   bossQueenJson,

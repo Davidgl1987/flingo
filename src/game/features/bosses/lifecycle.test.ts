@@ -246,6 +246,11 @@ describe('sellado de puerta de la sala de jefe (GDD §15.1 punto 7)', () => {
       tags: ['llave'],
       items: [{ id: 'key-item', kind: 'key', position: { x: 0, y: 0 } }],
     };
+    const shopRoom: RoomData = {
+      ...combat('shop-room'),
+      tags: ['tienda'],
+      items: [{ id: 'shopkeeper', kind: 'shopkeeper', position: { x: 0, y: 0 } }],
+    };
     return [
       { ...combat('start-room'), tags: ['inicio'] },
       combat('combat-1'),
@@ -253,6 +258,7 @@ describe('sellado de puerta de la sala de jefe (GDD §15.1 punto 7)', () => {
       combat('combat-3'),
       keyRoom,
       bossRoom,
+      shopRoom,
     ];
   }
 

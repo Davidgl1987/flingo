@@ -51,6 +51,9 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // Compra en tienda (docs/plans/ECONOMY_PLAN.md, F1/F4): dorado como las
   // monedas que gasta, burst algo más contenido que la propia mejora aplicada.
   'upgrade-purchased': { color: '#ffd166', size: 0.08, count: 10, life: 0.35, speed: 1.8, trauma: 0 },
+  // Contacto con el tendero (docs/plans/ECONOMY_PLAN.md F4): solo abre el
+  // modal, sin feedback visual propio (el ShopModal ya es aviso suficiente).
+  'shop-opened': NONE,
   'room-entered': NONE,
   'doors-open': NONE,
   'door-locked': NONE,

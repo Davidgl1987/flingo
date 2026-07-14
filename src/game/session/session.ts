@@ -14,7 +14,7 @@ import { generateDungeon } from '@/game/features/dungeon/dungeon';
 import { createDungeonWorld } from '@/game/features/dungeon/dungeon-world';
 import { createEventQueue, type EventQueue } from '@/engine/events';
 import { createRng, type Rng } from '@/engine/rng';
-import { applyUpgrade, rollBossReward, type UpgradeDef } from '@/game/session/upgrades';
+import { applyUpgrade, rollBossReward, rollShopStock, type UpgradeDef } from '@/game/session/upgrades';
 import { createWorld } from '@/game/world/create';
 import type { BossId, RoomData, World } from '@/game/world/types';
 
@@ -84,6 +84,14 @@ export interface GameSession {
    * y `chooseBossReward`.
    */
   bossRewardChoices: UpgradeDef[];
+  /**
+   * Stock de la tienda de la mazmorra actual (docs/plans/ECONOMY_PLAN.md F4):
+   * hasta 4 mejoras distintas, sorteadas UNA vez al crear la mazmorra (y en
+   * cada `advanceToNextDungeon`/`restartSession`) con `world.rng` — NO se
+   * vuelve a sortear al reabrir la tienda dentro de la misma mazmorra (ver
+   * `rollShopStock`, session/upgrades.ts).
+   */
+  shopStock: UpgradeDef[];
 }
 
 /** Sesión de sala única (playtest del editor, fases 1-2): sin mazmorra multi-sala. */
@@ -106,6 +114,7 @@ export function createGameSession(room: RoomData): GameSession {
     bossSequence: [],
     stageIndex: 0,
     bossRewardChoices: [],
+    shopStock: rollShopStock(world.hero, world.rng),
   };
 }
 
@@ -187,6 +196,7 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
     bossSequence,
     stageIndex,
     bossRewardChoices: [],
+    shopStock: rollShopStock(world.hero, world.rng),
   };
 }
 
@@ -240,6 +250,8 @@ export function restartSession(session: GameSession): void {
   // Recompensa de jefe (docs/plans/ECONOMY_PLAN.md F3): un reinicio no debe
   // arrastrar opciones calculadas para la mazmorra anterior.
   session.bossRewardChoices = [];
+  // Tienda (docs/plans/ECONOMY_PLAN.md F4): reinicio = mazmorra nueva → stock nuevo.
+  session.shopStock = rollShopStock(world.hero, world.rng);
   // Trauma/hit-stop no deben sobrevivir a un reinicio de run (evita un shake
   // heredado de la muerte al aparecer en la nueva run); los pools de
   // partículas/estela sí se conservan (son geometría pura, sin estado de sala).
@@ -322,6 +334,20 @@ export function advanceToNextDungeon(session: GameSession): void {
   // Recompensa de jefe (docs/plans/ECONOMY_PLAN.md F3): ya se eligió (o se
   // saltó) para poder llegar aquí; no debe sobrevivir a la mazmorra siguiente.
   session.bossRewardChoices = [];
+  // Tienda (docs/plans/ECONOMY_PLAN.md F4): mazmorra nueva → stock nuevo.
+  session.shopStock = rollShopStock(world.hero, world.rng);
   session.effects.state.trauma = 0;
   session.effects.state.hitStopRemaining = 0;
+}
+
+/**
+ * Cierra la tienda (docs/plans/ECONOMY_PLAN.md F4, ShopModal "Salir"): vuelve
+ * a 'playing'. No re-sortea `shopStock` (el mismo stock vale toda la
+ * mazmorra, reabrible con los niveles ya comprados reflejados). No-op si la
+ * fase no es 'shopping'.
+ */
+export function closeShop(session: GameSession): void {
+  if (session.world.phase === 'shopping') {
+    session.world.phase = 'playing';
+  }
 }

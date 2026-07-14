@@ -23,7 +23,8 @@ describe('createDungeonGameSession (arranque de run completa)', () => {
     const world = session.world;
 
     expect(world.dungeon).not.toBeNull();
-    expect(world.dungeon!.rooms.length).toBe(6);
+    // 6 (ROOMS_PER_RUN) + 1 tienda adicional (docs/plans/ECONOMY_PLAN.md F4).
+    expect(world.dungeon!.rooms.length).toBe(7);
     expect(world.currentRoomId).toBe(world.dungeon!.startRoomId);
 
     const startRuntime = world.roomRuntimes.get(world.dungeon!.startRoomId)!;
@@ -180,6 +181,31 @@ describe('restartSession y muerte: economía (GDD §10, docs/plans/ECONOMY_PLAN.
 
     expect(session.world.hero.coins).toBe(0);
     expect(session.world.hero.upgradeLevels).toEqual({});
+  });
+});
+
+describe('shopStock (tienda, docs/plans/ECONOMY_PLAN.md F4)', () => {
+  it('se sortea al crear la run: hasta 4 mejoras distintas, determinista con la misma semilla', () => {
+    const a = createDungeonGameSession(seriesRooms, 42);
+    const b = createDungeonGameSession(seriesRooms, 42);
+    expect(a.shopStock.length).toBe(4);
+    const ids = a.shopStock.map((d) => d.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(a.shopStock.map((d) => d.id)).toEqual(b.shopStock.map((d) => d.id));
+  });
+
+  it('se re-sortea (nueva referencia) en advanceToNextDungeon', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    const stockBefore = session.shopStock;
+    advanceToNextDungeon(session);
+    expect(session.shopStock).not.toBe(stockBefore);
+  });
+
+  it('se re-sortea (nueva referencia) en restartSession', () => {
+    const session = createDungeonGameSession(seriesRooms, 42);
+    const stockBefore = session.shopStock;
+    restartSession(session);
+    expect(session.shopStock).not.toBe(stockBefore);
   });
 });
 

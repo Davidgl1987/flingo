@@ -22,9 +22,24 @@ import { useRef, useState } from 'react';
 import type { Group } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Item } from '@/game/world/types';
-import { coinGeometry, coinMaterial, coinRimMaterial, keyMaterial, potionBodyGeometry, potionCapGeometry, potionCapMaterial, potionMaterial, potionNeckGeometry, unitBox } from '@/game/render/assets';
+import {
+  coinGeometry,
+  coinMaterial,
+  coinRimMaterial,
+  keyMaterial,
+  potionBodyGeometry,
+  potionCapGeometry,
+  potionCapMaterial,
+  potionMaterial,
+  potionNeckGeometry,
+  shopkeeperHeadMaterial,
+  shopkeeperRobeMaterial,
+  unitBox,
+  unitCone,
+  unitSphere,
+} from '@/game/render/assets';
 
-const ITEM_HEIGHT: Record<Item['kind'], number> = { coin: 0.3, potion: 0.32, key: 0.3 };
+const ITEM_HEIGHT: Record<Item['kind'], number> = { coin: 0.3, potion: 0.32, key: 0.3, shopkeeper: 0 };
 /** Radio visual de la moneda (diámetro del cilindro plano de assets.ts, escalado). */
 const COIN_RADIUS = 0.24;
 const POTION_SCALE = 0.24;
@@ -41,6 +56,16 @@ function CoinShape() {
         scale={[COIN_RADIUS * 1.94, 1.02, COIN_RADIUS * 1.94]}
       />
     </>
+  );
+}
+
+/** Tendero placeholder (docs/plans/ECONOMY_PLAN.md F4): túnica cónica + cabeza esférica, estático (sin bob/giro). */
+function ShopkeeperShape() {
+  return (
+    <group>
+      <mesh geometry={unitCone} material={shopkeeperRobeMaterial} scale={[0.7, 1.4, 0.7]} position={[0, 0.5, 0]} />
+      <mesh geometry={unitSphere} material={shopkeeperHeadMaterial} scale={0.32} position={[0, 1.35, 0]} />
+    </group>
   );
 }
 
@@ -66,9 +91,14 @@ function ItemMesh({ session, itemId }: { session: GameSession; itemId: string })
     if (!item || !group) return;
     group.visible = item.active;
     if (item.active) {
-      const bob = Math.sin(session.world.time * 3 + item.position.x) * 0.05;
+      // El tendero es un NPC estático (placeholder F4): sin bob ni giro, a
+      // diferencia del resto de items recogibles.
+      const isShopkeeper = item.kind === 'shopkeeper';
+      const bob = isShopkeeper ? 0 : Math.sin(session.world.time * 3 + item.position.x) * 0.05;
       group.position.set(item.position.x, ITEM_HEIGHT[item.kind] + bob, item.position.y);
-      if (item.kind === 'coin') {
+      if (isShopkeeper) {
+        group.rotation.set(0, 0, 0);
+      } else if (item.kind === 'coin') {
         // Moneda (ronda 3, punto 10: "que giren en el otro eje"): gira sobre
         // el eje Z (perpendicular al que se usaba antes, X) para que se vea
         // el volteo real (canto visible) con el otro "sentido" de vuelco en
@@ -90,6 +120,7 @@ function ItemMesh({ session, itemId }: { session: GameSession; itemId: string })
       {kind === 'coin' && <CoinShape />}
       {kind === 'potion' && <PotionShape />}
       {kind === 'key' && <mesh geometry={unitBox} material={keyMaterial} scale={0.22} />}
+      {kind === 'shopkeeper' && <ShopkeeperShape />}
     </group>
   );
 }

@@ -12,7 +12,7 @@ import type { Rng } from '@/engine/rng';
 
 // ── Formato de sala (contrato de datos del GDD §13) ───────────────────────
 
-export type RoomTag = 'inicio' | 'combate' | 'llave' | 'recompensa' | 'jefe';
+export type RoomTag = 'inicio' | 'combate' | 'llave' | 'recompensa' | 'jefe' | 'tienda';
 
 export type DoorSide = 'north' | 'south' | 'east' | 'west';
 
@@ -62,7 +62,12 @@ export interface HazardSpawn {
   direction?: Vec2;
 }
 
-export type ItemKind = 'coin' | 'potion' | 'key';
+/**
+ * `'shopkeeper'` (docs/plans/ECONOMY_PLAN.md F4): NPC placeholder de la sala
+ * de tienda. No se recoge (ver `tryPickup`/`stepShopkeeperContact` en
+ * features/items/items.ts): al contacto abre la fase 'shopping'.
+ */
+export type ItemKind = 'coin' | 'potion' | 'key' | 'shopkeeper';
 
 export interface ItemSpawn {
   id: string;
@@ -385,7 +390,8 @@ export interface BossState {
   readonly bossId: BossId;
 }
 
-export type GamePhase = 'playing' | 'paused' | 'boss-reward' | 'dungeon-cleared' | 'game-over' | 'victory';
+/** `'shopping'` (docs/plans/ECONOMY_PLAN.md F4): ShopModal abierto tras tocar al tendero; misma pausa de sim que el resto de fases != 'playing'. */
+export type GamePhase = 'playing' | 'paused' | 'boss-reward' | 'dungeon-cleared' | 'game-over' | 'victory' | 'shopping';
 
 export interface RunStats {
   roomsCleared: number;
@@ -461,4 +467,14 @@ export interface World {
    * multi-mazmorra.
    */
   isFinalDungeon: boolean;
+  /**
+   * Anti-reapertura instantánea de la tienda (docs/plans/ECONOMY_PLAN.md F4):
+   * true cuando el héroe puede volver a abrir la tienda al tocar al tendero.
+   * Se pone a false al abrir (`stepShopkeeperContact`, features/items/items.ts)
+   * y solo vuelve a true cuando el héroe SALE de su radio de contacto —
+   * evita que cerrar la tienda con el héroe aún pegado al tendero la
+   * reabra en el mismo tick. Solo hay una tienda por mazmorra, así que un
+   * único flag global basta (no hace falta uno por item).
+   */
+  shopGreeterArmed: boolean;
 }

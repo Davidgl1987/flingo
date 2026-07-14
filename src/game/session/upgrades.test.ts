@@ -12,6 +12,7 @@ import {
   canOfferUpgrade,
   getUpgradeLevel,
   rollBossReward,
+  rollShopStock,
   tryPurchaseUpgrade,
   UPGRADE_POOL,
   type UpgradeId,
@@ -334,5 +335,61 @@ describe('rollBossReward', () => {
       const rewards = rollBossReward(world.hero, createRng(seed));
       expect(rewards.every((r) => r.category !== 'consumible')).toBe(true);
     }
+  });
+});
+
+describe('rollShopStock (tienda, docs/plans/ECONOMY_PLAN.md F4)', () => {
+  it('devuelve 4 mejoras DISTINTAS del pool completo (todas las categorías, consumibles incluidos)', () => {
+    const world = makeWorld();
+    const stock = rollShopStock(world.hero, createRng(7));
+    expect(stock.length).toBe(4);
+    const ids = stock.map((d) => d.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('es determinista con la misma semilla', () => {
+    const world = makeWorld();
+    const a = rollShopStock(world.hero, createRng(42)).map((d) => d.id);
+    const b = rollShopStock(world.hero, createRng(42)).map((d) => d.id);
+    expect(a).toEqual(b);
+  });
+
+  it('puede incluir consumibles (a diferencia de rollBossReward)', () => {
+    const world = makeWorld();
+    let sawConsumable = false;
+    for (let seed = 1; seed <= 30 && !sawConsumable; seed++) {
+      const stock = rollShopStock(world.hero, createRng(seed));
+      if (stock.some((d) => d.category === 'consumible')) sawConsumable = true;
+    }
+    expect(sawConsumable).toBe(true);
+  });
+
+  it('excluye mejoras no ofertables (maxLevel ya alcanzado)', () => {
+    const world = makeWorld();
+    const events = createEventQueue(64);
+    // Maxea TODAS las mejoras maxeables excepto 'iman' (el escudo tiene
+    // maxLevel Infinity: nunca se maxea y siempre es ofertable): solo deben
+    // poder salir 'iman' y 'escudo' en el stock.
+    for (const def of UPGRADE_POOL) {
+      if (def.id === 'iman' || !Number.isFinite(def.maxLevel)) continue;
+      for (let i = 0; i < def.maxLevel; i++) applyUpgrade(world, def, events);
+    }
+    for (let seed = 1; seed <= 20; seed++) {
+      const stock = rollShopStock(world.hero, createRng(seed));
+      expect(stock.every((d) => d.id === 'iman' || d.id === 'escudo')).toBe(true);
+    }
+  });
+
+  it('con menos de 4 elegibles, devuelve las que haya sin repetir', () => {
+    const world = makeWorld();
+    const events = createEventQueue(64);
+    // Maxea todo salvo 2 mejoras: como mucho puede haber 2 elegibles.
+    for (const def of UPGRADE_POOL) {
+      if (def.id === 'iman' || def.id === 'escudo') continue;
+      for (let i = 0; i < def.maxLevel; i++) applyUpgrade(world, def, events);
+    }
+    const stock = rollShopStock(world.hero, createRng(3));
+    expect(stock.length).toBeLessThanOrEqual(2);
+    expect(stock.every((d) => d.id === 'iman' || d.id === 'escudo')).toBe(true);
   });
 });

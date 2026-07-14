@@ -23,7 +23,7 @@
 import { DOOR_WIDTH, ROOMS_PER_RUN, WALL_THICKNESS } from '@/game/world/constants';
 import { type Rng, createRng } from '@/engine/rng';
 import type { AABB, Vec2 } from '@/engine/geometry';
-import type { BossId, DoorSide, DoorSlot, RoomData, RoomTag } from '@/game/world/types';
+import type { BossId, DoorSide, DoorSlot, ItemSpawn, RoomData, RoomTag } from '@/game/world/types';
 
 /** Hueco entre salas contiguas (además del grosor de muro de cada una). */
 export const ROOM_GAP = WALL_THICKNESS;
@@ -115,6 +115,11 @@ interface Topology {
  * bucle para llegar). El jefe cuelga de (1,0) hacia el este, a través de
  * tantas salas de combate intermedias como haga falta para completar
  * ROOMS_PER_RUN.
+ *
+ * Tienda (docs/plans/ECONOMY_PLAN.md F4): un nodo ADICIONAL (no cuenta para
+ * `roomCount`) colgado al sur de (0,1) — un callejón sin salida fuera del
+ * camino al jefe (la cola este nunca pisa cy=2, sin colisión posible). Así el
+ * jugador la encuentra sin desviarse mucho pero no es de paso obligatorio.
  */
 function buildTopology(roomCount: number): Topology {
   const nodes: TopologyNode[] = [
@@ -142,6 +147,11 @@ function buildTopology(roomCount: number): Topology {
     prevIndex = nodeIndex;
     cx += 1;
   }
+
+  // Tienda: callejón sin salida colgado al sur de (0,1) (índice 3 del bucle).
+  const shopIndex = nodes.length;
+  nodes.push({ cx: 0, cy: 2, role: 'tienda' });
+  edges.push({ a: 3, b: shopIndex, side: 'south' });
 
   const bossIndex = nodes.findIndex((n) => n.role === 'jefe');
   const keyIndex = nodes.findIndex((n) => n.role === 'llave');
@@ -179,8 +189,16 @@ function pickRoomForRole(
   return candidates[index];
 }
 
-/** Sala de emergencia 9×9 sin hazards, con doorSlots en los 4 lados centrados: siempre válida. */
+/**
+ * Sala de emergencia 9×9 sin hazards, con doorSlots en los 4 lados centrados:
+ * siempre válida. Rol 'tienda' (docs/plans/ECONOMY_PLAN.md F4): incluye un
+ * tendero placeholder para que el layout de emergencia también ofrezca
+ * tienda, sin enemigos (se abre igual que la sala de inicio, ver dungeon-world.ts).
+ */
 function makeFallbackRoom(id: string, name: string, tags: RoomTag[]): RoomData {
+  const items: ItemSpawn[] = tags.includes('tienda')
+    ? [{ id: 'shopkeeper', kind: 'shopkeeper', position: { x: 0, y: -2 } }]
+    : [];
   return {
     version: 1,
     id,
@@ -197,7 +215,7 @@ function makeFallbackRoom(id: string, name: string, tags: RoomTag[]): RoomData {
     ],
     enemies: [],
     hazards: [],
-    items: [],
+    items,
   };
 }
 

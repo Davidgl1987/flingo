@@ -254,6 +254,28 @@ export function rollBossReward(hero: Hero, rng: Rng): UpgradeDef[] {
   return rewards;
 }
 
+/** Nº de mejoras distintas en el stock de la tienda por mazmorra (docs/plans/ECONOMY_PLAN.md F4). */
+const SHOP_STOCK_SIZE = 4;
+
+/**
+ * Sortea el stock de la tienda de una mazmorra (F4, `GameSession.shopStock`,
+ * session.ts): hasta `SHOP_STOCK_SIZE` mejoras DISTINTAS del pool COMPLETO
+ * (todas las categorías, consumibles incluidos — a diferencia de
+ * `rollBossReward`), filtrando de entrada las que ya no serían ofertables
+ * (`canOfferUpgrade`). Determinista con `rng`; si hay menos de
+ * `SHOP_STOCK_SIZE` elegibles, devuelve las que haya (nunca repite).
+ */
+export function rollShopStock(hero: Hero, rng: Rng): UpgradeDef[] {
+  const pool = UPGRADE_POOL.filter((def) => canOfferUpgrade(def, hero));
+  const stock: UpgradeDef[] = [];
+  while (pool.length > 0 && stock.length < SHOP_STOCK_SIZE) {
+    const index = Math.floor(rng() * pool.length);
+    stock.push(pool[index]);
+    pool.splice(index, 1);
+  }
+  return stock;
+}
+
 /**
  * Compra una mejora en la tienda (F4): precio = `def.price(nivelActual+1)`.
  * Sin efecto y devuelve false si la mejora no es ofrecible (maxLevel/isAvailable)

@@ -57,6 +57,9 @@ function makePool(): RoomData[] {
     makeRoom('boss-1', ['jefe'], {
       enemies: [{ id: 'boss-enemy', kind: 'dummy', position: { x: 0, y: 0 } }],
     }),
+    makeRoom('shop-1', ['tienda'], {
+      items: [{ id: 'shopkeeper', kind: 'shopkeeper', position: { x: 0, y: 0 } }],
+    }),
   ];
 }
 

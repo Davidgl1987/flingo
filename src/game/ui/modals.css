@@ -57,6 +57,15 @@
   background: #202741;
 }
 
+.upgrade-card:disabled {
+  opacity: 0.45;
+}
+
+.upgrade-card:disabled:active {
+  border-color: #39405c;
+  background: #1b2033;
+}
+
 .upgrade-card-head {
   display: flex;
   align-items: center;
@@ -300,4 +309,43 @@ details.pause-accordion .pause-legend {
 .modal-secondary-btn:active {
   border-color: #54c7ff;
   color: #e8f6ff;
+}
+
+/* ── Modal de tienda (docs/plans/ECONOMY_PLAN.md F4) ── */
+
+.shop-balance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+.shop-balance-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe9a8, #ffd166 55%, #c98f1b);
+}
+
+.shop-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  gap: 8px;
+}
+
+.shop-card-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd166;
+  white-space: nowrap;
+}
+
+.shop-modal .upgrade-cards {
+  margin-bottom: 16px;
 }

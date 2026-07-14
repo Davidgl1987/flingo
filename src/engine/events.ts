@@ -31,6 +31,8 @@ export type GameEventType =
   | 'upgrade-applied'
   /** Compra en tienda (docs/plans/ECONOMY_PLAN.md, F1 economía/F4 tienda): intensity = precio pagado. */
   | 'upgrade-purchased'
+  /** Contacto con el tendero de la sala de tienda abre la fase 'shopping' (docs/plans/ECONOMY_PLAN.md F4). */
+  | 'shop-opened'
   | 'room-entered'
   | 'doors-open'
   | 'door-locked'

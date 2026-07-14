@@ -339,6 +339,14 @@ export const potionMaterial = new THREE.MeshLambertMaterial({ color: '#ff6bcb' }
 export const potionCapMaterial = new THREE.MeshLambertMaterial({ color: '#7a1f4d' });
 export const keyMaterial = new THREE.MeshLambertMaterial({ color: '#ffe082' });
 
+/**
+ * Tendero placeholder de la sala de tienda (docs/plans/ECONOMY_PLAN.md F4):
+ * visual mínimo (túnica cónica + cabeza) a propósito — el feedback fino de
+ * personajes llega en F5, esto solo necesita ser legible como NPC.
+ */
+export const shopkeeperRobeMaterial = new THREE.MeshLambertMaterial({ color: '#7bd88f' });
+export const shopkeeperHeadMaterial = new THREE.MeshLambertMaterial({ color: '#e8c39e' });
+
 /** Moneda: cilindro plano (diámetro 1, canto 0.16) — se escala por el radio deseado en el componente. */
 export const coinGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.16, 20);
 /** Cuerpo bulboso del frasco de poción: esfera achatada verticalmente. */

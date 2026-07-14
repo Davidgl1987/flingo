@@ -16,10 +16,18 @@ describe('pool de salas de serie', () => {
     expect(seriesRooms.filter((r) => r.tags.includes('combate')).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('genera una mazmorra válida de 6 salas sin caer al fallback', () => {
+  it('contiene una sala de tienda (docs/plans/ECONOMY_PLAN.md F4) con tendero', () => {
+    const shopRooms = seriesRooms.filter((r) => r.tags.includes('tienda'));
+    expect(shopRooms.length).toBeGreaterThanOrEqual(1);
+    expect(shopRooms.every((r) => r.items.some((i) => i.kind === 'shopkeeper'))).toBe(true);
+  });
+
+  it('genera una mazmorra válida de 6+1 (tienda) salas sin caer al fallback', () => {
     const dungeon = generateDungeon(2026, seriesRooms);
-    expect(dungeon.rooms.length).toBe(6);
+    // ROOMS_PER_RUN (6) + 1 tienda adicional (docs/plans/ECONOMY_PLAN.md F4).
+    expect(dungeon.rooms.length).toBe(7);
     expect(dungeon.rooms.some((r) => r.room.id.startsWith('fallback-'))).toBe(false);
+    expect(dungeon.rooms.filter((r) => r.room.tags.includes('tienda')).length).toBe(1);
 
     const validation = validateDungeon(dungeon);
     expect(validation.errors).toEqual([]);

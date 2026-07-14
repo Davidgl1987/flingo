@@ -215,6 +215,24 @@ describe('contención de aggro por sala (punto 7 de playtest ronda 3)', () => {
         hazards: [],
         items: [],
       },
+      {
+        version: 1,
+        id: 'shop-1',
+        name: 'Sala shop-1',
+        width: 9,
+        height: 9,
+        playerStart: { x: 0, y: 0 },
+        tags: ['tienda'],
+        doorSlots: [
+          { side: 'north', offset: 0 },
+          { side: 'south', offset: 0 },
+          { side: 'east', offset: 0 },
+          { side: 'west', offset: 0 },
+        ],
+        enemies: [],
+        hazards: [],
+        items: [{ id: 'shopkeeper', kind: 'shopkeeper', position: { x: 0, y: 0 } }],
+      },
     ];
 
     const dungeon = generateDungeon(10, pool);
