@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "boss-storm",
+  "name": "Sala de la Tormenta",
+  "width": 13,
+  "height": 13,
+  "playerStart": { "x": 0, "y": 5 },
+  "tags": ["jefe"],
+  "boss": "storm",
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [
+    {
+      "id": "boss-1",
+      "kind": "boss",
+      "bossId": "storm",
+      "position": { "x": 0, "y": 0 },
+      "patrolTarget": { "x": 0, "y": 0 }
+    }
+  ],
+  "hazards": [],
+  "items": []
+}

@@ -13,6 +13,9 @@ import { queenOnInit, queenOnPhaseChanged, queenStepPattern } from '@/game/featu
 import { stepQueenColumns } from '@/game/features/bosses/queen/columns';
 import { PRISMA_DAMAGE_OUTSIDE_WINDOW, PRISMA_HIT_DAMAGE_CAP_FRACTION, PRISMA_MAX_HP, PRISMA_RADIUS } from '@/game/features/bosses/prisma/constants';
 import { prismaOnInit, prismaOnPhaseChanged, prismaStepPattern } from '@/game/features/bosses/prisma/pattern';
+import { STORM_DAMAGE_OUTSIDE_WINDOW, STORM_HIT_DAMAGE_CAP_FRACTION, STORM_MAX_HP } from '@/game/features/bosses/storm/machine-constants';
+import { STORM_RADIUS } from '@/game/features/bosses/storm/constants';
+import { stormOnInit, stormOnPhaseChanged, stormStepPattern } from '@/game/features/bosses/storm/pattern';
 import { testBossStepPattern } from '@/game/features/bosses/test-boss/pattern';
 import type { BossDef } from './types';
 
@@ -70,6 +73,21 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     stepPattern: prismaStepPattern,
     onPhaseChanged: prismaOnPhaseChanged,
     onInit: prismaOnInit,
+  },
+  storm: {
+    id: 'storm',
+    name: 'La Tormenta',
+    maxHp: STORM_MAX_HP,
+    radius: STORM_RADIUS,
+    hitDamageCapFraction: STORM_HIT_DAMAGE_CAP_FRACTION,
+    // Jefe de esquive puro (GDD §15.5): sin puzzle de arma/color (a
+    // diferencia del Prisma, cualquier arma le hace daño siempre), pero la
+    // recarga sigue siendo LA ventana de vulnerabilidad — fuera de ella,
+    // inmune del todo (0), ver el porqué en machine-constants.ts.
+    damageOutsideWindow: STORM_DAMAGE_OUTSIDE_WINDOW,
+    stepPattern: stormStepPattern,
+    onPhaseChanged: stormOnPhaseChanged,
+    onInit: stormOnInit,
   },
 };
 

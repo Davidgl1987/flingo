@@ -42,6 +42,17 @@
  *   (`bossWeaponGateB!==''`): alterna los dos colores activos a un ritmo más
  *   calmado. 3 gemas orbitando el núcleo dan silueta propia, distinta de
  *   cuernos/corona.
+ * - La Tormenta (GDD §15.5, Fase B4, `bossId==='storm'`): jefe de esquive
+ *   puro, cuerpo tormentoso propio (gris-azulado) envuelto en un halo/vórtice
+ *   (toro) cuya rotación/pulso/opacidad delatan el patrón telegrafiado o en
+ *   curso (`enemy.bossTelegraphKind`: espiral gira cada vez más rápido,
+ *   anillos pulsan concéntricos y calmados, ráfaga parpadea urgente) — así el
+ *   jugador lee QUÉ va a esquivar antes de que empiece a disparar, no solo
+ *   QUE algo va a pasar (el anillo ámbar genérico ya cubre eso). Pose de
+ *   recarga (ventana de vulnerabilidad, GDD §15.5 "aviso visual claro"):
+ *   cuerpo sustituido por un tono pálido/apagado y halo quieto y translúcido
+ *   — inconfundible frente al resto de estados, encima del anillo verde
+ *   genérico ya heredado.
  *
  * Todo con geometrías/materiales compartidos de assets.ts; cero asignaciones
  * en useFrame (solo escalares y mutación de refs/materiales ya existentes).
@@ -80,11 +91,16 @@ import {
   prismaGemMaterial,
   shooterMaterial,
   spikeMaterial,
+  stormBodyMaterial,
+  stormHaloGeometry,
+  stormHaloMaterial,
+  stormReloadCoreMaterial,
   trailMaterial,
   unitCircle,
   unitSphere,
   WEAPON_COLOR,
 } from '@/game/render/assets';
+import { STORM_STAGE_EXECUTE, STORM_STAGE_RELOAD, STORM_STAGE_TELEGRAPH, STORM_TELEGRAPH_KIND } from '@/game/features/bosses/storm/machine-constants';
 import { ChaserMesh } from '@/game/features/enemies/chaser/Mesh';
 import { DummyMesh } from '@/game/features/enemies/dummy/Mesh';
 import { ShooterMesh } from '@/game/features/enemies/shooter/Mesh';
@@ -113,6 +129,9 @@ function restingBodyMaterial(kind: EnemyKind, bossId: BossId | undefined): Mater
   // El Prisma (GDD §15.4): MUTABLE, ver comentario de cabecera — su color se
   // actualiza cada frame más abajo en vez de intercambiar material.
   if (kind === 'boss' && bossId === 'prisma') return prismaCoreMaterial;
+  // La Tormenta (GDD §15.5): cuerpo tormentoso propio, sustituido por
+  // stormReloadCoreMaterial mientras está en RELOAD (ver useFrame de abajo).
+  if (kind === 'boss' && bossId === 'storm') return stormBodyMaterial;
   return ENEMY_MATERIAL[kind];
 }
 
@@ -189,6 +208,9 @@ function EnemyMesh({
   const lastQueenWaveTimer = useRef(0);
   // El Prisma (GDD §15.4): 3 gemas orbitando el núcleo, silueta propia.
   const prismaGemRefs = useRef<(Mesh | null)[]>([]);
+  // La Tormenta (GDD §15.5): halo/vórtice alrededor del cuerpo, animado según
+  // el patrón telegrafiado/en curso y apagado en la pose de recarga.
+  const stormHaloRef = useRef<Mesh>(null);
   // Orientación (yaw) suavizada del grupo: yaw actual y yaw OBJETIVO, ver
   // comentario extenso en el useFrame más abajo. `null` = "aún no
   // inicializado" (primer frame con enemigo válido: snap directo sin girar
@@ -439,6 +461,46 @@ function EnemyMesh({
         gem.rotation.y = angle * 1.5;
       }
     }
+
+    if (kind === 'boss' && bossId === 'storm') {
+      // Halo/vórtice: distinto comportamiento de giro/pulso por patrón
+      // telegrafiado o en curso (GDD §15.5: "cada uno anunciado con una pose/
+      // brillo distinto"), y pose de recarga inconfundible (quieto y apagado)
+      // mientras dura la ventana de vulnerabilidad.
+      const stage = enemy.bossStage;
+      const kindTag = enemy.bossTelegraphKind;
+      const halo = stormHaloRef.current;
+      if (halo) {
+        if (stage === STORM_STAGE_RELOAD) {
+          halo.scale.setScalar(bodyRadius * 1.15);
+          stormHaloMaterial.opacity = 0.18;
+        } else if (kindTag === STORM_TELEGRAPH_KIND[0] && (stage === STORM_STAGE_TELEGRAPH || stage === STORM_STAGE_EXECUTE)) {
+          // Espiral: el halo gira cada vez más deprisa — promete el patrón.
+          halo.rotation.y += delta * 9;
+          halo.scale.setScalar(bodyRadius * 1.3);
+          stormHaloMaterial.opacity = 0.6;
+        } else if (kindTag === STORM_TELEGRAPH_KIND[1] && (stage === STORM_STAGE_TELEGRAPH || stage === STORM_STAGE_EXECUTE)) {
+          // Anillos: pulso concéntrico, calmado.
+          halo.rotation.y += delta * 0.5;
+          halo.scale.setScalar(bodyRadius * (1.2 + 0.3 * Math.sin(world.time * 7)));
+          stormHaloMaterial.opacity = 0.6;
+        } else if (kindTag === STORM_TELEGRAPH_KIND[2] && stage === STORM_STAGE_TELEGRAPH) {
+          // Ráfaga radial: parpadeo urgente y de mayor amplitud, distinto del pulso de anillos.
+          halo.rotation.y += delta * 0.5;
+          halo.scale.setScalar(bodyRadius * (1.2 + 0.35 * Math.sin(world.time * 22)));
+          stormHaloMaterial.opacity = 0.65;
+        } else {
+          // Ambiente (idle entre patrones): giro lento constante.
+          halo.rotation.y += delta * 0.5;
+          halo.scale.setScalar(bodyRadius * 1.2);
+          stormHaloMaterial.opacity = 0.4;
+        }
+      }
+      const body = bodyRef.current;
+      if (body && !flashing) {
+        body.material = stage === STORM_STAGE_RELOAD ? stormReloadCoreMaterial : stormBodyMaterial;
+      }
+    }
   });
 
   return (
@@ -578,6 +640,16 @@ function EnemyMesh({
               material={prismaGemMaterial}
             />
           ))}
+        </>
+      )}
+
+      {kind === 'boss' && bossId === 'storm' && (
+        <>
+          {/* Halo/vórtice alrededor del cuerpo (GDD §15.5): silueta propia de
+              "ojo de la tormenta", distinta de cuernos/corona/gemas — gira en
+              torno al eje vertical del cuerpo (estilo anillo de Saturno);
+              rotación/escala/opacidad reales en useFrame. */}
+          <mesh ref={stormHaloRef} geometry={stormHaloGeometry} material={stormHaloMaterial} rotation-x={Math.PI / 2} />
         </>
       )}
     </group>

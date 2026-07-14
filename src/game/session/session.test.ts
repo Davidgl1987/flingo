@@ -89,7 +89,7 @@ describe('createDungeonGameSession (arranque de run completa)', () => {
 describe('bossSequence (run multi-mazmorra, GDD §10)', () => {
   it('contiene exactamente los jefes de diseño del pool de serie, uno cada uno (sin test-boss)', () => {
     const session = createDungeonGameSession(seriesRooms, 42);
-    expect([...session.bossSequence].sort()).toEqual(['guardian', 'prisma', 'queen']);
+    expect([...session.bossSequence].sort()).toEqual(['guardian', 'prisma', 'queen', 'storm']);
     expect(session.bossSequence).not.toContain('test-boss');
   });
 
@@ -115,7 +115,7 @@ describe('bossSequence (run multi-mazmorra, GDD §10)', () => {
 
   it('isFinalDungeon es true en el stage 0 solo si hay un único jefe en la secuencia', () => {
     const session = createDungeonGameSession(seriesRooms, 7);
-    expect(session.bossSequence.length).toBe(3);
+    expect(session.bossSequence.length).toBe(4);
     expect(session.world.isFinalDungeon).toBe(false);
   });
 });
@@ -123,7 +123,7 @@ describe('bossSequence (run multi-mazmorra, GDD §10)', () => {
 describe('advanceToNextDungeon (run multi-mazmorra, GDD §10)', () => {
   it('conserva hp/maxHp/modifiers/coins/upgradeLevels y stats acumulados; hasKey false; avanza al jefe del siguiente stage', () => {
     const session = createDungeonGameSession(seriesRooms, 42);
-    expect(session.bossSequence.length).toBe(3);
+    expect(session.bossSequence.length).toBe(4);
     const secondBoss = session.bossSequence[1];
 
     // Progreso simulado en la primera mazmorra.
@@ -218,7 +218,7 @@ describe('restartSession (run multi-mazmorra, GDD §10)', () => {
     restartSession(session);
 
     expect(session.stageIndex).toBe(0);
-    expect(session.bossSequence.length).toBe(3);
+    expect(session.bossSequence.length).toBe(4);
     const bossRoom = session.world.dungeon!.rooms.find((r) => r.room.id === session.world.dungeon!.bossRoomId)!;
     expect(bossRoom.room.boss).toBe(session.bossSequence[0]);
   });

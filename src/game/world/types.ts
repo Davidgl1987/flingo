@@ -81,8 +81,9 @@ export interface ItemSpawn {
  * trivial de la Fase B0 (framework), disponible solo en dev/tests. `guardian`
  * es el Guardián de Canto (GDD §15.2, Fase B1). `queen` es la Reina del
  * Enjambre (GDD §15.3, Fase B2). `prisma` es El Prisma (GDD §15.4, Fase B3).
+ * `storm` es La Tormenta (GDD §15.5, Fase B4).
  */
-export type BossId = 'test-boss' | 'guardian' | 'queen' | 'prisma';
+export type BossId = 'test-boss' | 'guardian' | 'queen' | 'prisma' | 'storm';
 
 /** Estado en vivo de una puerta de una sala en la mazmorra multi-sala. */
 export interface RoomDoorRuntime {

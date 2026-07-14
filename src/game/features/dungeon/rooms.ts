@@ -11,6 +11,7 @@ import boossDenJson from '@/game/features/dungeon/levels/boss-den.json';
 import bossGuardianJson from '@/game/features/dungeon/levels/boss-guardian.json';
 import bossPrismaJson from '@/game/features/dungeon/levels/boss-prisma.json';
 import bossQueenJson from '@/game/features/dungeon/levels/boss-queen.json';
+import bossStormJson from '@/game/features/dungeon/levels/boss-storm.json';
 import bossTestJson from '@/game/features/dungeon/levels/boss-test.json';
 import combatArenaJson from '@/game/features/dungeon/levels/combat-arena.json';
 import combatCrossroadsJson from '@/game/features/dungeon/levels/combat-crossroads.json';
@@ -98,6 +99,7 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
   bossGuardianJson,
   bossQueenJson,
   bossPrismaJson,
+  bossStormJson,
 ];
 
 /**
@@ -111,14 +113,15 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
  * explícitamente aquí en vez de confiar en esa preferencia.
  *
  * `boss-guardian.json` (Fase B1, GDD §15.2), `boss-queen.json` (Fase B2, GDD
- * §15.3) y `boss-prisma.json` (Fase B3, GDD §15.4) ya están en
- * `SERIES_LEVEL_JSON` con `boss` definido: `deriveBossSequence` (session.ts)
- * encadena una mazmorra por cada jefe de diseño disponible en el pool, en
- * orden aleatorio por semilla (GDD §15.1 punto 9: "un pool de jefes, uno por
- * mazmorra, encadenados dentro de la misma run"). `boss-den.json` sigue en el
- * pool con tag 'jefe' pero SIN `boss` — queda inerte (nunca se sortea para
- * ningún rol) hasta que B4 añada su jefe de diseño; se conserva sin tocar por
- * ser una decisión ya tomada en B0.
+ * §15.3), `boss-prisma.json` (Fase B3, GDD §15.4) y `boss-storm.json` (Fase
+ * B4, GDD §15.5) ya están en `SERIES_LEVEL_JSON` con `boss` definido:
+ * `deriveBossSequence` (session.ts) encadena una mazmorra por cada jefe de
+ * diseño disponible en el pool, en orden aleatorio por semilla (GDD §15.1
+ * punto 9: "un pool de jefes, uno por mazmorra, encadenados dentro de la
+ * misma run"). `boss-den.json` sigue en el pool con tag 'jefe' pero SIN
+ * `boss` — queda inerte (nunca se sortea para ningún rol) a propósito: con
+ * los 4 jefes de diseño ya cubiertos (B1-B4), no hay un 5.º jefe que colgarle;
+ * se conserva sin tocar por ser una decisión ya tomada en B0.
  */
 const DEV_ONLY_LEVEL_JSON: readonly unknown[] = [bossTestJson];
 

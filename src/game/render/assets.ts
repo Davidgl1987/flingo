@@ -288,6 +288,35 @@ export const prismaGemMaterial = new THREE.MeshLambertMaterial({ color: '#cbd5f5
  */
 export const prismaGemGeometry = new THREE.OctahedronGeometry(0.22);
 
+// ── La Tormenta (GDD §15.5, Fase B4): cuerpo tormentoso + halo de patrón ───
+
+/** Cuerpo de La Tormenta: gris-azulado tormentoso, distinto de la piedra del Guardián, el violeta-verdoso de la Reina y el núcleo mutable del Prisma. */
+export const stormBodyMaterial = new THREE.MeshLambertMaterial({ color: '#3a4a63' });
+/**
+ * Pose de recarga (GDD §15.5: "aviso visual claro" de la ventana de
+ * vulnerabilidad): sustituye al cuerpo entero por un tono pálido/apagado
+ * mientras `bossStage===STORM_STAGE_RELOAD` — inconfundible frente al
+ * gris-azulado tormentoso normal, mismo criterio de intercambio de material
+ * que `guardianTelegraphGlowMaterial`.
+ */
+export const stormReloadCoreMaterial = new THREE.MeshBasicMaterial({ color: '#dce8f2' });
+/**
+ * Halo/vórtice que envuelve el cuerpo (silueta de "ojo de la tormenta",
+ * distinta de cuernos/corona/gemas del resto de jefes): MUTABLE (opacidad
+ * actualizada cada frame según el patrón telegrafiado/en curso, ver
+ * EnemyViews.tsx), mismo criterio de mutación que `prismaCoreMaterial` — un
+ * único jefe La Tormenta vivo a la vez, así que es seguro mutar el material
+ * compartido en vez de intercambiarlo.
+ */
+export const stormHaloMaterial = new THREE.MeshBasicMaterial({
+  color: '#8fd8ff',
+  transparent: true,
+  opacity: 0.4,
+  depthWrite: false,
+});
+/** Halo: toro fino alrededor del cuerpo (se escala/gira/pulsa por patrón en EnemyViews). */
+export const stormHaloGeometry = new THREE.TorusGeometry(1, 0.07, 8, 28);
+
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
 // silueta/color de contrato del GDD. ──────────────────────────────────────
