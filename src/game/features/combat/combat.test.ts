@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { ARROW_PIERCE_COUNT, CONTACT_DAMAGE_COOLDOWN, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FAN_ANGLE_STEP, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_WALL_BOUNCES } from './constants';
 import { MAX_SPEED } from '@/engine/physics';
-import { applyDamageToEnemy, applyDamageToHero, applyKnockbackToHero, fireProjectile, isSpikeContactDangerous, ramDamage, stepHeroEnemyContacts, stepProjectiles } from './combat';
+import { applyDamageToEnemy, applyDamageToHero, applyKnockbackToHero, fireEnemyProjectile, fireProjectile, isSpikeContactDangerous, ramDamage, stepHeroEnemyContacts, stepProjectiles } from './combat';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
 import { createWorld } from '@/game/world/create';
 import type { EnemySpawn, RoomData, World } from '@/game/world/types';
@@ -391,5 +391,184 @@ describe('applyDamageToEnemy', () => {
     const types: string[] = [];
     drainEvents(events, (e: GameEvent) => types.push(e.type));
     expect(types).toContain('enemy-died');
+  });
+});
+
+describe('El Prisma (GDD §15.4, Fase B3): gate de color en applyDamageToEnemy', () => {
+  function makeBossWorld(): World {
+    return makeWorld([{ id: 'boss-1', kind: 'boss', bossId: 'prisma', position: { x: 0, y: 0 } }]);
+  }
+
+  it('arma que NO coincide con el color activo: hp intacto + evento boss-immune-hit (ni en ventana)', () => {
+    const world = makeBossWorld();
+    const events = createEventQueue(16);
+    const boss = world.enemies[0];
+    boss.bossWeaponGateA = 'ram';
+    boss.bossVulnerable = true; // el gate manda ANTES que la ventana
+    const hpBefore = boss.hp;
+
+    applyDamageToEnemy(world, boss, 10, 1, 0, events, false, 'arrow');
+
+    expect(boss.hp).toBe(hpBefore);
+    const types: string[] = [];
+    drainEvents(events, (e: GameEvent) => types.push(e.type));
+    expect(types).toEqual(['boss-immune-hit']);
+  });
+
+  it('arma que coincide con el color activo: daño normal, respetando la ventana de vulnerabilidad', () => {
+    const world = makeBossWorld();
+    const events = createEventQueue(16);
+    const boss = world.enemies[0];
+    boss.bossWeaponGateA = 'arrow';
+
+    // Fuera de ventana: bossDamageOutsideWindowFactor por defecto (0) → inmune, pero SIN evento boss-immune-hit (color correcto).
+    boss.bossVulnerable = false;
+    const hpBefore1 = boss.hp;
+    applyDamageToEnemy(world, boss, 10, 1, 0, events, false, 'arrow');
+    expect(boss.hp).toBe(hpBefore1);
+    const typesOutside: string[] = [];
+    drainEvents(events, (e: GameEvent) => typesOutside.push(e.type));
+    expect(typesOutside).not.toContain('boss-immune-hit');
+
+    // Dentro de ventana: daño completo.
+    boss.bossVulnerable = true;
+    const hpBefore2 = boss.hp;
+    applyDamageToEnemy(world, boss, 10, 1, 0, events, false, 'arrow');
+    expect(boss.hp).toBe(hpBefore2 - 10);
+  });
+
+  it("daño 'other' (barril, pinchos...) pasa el gate sin importar el color activo (no es un arma)", () => {
+    const world = makeBossWorld();
+    const events = createEventQueue(16);
+    const boss = world.enemies[0];
+    boss.bossWeaponGateA = 'ram';
+    boss.bossVulnerable = true;
+    const hpBefore = boss.hp;
+
+    applyDamageToEnemy(world, boss, 4, 1, 0, events, true, 'other');
+
+    expect(boss.hp).toBe(hpBefore - 4);
+    const types: string[] = [];
+    drainEvents(events, (e: GameEvent) => types.push(e.type));
+    expect(types).not.toContain('boss-immune-hit');
+  });
+
+  it('solape de fase 3 (bossWeaponGateB): cualquiera de los dos colores hace daño DOBLE', () => {
+    const world = makeBossWorld();
+    const events = createEventQueue(16);
+    const boss = world.enemies[0];
+    // HP amplio (el placeholder de createEnemy es 1): applyDamageToEnemy
+    // corta en seco si hp<=0, y este test encadena dos golpes de 10.
+    boss.hp = 100;
+    boss.maxHp = 100;
+    boss.bossWeaponGateA = 'spell';
+    boss.bossWeaponGateB = 'arrow';
+    boss.bossVulnerable = true;
+
+    const hpBefore = boss.hp;
+    applyDamageToEnemy(world, boss, 5, 1, 0, events, false, 'arrow');
+    expect(boss.hp).toBe(hpBefore - 10); // ×2, acierta por el gate B
+
+    const hpBefore2 = boss.hp;
+    applyDamageToEnemy(world, boss, 5, 1, 0, events, false, 'spell');
+    expect(boss.hp).toBe(hpBefore2 - 10); // ×2, acierta por el gate A
+  });
+
+  it('sin gate activo (bossWeaponGateA === ""): comportamiento normal de cualquier otro jefe/enemigo', () => {
+    const world = makeBossWorld();
+    const events = createEventQueue(16);
+    const boss = world.enemies[0];
+    expect(boss.bossWeaponGateA).toBe('');
+    boss.bossVulnerable = true;
+
+    const hpBefore = boss.hp;
+    applyDamageToEnemy(world, boss, 3, 1, 0, events, false, 'ram');
+    expect(boss.hp).toBe(hpBefore - 3);
+  });
+});
+
+describe('El Prisma (GDD §15.4): atribución de fuente de daño desde los llamadores reales', () => {
+  it('una flecha del héroe (stepHeroProjectileCollisions) pasa source="arrow": rebota sin efecto contra un gate distinto y daña con el gate correcto', () => {
+    const world = makeWorld([{ id: 'boss-1', kind: 'boss', bossId: 'prisma', position: { x: 3, y: 0 } }]);
+    const boss = world.enemies[0];
+    boss.bossVulnerable = true;
+    const events = createEventQueue(32);
+
+    boss.bossWeaponGateA = 'ram';
+    fireProjectile(world, 'arrow', 1, 0, 1, events);
+    const hpBefore = boss.hp;
+    for (let i = 0; i < 60; i++) stepProjectiles(world, FIXED_DT, events);
+    expect(boss.hp).toBe(hpBefore); // gate equivocado: inmune
+
+    world.time += 1; // libera el cooldown de la flecha
+    boss.bossWeaponGateA = 'arrow';
+    fireProjectile(world, 'arrow', 1, 0, 1, events);
+    const hpBefore2 = boss.hp;
+    for (let i = 0; i < 60; i++) stepProjectiles(world, FIXED_DT, events);
+    expect(boss.hp).toBeLessThan(hpBefore2);
+  });
+
+  it('la embestida del héroe (stepHeroEnemyContacts) pasa source="ram": solo daña un Prisma con gate "ram"', () => {
+    const world = makeWorld([{ id: 'boss-1', kind: 'boss', bossId: 'prisma', position: { x: 0.5, y: 0 } }]);
+    const boss = world.enemies[0];
+    boss.bossVulnerable = true;
+    const events = createEventQueue(16);
+
+    boss.bossWeaponGateA = 'arrow';
+    world.hero.velocity.x = 5; // por encima de RAM_SPEED_THRESHOLD
+    const hpBefore = boss.hp;
+    stepHeroEnemyContacts(world, new Map(), events);
+    expect(boss.hp).toBe(hpBefore); // gate equivocado: inmune
+
+    boss.bossWeaponGateA = 'ram';
+    world.hero.velocity.x = 5;
+    const hpBefore2 = boss.hp;
+    stepHeroEnemyContacts(world, new Map(), events);
+    expect(boss.hp).toBeLessThan(hpBefore2);
+  });
+});
+
+describe('proyectil enemigo con rebote (El Prisma, GDD §15.4, modo Sombra)', () => {
+  it('con bouncesLeft > 0 rebota en la pared en vez de desaparecer, y se apaga al agotar los rebotes', () => {
+    const world = createWorld(makeRoom({ width: 10, height: 10 }));
+    const events = createEventQueue(64);
+    world.hero.position.x = -100; // lejos: no lo intercepta el héroe
+    world.hero.position.y = -100;
+
+    expect(fireEnemyProjectile(world, 0, 0, 1, 0, 3, 1, 0.2, 1)).toBe(true);
+    const p = world.projectiles.find((proj) => proj.active && proj.owner === 'enemy')!;
+    expect(p).toBeDefined();
+    expect(p.bouncesLeft).toBe(1);
+
+    let bounced = false;
+    for (let i = 0; i < 600 && !bounced; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+      if (p.active && p.velocity.x < 0) bounced = true;
+    }
+    expect(bounced).toBe(true);
+    expect(p.active).toBe(true);
+    expect(p.bouncesLeft).toBe(0);
+
+    // Segundo choque (pared oeste): sin rebotes restantes, desaparece.
+    for (let i = 0; i < 600 && p.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+    expect(p.active).toBe(false);
+  });
+
+  it('sin bouncesLeft (Shooter, comportamiento intacto): desaparece contra la pared sin rebotar', () => {
+    const world = createWorld(makeRoom({ width: 10, height: 10 }));
+    const events = createEventQueue(64);
+    world.hero.position.x = -100;
+    world.hero.position.y = -100;
+
+    fireEnemyProjectile(world, 0, 0, 1, 0, 3, 1, 0.2);
+    const p = world.projectiles.find((proj) => proj.active && proj.owner === 'enemy')!;
+    expect(p.bouncesLeft).toBe(0);
+
+    for (let i = 0; i < 600 && p.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+    expect(p.active).toBe(false);
   });
 });

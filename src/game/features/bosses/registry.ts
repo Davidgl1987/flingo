@@ -11,6 +11,8 @@ import { guardianOnPhaseChanged, guardianStepPattern } from '@/game/features/bos
 import { QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_MAX_HP, QUEEN_RADIUS } from '@/game/features/bosses/queen/constants';
 import { queenOnInit, queenOnPhaseChanged, queenStepPattern } from '@/game/features/bosses/queen/pattern';
 import { stepQueenColumns } from '@/game/features/bosses/queen/columns';
+import { PRISMA_DAMAGE_OUTSIDE_WINDOW, PRISMA_HIT_DAMAGE_CAP_FRACTION, PRISMA_MAX_HP, PRISMA_RADIUS } from '@/game/features/bosses/prisma/constants';
+import { prismaOnInit, prismaOnPhaseChanged, prismaStepPattern } from '@/game/features/bosses/prisma/pattern';
 import { testBossStepPattern } from '@/game/features/bosses/test-boss/pattern';
 import type { BossDef } from './types';
 
@@ -52,6 +54,22 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     stepState: stepQueenColumns,
     onPhaseChanged: queenOnPhaseChanged,
     onInit: queenOnInit,
+  },
+  prisma: {
+    id: 'prisma',
+    name: 'El Prisma',
+    maxHp: PRISMA_MAX_HP,
+    radius: PRISMA_RADIUS,
+    hitDamageCapFraction: PRISMA_HIT_DAMAGE_CAP_FRACTION,
+    // Escudo de color rotatorio (GDD §15.4): el gate real (solo el arma del
+    // color activo hace daño de verdad) vive en `Enemy.bossWeaponGateA/B` y
+    // se comprueba en `applyDamageToEnemy` (combat.ts) ANTES de esta ventana;
+    // este factor solo decide cuánto pasa una vez acertado el color, igual
+    // criterio "apenas hace daño, pero se nota" que el Guardián.
+    damageOutsideWindow: PRISMA_DAMAGE_OUTSIDE_WINDOW,
+    stepPattern: prismaStepPattern,
+    onPhaseChanged: prismaOnPhaseChanged,
+    onInit: prismaOnInit,
   },
 };
 

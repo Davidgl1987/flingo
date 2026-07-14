@@ -80,9 +80,9 @@ export interface ItemSpawn {
  * define vida, umbrales de fase y función de patrón. `test-boss` es el jefe
  * trivial de la Fase B0 (framework), disponible solo en dev/tests. `guardian`
  * es el Guardián de Canto (GDD §15.2, Fase B1). `queen` es la Reina del
- * Enjambre (GDD §15.3, Fase B2).
+ * Enjambre (GDD §15.3, Fase B2). `prisma` es El Prisma (GDD §15.4, Fase B3).
  */
-export type BossId = 'test-boss' | 'guardian' | 'queen';
+export type BossId = 'test-boss' | 'guardian' | 'queen' | 'prisma';
 
 /** Estado en vivo de una puerta de una sala en la mazmorra multi-sala. */
 export interface RoomDoorRuntime {
@@ -304,6 +304,17 @@ export interface Enemy {
   bossTimer: number;
   bossStage: number;
   bossCounter: number;
+  /**
+   * El Prisma (GDD §15.4, Fase B3): arma que gatea el daño ahora mismo
+   * ('ram'|'arrow'|'spell'), '' = sin gate (el resto de jefes/enemigos, daño
+   * normal). `applyDamageToEnemy` (combat.ts) lo lee como escalar plano —
+   * combat.ts sigue sin importar nada de `features/bosses/` (mismo criterio
+   * que `bossDamageOutsideWindowFactor`). `bossWeaponGateB` es el segundo
+   * color válido durante el solape de fase 3 (golpe doble si aciertas
+   * cualquiera de los dos); '' si no hay solape activo.
+   */
+  bossWeaponGateA: string;
+  bossWeaponGateB: string;
 }
 
 /**

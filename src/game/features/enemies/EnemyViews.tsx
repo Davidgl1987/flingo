@@ -31,9 +31,20 @@
  *   1=TELEGRAFÍA, 2=carga) — parpadeo ámbar + hinchazón pulsante durante la
  *   telegrafía, tono rojo intenso y constante mientras carga; el flash de
  *   golpe (hitFlash, ya existente) tiene prioridad y nunca se pisan.
+ * - El Prisma (GDD §15.4, Fase B3, `bossId==='prisma'`): el núcleo (mismo
+ *   `bodyRef` compartido) MUTA su color al del arma activa
+ *   (`enemy.bossWeaponGateA`, mapeado con `WEAPON_COLOR` — el mismo mapeo
+ *   instantáneo arma↔color que ya usa la Weapon bar del héroe), en vez de
+ *   intercambiar materiales — un único Prisma vivo a la vez, mismo criterio
+ *   que `heroMaterial`. Telegraph de cambio de color: "tartamudeo" (parpadeo
+ *   rápido alternando el color actual y el siguiente, leído de
+ *   `bossTelegraphKind==='color-change:<arma>'`). Solape de fase 3
+ *   (`bossWeaponGateB!==''`): alterna los dos colores activos a un ritmo más
+ *   calmado. 3 gemas orbitando el núcleo dan silueta propia, distinta de
+ *   cuernos/corona.
  *
  * Todo con geometrías/materiales compartidos de assets.ts; cero asignaciones
- * en useFrame (solo escalares y mutación de refs ya existentes).
+ * en useFrame (solo escalares y mutación de refs/materiales ya existentes).
  */
 
 import { useFrame } from '@react-three/fiber';
@@ -64,11 +75,15 @@ import {
   queenGuardianChargeMaterial,
   queenGuardianTelegraphMaterial,
   queenSummonPulseMaterial,
+  prismaCoreMaterial,
+  prismaGemGeometry,
+  prismaGemMaterial,
   shooterMaterial,
   spikeMaterial,
   trailMaterial,
   unitCircle,
   unitSphere,
+  WEAPON_COLOR,
 } from '@/game/render/assets';
 import { ChaserMesh } from '@/game/features/enemies/chaser/Mesh';
 import { DummyMesh } from '@/game/features/enemies/dummy/Mesh';
@@ -95,7 +110,17 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
 function restingBodyMaterial(kind: EnemyKind, bossId: BossId | undefined): Material {
   if (kind === 'boss' && bossId === 'guardian') return guardianBodyMaterial;
   if (kind === 'boss' && bossId === 'queen') return queenBodyMaterial;
+  // El Prisma (GDD §15.4): MUTABLE, ver comentario de cabecera — su color se
+  // actualiza cada frame más abajo en vez de intercambiar material.
+  if (kind === 'boss' && bossId === 'prisma') return prismaCoreMaterial;
   return ENEMY_MATERIAL[kind];
+}
+
+/** El Prisma (GDD §15.4): mapea el gate de arma ('ram'|'arrow'|'spell') al mismo color que `WEAPON_COLOR` del héroe ('ram'→'body'). */
+function prismaWeaponColor(weapon: string): (typeof WEAPON_COLOR)['body'] {
+  if (weapon === 'arrow') return WEAPON_COLOR.arrow;
+  if (weapon === 'spell') return WEAPON_COLOR.spell;
+  return WEAPON_COLOR.body;
 }
 
 /** true si este id de enemigo es una larva de la Reina del Enjambre (GDD §15.3): mini-dummy, escala menor. */
@@ -119,6 +144,13 @@ const ORIENTATION_SPEED_THRESHOLD = 0.2;
  * para no sentirse "flotante" pero sin snap instantáneo.
  */
 const ORIENTATION_DAMP_LAMBDA = 12;
+
+/** El Prisma (GDD §15.4): velocidad angular del "tartamudeo" de color durante el telegraph de cambio (~10Hz, en rad/s: 2π×10). */
+const PRISMA_COLOR_TELEGRAPH_BLINK_SPEED = 63;
+/** El Prisma, fase 3 (GDD §15.4): ritmo más calmado (~4Hz) al alternar los 2 colores del solape. */
+const PRISMA_OVERLAP_BLINK_SPEED = 25;
+/** Velocidad angular de la órbita visual de las gemas del Prisma. */
+const PRISMA_GEM_ORBIT_SPEED = 1.4;
 
 function EnemyMesh({
   session,
@@ -155,6 +187,8 @@ function EnemyMesh({
   const queenSummonPulseRef = useRef<Mesh>(null);
   const queenSummonPulseUntil = useRef(0);
   const lastQueenWaveTimer = useRef(0);
+  // El Prisma (GDD §15.4): 3 gemas orbitando el núcleo, silueta propia.
+  const prismaGemRefs = useRef<(Mesh | null)[]>([]);
   // Orientación (yaw) suavizada del grupo: yaw actual y yaw OBJETIVO, ver
   // comentario extenso en el useFrame más abajo. `null` = "aún no
   // inicializado" (primer frame con enemigo válido: snap directo sin girar
@@ -366,6 +400,45 @@ function EnemyMesh({
         }
       }
     }
+
+    if (kind === 'boss' && bossId === 'prisma') {
+      // Núcleo con el color del arma activa (GDD §15.4): MUTA el color del
+      // material compartido en vez de intercambiarlo (ver restingBodyMaterial
+      // + comentario de cabecera). El flash de golpe (arriba) tiene
+      // prioridad: mismo criterio que el Guardián (guardianTelegraphGlow más
+      // abajo), que tampoco compite contra el flash de fase.
+      if (!flashing) {
+        const activeColor = prismaWeaponColor(enemy.bossWeaponGateA);
+        const telegraphingColorChange =
+          enemy.bossTelegraphKind.startsWith('color-change:') && world.time < enemy.bossTelegraphUntil;
+        if (telegraphingColorChange) {
+          // Tartamudeo (GDD §15.4): parpadeo rápido alternando el color
+          // actual y el siguiente (leído del propio `bossTelegraphKind`).
+          const nextWeapon = enemy.bossTelegraphKind.slice('color-change:'.length);
+          const nextColor = prismaWeaponColor(nextWeapon);
+          const blink = Math.sin(world.time * PRISMA_COLOR_TELEGRAPH_BLINK_SPEED) > 0;
+          prismaCoreMaterial.color.copy(blink ? activeColor : nextColor);
+        } else if (enemy.bossWeaponGateB !== '') {
+          // Solape de fase 3 (GDD §15.4): alterna los dos colores activos a
+          // un ritmo más calmado que el tartamudeo del telegraph.
+          const overlapColor = prismaWeaponColor(enemy.bossWeaponGateB);
+          const blink = Math.sin(world.time * PRISMA_OVERLAP_BLINK_SPEED) > 0;
+          prismaCoreMaterial.color.copy(blink ? activeColor : overlapColor);
+        } else {
+          prismaCoreMaterial.color.copy(activeColor);
+        }
+      }
+
+      // Gemas orbitando el núcleo (silueta propia, distinta de cuernos/corona).
+      for (let i = 0; i < prismaGemRefs.current.length; i++) {
+        const gem = prismaGemRefs.current[i];
+        if (!gem) continue;
+        const angle = world.time * PRISMA_GEM_ORBIT_SPEED + (i / prismaGemRefs.current.length) * Math.PI * 2;
+        const orbitRadius = bodyRadius * 1.35;
+        gem.position.set(Math.cos(angle) * orbitRadius, 0, Math.sin(angle) * orbitRadius);
+        gem.rotation.y = angle * 1.5;
+      }
+    }
   });
 
   return (
@@ -487,6 +560,24 @@ function EnemyMesh({
             position={[0, -0.38, 0]}
             visible={false}
           />
+        </>
+      )}
+
+      {kind === 'boss' && bossId === 'prisma' && (
+        <>
+          {/* Silueta propia (GDD §15.4): 3 gemas pequeñas orbitando el núcleo
+              (distinta de cuernos/corona) — posición real recalculada en
+              useFrame (órbita continua, siempre visible). */}
+          {[0, 1, 2].map((i) => (
+            <mesh
+              key={i}
+              ref={(el) => {
+                prismaGemRefs.current[i] = el;
+              }}
+              geometry={prismaGemGeometry}
+              material={prismaGemMaterial}
+            />
+          ))}
         </>
       )}
     </group>

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "boss-prisma",
+  "name": "Sala del Prisma",
+  "width": 13,
+  "height": 13,
+  "playerStart": { "x": 0, "y": 5 },
+  "tags": ["jefe"],
+  "boss": "prisma",
+  "doorSlots": [
+    { "side": "north", "offset": 0 },
+    { "side": "south", "offset": 0 },
+    { "side": "east", "offset": 0 },
+    { "side": "west", "offset": 0 }
+  ],
+  "enemies": [
+    {
+      "id": "boss-1",
+      "kind": "boss",
+      "bossId": "prisma",
+      "position": { "x": 0, "y": 0 },
+      "patrolTarget": { "x": 0, "y": 0 }
+    }
+  ],
+  "hazards": [
+    { "id": "rock-w", "kind": "rock", "position": { "x": -2.6, "y": 0 }, "width": 1.4, "height": 1.4 },
+    { "id": "rock-e", "kind": "rock", "position": { "x": 2.6, "y": 0 }, "width": 1.4, "height": 1.4 }
+  ],
+  "items": []
+}

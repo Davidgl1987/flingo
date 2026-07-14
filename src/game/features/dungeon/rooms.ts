@@ -9,6 +9,7 @@
 
 import boossDenJson from '@/game/features/dungeon/levels/boss-den.json';
 import bossGuardianJson from '@/game/features/dungeon/levels/boss-guardian.json';
+import bossPrismaJson from '@/game/features/dungeon/levels/boss-prisma.json';
 import bossQueenJson from '@/game/features/dungeon/levels/boss-queen.json';
 import bossTestJson from '@/game/features/dungeon/levels/boss-test.json';
 import combatArenaJson from '@/game/features/dungeon/levels/combat-arena.json';
@@ -96,6 +97,7 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
   boossDenJson,
   bossGuardianJson,
   bossQueenJson,
+  bossPrismaJson,
 ];
 
 /**
@@ -108,15 +110,15 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
  * elige entre TODAS con la misma probabilidad, así que hay que excluirlo
  * explícitamente aquí en vez de confiar en esa preferencia.
  *
- * `boss-guardian.json` (Fase B1, GDD §15.2) y `boss-queen.json` (Fase B2, GDD
- * §15.3) ya están en `SERIES_LEVEL_JSON` con `boss` definido: a partir de B2,
- * `pickRoomForRole('jefe', …)` (features/dungeon/dungeon.ts) sortea CON LA MISMA
- * PROBABILIDAD entre las salas 'jefe' con `boss` — cada run puede tocar
- * cualquiera de las dos (GDD §15.1 punto 9: "un pool de jefes, uno por
- * partida"). `boss-den.json` sigue en el pool con tag 'jefe' pero SIN `boss`
- * — queda inerte (nunca se sortea para ningún rol) hasta que B3-B4 añadan
- * más jefes de diseño; se conserva sin tocar por ser una decisión ya tomada
- * en B0.
+ * `boss-guardian.json` (Fase B1, GDD §15.2), `boss-queen.json` (Fase B2, GDD
+ * §15.3) y `boss-prisma.json` (Fase B3, GDD §15.4) ya están en
+ * `SERIES_LEVEL_JSON` con `boss` definido: `deriveBossSequence` (session.ts)
+ * encadena una mazmorra por cada jefe de diseño disponible en el pool, en
+ * orden aleatorio por semilla (GDD §15.1 punto 9: "un pool de jefes, uno por
+ * mazmorra, encadenados dentro de la misma run"). `boss-den.json` sigue en el
+ * pool con tag 'jefe' pero SIN `boss` — queda inerte (nunca se sortea para
+ * ningún rol) hasta que B4 añada su jefe de diseño; se conserva sin tocar por
+ * ser una decisión ya tomada en B0.
  */
 const DEV_ONLY_LEVEL_JSON: readonly unknown[] = [bossTestJson];
 

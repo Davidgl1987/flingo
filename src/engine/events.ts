@@ -116,7 +116,15 @@ export type GameEventType =
    * embestida contra el héroe (aviso ~0.45 s antes de cargar). El render lo usa
    * para el destello/hinchazón de aviso.
    */
-  | 'boss-guardian-charge';
+  | 'boss-guardian-charge'
+  /**
+   * El Prisma (GDD §15.4, Fase B3): golpe con el arma equivocada para el
+   * color activo (o para ninguno de los dos en solape de fase 3) — el daño se
+   * descarta por completo y el render dibuja un chispazo de "inmune" en vez
+   * del flash de golpe normal. Distinto de 'enemy-hit'/'boss-hit' (que sí
+   * bajan HP): este evento nunca acompaña una bajada de vida real.
+   */
+  | 'boss-immune-hit';
 
 export interface GameEvent {
   type: GameEventType;

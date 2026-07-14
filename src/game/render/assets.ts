@@ -268,6 +268,26 @@ export const queenGuardianTelegraphMaterial = new THREE.MeshBasicMaterial({ colo
 /** Carga (bossStage=2, opcional): tono rojo más intenso y saturado que el reposo — "ya viene, esquiva". */
 export const queenGuardianChargeMaterial = new THREE.MeshBasicMaterial({ color: '#ff2d2d' });
 
+// ── El Prisma (GDD §15.4, Fase B3): núcleo con el color del arma activa ────
+
+/**
+ * Núcleo del Prisma: MUTABLE (color actualizado cada frame según el arma
+ * activa/telegraph de cambio, ver EnemyViews.tsx), mismo criterio que
+ * `heroMaterial` — un único Prisma vivo a la vez, así que es seguro mutar el
+ * material compartido en vez de recrearlo. Arranca en el color de "cuerpo"
+ * (mismo mapeo que `WEAPON_COLOR` del héroe: instantáneo arma↔color).
+ */
+export const prismaCoreMaterial = new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.body.clone() });
+/** Gemas orbitantes del Prisma (silueta propia, GDD §15.4): tono neutro cristalino, no compite con el color del núcleo. */
+export const prismaGemMaterial = new THREE.MeshLambertMaterial({ color: '#cbd5f5' });
+/**
+ * Gema pequeña: octaedro (silueta distinta de los cuernos del Guardián / la
+ * corona de la Reina). El chispazo "inmune" (evento 'boss-immune-hit') no
+ * necesita material propio: reutiliza el sistema de partículas genérico vía
+ * `burstTable.ts` (blanco, barato), sin tocar EnemyViews.
+ */
+export const prismaGemGeometry = new THREE.OctahedronGeometry(0.22);
+
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
 // silueta/color de contrato del GDD. ──────────────────────────────────────

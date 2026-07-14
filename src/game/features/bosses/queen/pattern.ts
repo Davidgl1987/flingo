@@ -83,6 +83,8 @@ export function queenOnInit(world: World, boss: Enemy): void {
       bossTimer: 0,
       bossStage: 0,
       bossCounter: 0,
+      bossWeaponGateA: '',
+      bossWeaponGateB: '',
     });
   }
   // (Ya no hay setup de deambulación que hacer aquí: TAREA 5 del rediseño

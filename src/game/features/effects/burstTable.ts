@@ -99,6 +99,10 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   'boss-column-broken': { color: '#c9c2a8', size: 0.14, count: 26, life: 0.5, speed: 3.2, trauma: 0.3 },
   'boss-columns-cleared': { color: '#ff6bcb', size: 0.16, count: 34, life: 0.7, speed: 3.6, trauma: 0.5 },
   'boss-guardian-charge': { color: '#4dd68a', size: 0.07, count: 6, life: 0.3, speed: 1.8, trauma: 0.05 },
+  // El Prisma (GDD §15.4): chispazo blanco y barato al golpear con el arma
+  // equivocada — feedback de "inmune", deliberadamente más pequeño y sin
+  // trauma que 'enemy-hit'/'boss-hit' (no hay daño real que reforzar).
+  'boss-immune-hit': { color: '#ffffff', size: 0.06, count: 6, life: 0.2, speed: 1.6, trauma: 0 },
 };
 
 /** Color de burst específico por tipo de objeto recogido (label del evento 'item-pickup'), GDD §12: dorado/rosa/azul. */

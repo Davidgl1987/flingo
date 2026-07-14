@@ -143,6 +143,8 @@ function createEnemy(spawn: EnemySpawn, bounds: AABB, rng: Rng, origin: Vec2, ro
     bossTimer: 0,
     bossStage: 0,
     bossCounter: 0,
+    bossWeaponGateA: '',
+    bossWeaponGateB: '',
   };
 }
 

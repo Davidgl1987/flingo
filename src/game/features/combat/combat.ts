@@ -115,7 +115,13 @@ export function fireProjectile(
   return true;
 }
 
-/** Dispara un proyectil hostil (Shooter) hacia una dirección unitaria dada. */
+/**
+ * Dispara un proyectil hostil (Shooter, El Prisma) hacia una dirección
+ * unitaria dada. `bouncesLeft` (El Prisma, GDD §15.4, modo Sombra: "arcos
+ * lentos que rebotan en las paredes"): por defecto 0 (comportamiento intacto
+ * del Shooter, que nunca rebota); ver `stepEnemyProjectileCollision` para el
+ * mecanismo de rebote en sí (mismo que el hechizo del héroe).
+ */
 export function fireEnemyProjectile(
   world: World,
   originX: number,
@@ -125,6 +131,7 @@ export function fireEnemyProjectile(
   speed: number,
   damage: number,
   radius: number,
+  bouncesLeft = 0,
 ): boolean {
   const slot = acquireProjectile(world);
   if (!slot) return false;
@@ -138,7 +145,7 @@ export function fireEnemyProjectile(
   slot.radius = radius;
   slot.damage = damage;
   slot.ttl = PROJECTILE_LIFETIME;
-  slot.bouncesLeft = 0;
+  slot.bouncesLeft = bouncesLeft;
   slot.pierceLeft = 0;
   slot.hitEnemyIds.length = 0;
   return true;
@@ -217,7 +224,7 @@ function stepHeroProjectileCollisions(world: World, p: Projectile, events: Event
     const rr = enemy.radius + p.radius;
     if (dx * dx + dy * dy > rr * rr) continue;
 
-    applyDamageToEnemy(world, enemy, p.damage, p.velocity.x, p.velocity.y, events);
+    applyDamageToEnemy(world, enemy, p.damage, p.velocity.x, p.velocity.y, events, false, p.kind === 'arrow' ? 'arrow' : 'spell');
     p.hitEnemyIds.push(enemy.id);
 
     if (p.kind === 'arrow') {
@@ -245,8 +252,13 @@ function stepEnemyProjectileCollision(world: World, p: Projectile, events: Event
     deactivateProjectile(p);
     return false;
   }
-  // Los proyectiles enemigos desaparecen contra paredes/rocas (sin rebote).
-  // Ver nota de multi-sala en stepHeroProjectileCollisions.
+  // Paredes/rocas: la mayoría de proyectiles enemigos desaparecen sin rebote
+  // (Shooter, comportamiento intacto), salvo que traigan `bouncesLeft > 0`
+  // (El Prisma, GDD §15.4, modo Sombra: "arcos lentos que rebotan en las
+  // paredes") — mismo mecanismo que el hechizo del héroe en
+  // `stepHeroProjectileCollisions` (reflexión ya resuelta por
+  // collideInnerBounds/collideCircleAabb, más el amortiguado extra de
+  // SPELL_BOUNCE_FACTOR). Ver nota de multi-sala en stepHeroProjectileCollisions.
   const hitBounds = world.dungeon === null && collideInnerBounds(p.position, p.velocity, p.radius, world.bounds, null);
   let hitObstacle = false;
   const obstacles = world.obstacles;
@@ -257,13 +269,31 @@ function stepEnemyProjectileCollision(world: World, p: Projectile, events: Event
     }
   }
   if (hitBounds || hitObstacle) {
-    deactivateProjectile(p);
-    return false;
+    if (p.bouncesLeft > 0) {
+      p.bouncesLeft--;
+      p.velocity.x *= SPELL_BOUNCE_FACTOR;
+      p.velocity.y *= SPELL_BOUNCE_FACTOR;
+      p.ttl -= 0.4;
+      pushEvent(events, 'wall-bounce', p.position.x, p.position.y, 1);
+    } else {
+      deactivateProjectile(p);
+      return false;
+    }
   }
   return true;
 }
 
 // ── Daño y knockback ───────────────────────────────────────────────────────
+
+/**
+ * Arma/fuente que causó el daño (El Prisma, GDD §15.4, Fase B3): 'other' cubre
+ * cualquier daño que no sea un arma del héroe (barriles, pinchos, fosos...) —
+ * esas fuentes NO son gateables por color, ver `applyDamageToEnemy`. Tipo
+ * plano en `features/combat/combat.ts` a propósito (no en `features/bosses/`):
+ * mantiene el combate ajeno a la tabla de jefes, mismo criterio que
+ * `bossDamageOutsideWindowFactor`.
+ */
+export type DamageSource = 'ram' | 'arrow' | 'spell' | 'other';
 
 /**
  * Aplica daño a un enemigo, knockback en la dirección del impacto y flash.
@@ -275,6 +305,15 @@ function stepEnemyProjectileCollision(world: World, p: Projectile, events: Event
  * leído como escalar plano del propio Enemy — mantiene esta función y todo
  * `features/combat/combat.ts` ajenos a `features/bosses/registry.ts` (evita un ciclo de imports;
  * ver nota de diseño en `features/bosses/lifecycle.ts`).
+ *
+ * Gate de color (El Prisma, GDD §15.4, Fase B3): si `enemy.bossWeaponGateA`
+ * no es '', solo el arma de ese color (o de `bossWeaponGateB`, el solape de
+ * fase 3) hace daño de verdad — cualquier otra ARMA (nunca 'other': un barril
+ * no es un arma y pasa el gate igual que siempre) rebota sin efecto y emite
+ * 'boss-immune-hit' en vez de bajar HP. Acertar el color durante el solape de
+ * fase 3 (`bossWeaponGateB !== ''`) dobla el daño. Se comprueba ANTES que la
+ * ventana de vulnerabilidad: un gate equivocado nunca debería "colarse" solo
+ * por pillar al jefe fuera de ventana.
  *
  * `ignoreVulnerabilityWindow` (GDD §15.2, playtest 2026-07-06): el Guardián
  * arrollando su propio barril rodante es "su castigo" por cargar a ciegas —
@@ -295,6 +334,7 @@ export function applyDamageToEnemy(
   impulseY: number,
   events: EventQueue,
   ignoreVulnerabilityWindow = false,
+  source: DamageSource = 'other',
 ): void {
   if (enemy.hp <= 0) return;
   if (enemy.kind === 'boss' && enemy.roomId !== undefined && world.currentRoomId !== enemy.roomId) {
@@ -306,6 +346,16 @@ export function applyDamageToEnemy(
     // CUALQUIER fuente aquí para cubrir los cuatro casos de una vez. No afecta
     // a enemigos normales ni a mundos de un sola sala (roomId sin definir).
     return;
+  }
+  if (enemy.kind === 'boss' && enemy.bossWeaponGateA !== '') {
+    const matchesGate = source === enemy.bossWeaponGateA || source === enemy.bossWeaponGateB;
+    if (source !== 'other' && !matchesGate) {
+      pushEvent(events, 'boss-immune-hit', enemy.position.x, enemy.position.y, 1);
+      return;
+    }
+    if (matchesGate && enemy.bossWeaponGateB !== '') {
+      damage *= 2;
+    }
   }
   if (enemy.kind === 'boss' && !enemy.bossVulnerable && !ignoreVulnerabilityWindow) {
     // Fuera de ventana el daño del ARMA se escala por el factor del jefe. Sin
@@ -455,7 +505,7 @@ export function stepHeroEnemyContacts(
     }
 
     if (dmg > 0) {
-      applyDamageToEnemy(world, enemy, dmg, dx, dy, events);
+      applyDamageToEnemy(world, enemy, dmg, dx, dy, events, false, 'ram');
       // Rebote suave del héroe al embestir (conserva parte de la tangencial vía physics ya aplicado
       // en pared; aquí solo invertimos la componente normal como un choque elástico ligero).
       const dist = Math.sqrt(distSq) || 1;
