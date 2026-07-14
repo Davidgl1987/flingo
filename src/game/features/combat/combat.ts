@@ -297,6 +297,16 @@ export function applyDamageToEnemy(
   ignoreVulnerabilityWindow = false,
 ): void {
   if (enemy.hp <= 0) return;
+  if (enemy.kind === 'boss' && enemy.roomId !== undefined && world.currentRoomId !== enemy.roomId) {
+    // Contención por sala (bug playtest 2026-07-14): la IA del jefe ya no
+    // actúa si el héroe no está en su sala (`bosses/lifecycle.ts::stepBosses`),
+    // pero el daño SÍ entraba igual con la puerta abierta — se podía disparar
+    // flecha/hechizo/embestida o hacer estallar un barril desde la sala
+    // contigua sin cruzar la puerta. Punto único de daño boss-aware: bloquea
+    // CUALQUIER fuente aquí para cubrir los cuatro casos de una vez. No afecta
+    // a enemigos normales ni a mundos de un sola sala (roomId sin definir).
+    return;
+  }
   if (enemy.kind === 'boss' && !enemy.bossVulnerable && !ignoreVulnerabilityWindow) {
     // Fuera de ventana el daño del ARMA se escala por el factor del jefe. Sin
     // Math.floor a propósito (Guardián, playtest 2026-07-10: factor 0.2 sobre

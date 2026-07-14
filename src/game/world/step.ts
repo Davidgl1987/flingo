@@ -19,7 +19,7 @@
  * Muta `world` y `events` in-place: nada de crear un mundo nuevo por tick.
  */
 
-import { DOOR_TOUCH_MARGIN, ROOM_CLEAR_SCORE } from './constants';
+import { DOOR_CONTACT_MARGIN, DOOR_TOUCH_MARGIN, ROOM_CLEAR_SCORE } from './constants';
 import { FIXED_DT, stepBodySeparation, stepEnemyCollisions, stepHeroPhysics } from '@/engine/physics';
 import { stepBossDoorSeal, stepBosses, stepBossStates } from '@/game/features/bosses/lifecycle';
 import { stepEnemyAi } from '@/game/features/enemies/ai';
@@ -135,7 +135,15 @@ function stepDungeonRoomClear(world: World, events: EventQueue): void {
 /** Cadencia mínima entre avisos de "necesitas la llave" mientras el héroe sigue pegado a la puerta (s). */
 const LOCKED_NOTICE_INTERVAL = 1.5;
 
-/** GDD §10.2: la puerta del jefe se abre al tocarla con llave; sin llave, rebota (la física ya lo hace) + aviso. */
+/**
+ * GDD §10.2: la puerta del jefe se abre al TOCARLA con llave (bug playtest
+ * 2026-07-14: antes se abría desde `DOOR_TOUCH_MARGIN`=1.1u, mucho antes de
+ * llegar al muro, dejando atacar al jefe desde la sala contigua con la
+ * puerta ya abierta — ver `bossDamageOutsideWindowFactor`/contención en
+ * combat.ts para la otra mitad del fix). El aviso "necesitas la llave" sigue
+ * disparándose desde más lejos (`DOOR_TOUCH_MARGIN`): avisar de cerca está
+ * bien, lo que no puede pasar es abrir sin llegar a tocar.
+ */
 function stepBossDoorKeyCheck(world: World, events: EventQueue): void {
   const dungeon = world.dungeon;
   if (!dungeon) return;
@@ -146,9 +154,11 @@ function stepBossDoorKeyCheck(world: World, events: EventQueue): void {
     if (!door.requiresKey || door.open) continue;
     const dx = world.hero.position.x - door.center.x;
     const dy = world.hero.position.y - door.center.y;
-    if (Math.hypot(dx, dy) > DOOR_TOUCH_MARGIN) continue;
+    const dist = Math.hypot(dx, dy);
+    if (dist > DOOR_TOUCH_MARGIN) continue;
 
     if (world.hero.hasKey) {
+      if (dist > DOOR_CONTACT_MARGIN) continue; // con llave: solo abre al contacto real, no antes
       openConnection(world, door.connectionIndex);
       pushEvent(events, 'door-locked', door.center.x, door.center.y, 1, 'unlocked');
     } else if (world.time >= world.lockedNoticeCooldownUntil) {

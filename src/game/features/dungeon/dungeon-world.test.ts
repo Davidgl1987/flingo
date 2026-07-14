@@ -10,6 +10,7 @@ import { generateDungeon } from './dungeon';
 import { createDungeonWorld } from './dungeon-world';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
 import { stepWorld } from '@/game/world/step';
+import { DOOR_CONTACT_MARGIN, DOOR_TOUCH_MARGIN } from '@/game/world/constants';
 import type { EnemySpawn, RoomData, RoomTag } from '@/game/world/types';
 
 function makeRoom(
@@ -96,36 +97,62 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     }
   });
 
+  /**
+   * La puerta del jefe se toca desde la ANTECÁMARA (la sala vecina): el jefe
+   * es siempre el extremo 'b' de su única conexión (hoja terminal de la cola,
+   * ver `buildTopology`/`buildFixedTopology` en dungeon.ts), así que el lado
+   * 'a' de esa conexión es la antecámara — el único camino real de entrada.
+   * `DoorConnection.center` se calcula SIEMPRE desde el lado 'a' (ver
+   * `tryMaterialize`), así que coincide exactamente con el muro propio de la
+   * antecámara: el héroe puede acercarse hasta `HERO_RADIUS` de ese punto
+   * (tocando el muro) antes de que la física lo bloquee.
+   */
+  function findBossAntechamber(dungeon: ReturnType<typeof generateDungeon>) {
+    const bossConn = dungeon.connections.find((c) => c.requiresKey)!;
+    const anteRoomId = bossConn.roomBId === dungeon.bossRoomId ? bossConn.roomAId : bossConn.roomBId;
+    return { bossConn, anteRoomId };
+  }
+
   it('la puerta del jefe no abre sin llave (rebote + aviso) y abre al tocarla con llave', () => {
     const dungeon = generateDungeon(10, makePool());
     const world = createDungeonWorld(dungeon, 10);
     const events = createEventQueue(64);
 
-    const bossRuntime = world.roomRuntimes.get(dungeon.bossRoomId)!;
-    const bossDoor = bossRuntime.doors.find((d) => d.requiresKey)!;
+    const { anteRoomId } = findBossAntechamber(dungeon);
+    const anteRuntime = world.roomRuntimes.get(anteRoomId)!;
+    const bossDoor = anteRuntime.doors.find((d) => d.requiresKey)!;
     expect(bossDoor).toBeTruthy();
     expect(bossDoor.open).toBe(false);
 
-    // Aleja al enemigo del jefe para que no interfiera con el contacto de daño.
+    // Aleja a los enemigos de la antecámara para que no interfieran con la posición del héroe.
     for (const enemy of world.enemies) {
-      if (enemy.roomId === dungeon.bossRoomId) {
-        enemy.position.x = bossRuntime.bounds.maxX - 0.5;
-        enemy.position.y = bossRuntime.bounds.maxY - 0.5;
+      if (enemy.roomId === anteRoomId) {
+        enemy.position.x = anteRuntime.bounds.maxX - 0.5;
+        enemy.position.y = anteRuntime.bounds.maxY - 0.5;
       }
     }
 
-    // Sin llave: el héroe toca el hueco de la puerta desde dentro de la sala del jefe, no se abre.
-    world.currentRoomId = bossRuntime.id;
-    bossRuntime.visited = true;
-    const insideDoorX = bossDoor.center.x + Math.sign(bossRuntime.bounds.maxX - bossDoor.center.x || -1) * 0.3;
-    const insideDoorY = bossDoor.center.y + Math.sign(bossRuntime.bounds.maxY - bossDoor.center.y || -1) * 0.3;
-    world.hero.position.x = Math.min(Math.max(insideDoorX, bossRuntime.bounds.minX + 0.2), bossRuntime.bounds.maxX - 0.2);
-    world.hero.position.y = Math.min(Math.max(insideDoorY, bossRuntime.bounds.minY + 0.2), bossRuntime.bounds.maxY - 0.2);
+    world.currentRoomId = anteRuntime.id;
+    anteRuntime.visited = true;
     world.hero.velocity.x = 0;
     world.hero.velocity.y = 0;
+
+    // Posición a una distancia de CONTACTO real (por encima del suelo físico
+    // HERO_RADIUS, por debajo de DOOR_CONTACT_MARGIN): el héroe toca la
+    // puerta desde dentro de la antecámara.
+    const roomCenterX = (anteRuntime.bounds.minX + anteRuntime.bounds.maxX) / 2;
+    const roomCenterY = (anteRuntime.bounds.minY + anteRuntime.bounds.maxY) / 2;
+    const variesOnY = bossDoor.side === 'north' || bossDoor.side === 'south';
+    const dir = variesOnY
+      ? Math.sign(roomCenterY - bossDoor.center.y)
+      : Math.sign(roomCenterX - bossDoor.center.x);
+    const contactDistance = (DOOR_CONTACT_MARGIN + 0.38) / 2; // entre HERO_RADIUS y DOOR_CONTACT_MARGIN
+    world.hero.position.x = variesOnY ? bossDoor.center.x : bossDoor.center.x + dir * contactDistance;
+    world.hero.position.y = variesOnY ? bossDoor.center.y + dir * contactDistance : bossDoor.center.y;
+
     world.hero.hasKey = false;
     stepWorld(world, events);
-    expect(world.currentRoomId).toBe(bossRuntime.id);
+    expect(world.currentRoomId).toBe(anteRuntime.id);
     expect(bossDoor.open).toBe(false);
     expect(collect(events)).toContain('door-locked');
 
@@ -134,6 +161,59 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     stepWorld(world, events);
     expect(bossDoor.open).toBe(true);
     expect(collect(events)).toContain('door-locked');
+  });
+
+  it('con llave, a distancia de aviso NO abre la puerta del jefe; solo al contacto real (bug playtest 2026-07-14)', () => {
+    const dungeon = generateDungeon(10, makePool());
+    const world = createDungeonWorld(dungeon, 10);
+    const events = createEventQueue(64);
+
+    const { anteRoomId } = findBossAntechamber(dungeon);
+    const anteRuntime = world.roomRuntimes.get(anteRoomId)!;
+    const bossDoor = anteRuntime.doors.find((d) => d.requiresKey)!;
+    world.currentRoomId = anteRuntime.id;
+    anteRuntime.visited = true;
+    world.hero.hasKey = true;
+    world.hero.velocity.x = 0;
+    world.hero.velocity.y = 0;
+
+    // Aleja a los enemigos de la antecámara para que no interfieran.
+    for (const enemy of world.enemies) {
+      if (enemy.roomId === anteRoomId) {
+        enemy.position.x = anteRuntime.bounds.maxX - 0.5;
+        enemy.position.y = anteRuntime.bounds.maxY - 0.5;
+      }
+    }
+
+    // Mueve al héroe a una distancia dada del centro del hueco, a lo largo
+    // del eje PERPENDICULAR al muro (el otro eje coincide con el centro del
+    // hueco), hacia el INTERIOR de la antecámara (topología variable desde
+    // el bug 1: la puerta puede caer en cualquiera de los 4 lados).
+    const roomCenterX = (anteRuntime.bounds.minX + anteRuntime.bounds.maxX) / 2;
+    const roomCenterY = (anteRuntime.bounds.minY + anteRuntime.bounds.maxY) / 2;
+    const variesOnY = bossDoor.side === 'north' || bossDoor.side === 'south';
+    const dir = variesOnY
+      ? Math.sign(roomCenterY - bossDoor.center.y)
+      : Math.sign(roomCenterX - bossDoor.center.x);
+    const heroPositionAt = (dist: number) =>
+      variesOnY
+        ? { x: bossDoor.center.x, y: bossDoor.center.y + dir * dist }
+        : { x: bossDoor.center.x + dir * dist, y: bossDoor.center.y };
+
+    // A mitad de camino entre el margen de contacto y el de aviso: dentro de
+    // la sala, cerca de la puerta, pero SIN tocarla todavía.
+    const noticeDistance = (DOOR_CONTACT_MARGIN + DOOR_TOUCH_MARGIN) / 2;
+    expect(noticeDistance).toBeGreaterThan(DOOR_CONTACT_MARGIN);
+    expect(noticeDistance).toBeLessThan(DOOR_TOUCH_MARGIN);
+    Object.assign(world.hero.position, heroPositionAt(noticeDistance));
+
+    stepWorld(world, events);
+    expect(bossDoor.open).toBe(false);
+
+    // Ahora al contacto real (por encima del suelo físico HERO_RADIUS): se abre.
+    Object.assign(world.hero.position, heroPositionAt((DOOR_CONTACT_MARGIN + 0.38) / 2));
+    stepWorld(world, events);
+    expect(bossDoor.open).toBe(true);
   });
 
   it('cruzar un hueco de puerta actualiza la sala actual y activa a sus enemigos', () => {

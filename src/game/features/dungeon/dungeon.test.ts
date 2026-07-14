@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { generateDungeon, validateDungeon } from './dungeon';
+import { generateDungeon, validateDungeon, type DungeonMap } from './dungeon';
 import type { RoomData, RoomTag } from '@/game/world/types';
 
 function makeTestRoom(id: string, tags: RoomTag[], size = 9, boss?: RoomData['boss']): RoomData {
@@ -199,6 +199,51 @@ describe('generateDungeon', () => {
         expect(mapGuardian.bossRoomId).toBe('boss-guardian');
         const mapQueen = generateDungeon(seed, pool, 6, 'queen');
         expect(mapQueen.bossRoomId).toBe('boss-queen');
+      }
+    });
+  });
+
+  // Bug playtest 2026-07-14: la 2ª mazmorra de una run se veía casi igual a
+  // la 1ª (topología fija, solo permutaba qué sala de combate rellenaba cada
+  // celda). `buildTopology` ahora depende de `rng`: esta suite comprueba que
+  // sigue siendo siempre válida y que además VARÍA la forma del grafo entre
+  // semillas (no solo la sala elegida por celda).
+  describe('variedad de topología entre mazmorras (bug playtest: mazmorras casi idénticas)', () => {
+    /** Multiconjunto (cx,cy)+rol de una mazmorra, para comparar FORMAS de topología (no solo qué sala cae en cada celda). */
+    function topologyShape(map: DungeonMap): string {
+      return map.rooms
+        .map((r) => `${r.cell.cx},${r.cell.cy}:${r.room.tags.join('+')}`)
+        .sort()
+        .join('|');
+    }
+
+    it('genera una mazmorra válida para 30 semillas consecutivas', () => {
+      const pool = makeVariedPool();
+      for (let seed = 1; seed <= 30; seed++) {
+        const map = generateDungeon(seed, pool);
+        const validation = validateDungeon(map);
+        expect(validation.valid, `semilla ${seed}: ${validation.errors.join('; ')}`).toBe(true);
+      }
+    });
+
+    it('semillas consecutivas producen mayoritariamente formas de topología distintas', () => {
+      const pool = makeVariedPool();
+      const total = 29;
+      let distinct = 0;
+      for (let seed = 1; seed <= total; seed++) {
+        const shapeA = topologyShape(generateDungeon(seed, pool));
+        const shapeB = topologyShape(generateDungeon(seed + 1, pool));
+        if (shapeA !== shapeB) distinct++;
+      }
+      expect(distinct / total).toBeGreaterThan(0.5);
+    });
+
+    it('es determinista: misma semilla + pool → misma forma de topología', () => {
+      const pool = makeVariedPool();
+      for (const seed of [3, 17, 101]) {
+        const shapeA = topologyShape(generateDungeon(seed, pool));
+        const shapeB = topologyShape(generateDungeon(seed, pool));
+        expect(shapeA).toBe(shapeB);
       }
     });
   });

@@ -100,44 +100,147 @@ interface Topology {
 }
 
 /**
- * Construye una topología fija: un bucle de 4 celdas (garantiza el ciclo
- * exigido por el GDD) con el resto de salas de combate colgando del bucle, y
- * el jefe como hoja terminal en la última celda de la cadena. La llave se
- * coloca siempre en una celda del bucle distinta del inicio, nunca en el
- * camino hacia el jefe, así que es alcanzable sin pasar por él.
+ * Los 4 nodos del bucle viven SIEMPRE en el mismo cuadrado físico (mismas
+ * `cx,cy` y mismas aristas: 0→1 este, 1→2 sur, 2→3 oeste, 3→0 norte — un
+ * camino cerrado que vuelve exactamente al origen, ver `buildTopology`). Lo
+ * que varía por semilla es qué ROL narrativo cae en cada nodo y por qué lado
+ * libre cuelgan la cola y la tienda (ver `LOOP_FREE_SIDES`).
  *
  * Bucle (vista desde arriba, +y = sur):
- *   (0,0) -- (1,0)
- *     |        |
- *   (0,1) -- (1,1)
- *
- * Inicio en (0,0). Llave en (1,1) (diagonalmente opuesta, hay que rodear el
- * bucle para llegar). El jefe cuelga de (1,0) hacia el este, a través de
- * tantas salas de combate intermedias como haga falta para completar
- * ROOMS_PER_RUN.
- *
- * Tienda (docs/plans/ECONOMY_PLAN.md F4): un nodo ADICIONAL (no cuenta para
- * `roomCount`) colgado al sur de (0,1) — un callejón sin salida fuera del
- * camino al jefe (la cola este nunca pisa cy=2, sin colisión posible). Así el
- * jugador la encuentra sin desviarse mucho pero no es de paso obligatorio.
+ *   nodo0 (0,0) -- nodo1 (1,0)
+ *     |                |
+ *   nodo3 (0,1) -- nodo2 (1,1)
  */
-function buildTopology(roomCount: number): Topology {
+const LOOP_CELLS: readonly { cx: number; cy: number }[] = [
+  { cx: 0, cy: 0 },
+  { cx: 1, cy: 0 },
+  { cx: 1, cy: 1 },
+  { cx: 0, cy: 1 },
+];
+const LOOP_EDGES: readonly { a: number; b: number; side: DoorSide }[] = [
+  { a: 0, b: 1, side: 'east' },
+  { a: 1, b: 2, side: 'south' },
+  { a: 2, b: 3, side: 'west' },
+  { a: 3, b: 0, side: 'north' },
+];
+/**
+ * Lados de cada nodo del bucle NO usados por sus dos aristas del ciclo — por
+ * construcción apuntan siempre hacia FUERA del cuadrado 2×2, así que colgar
+ * la cola o la tienda desde cualquiera de ellos nunca reinvade una celda ya
+ * ocupada del bucle (mismo índice que `LOOP_CELLS`/`LOOP_EDGES`).
+ */
+const LOOP_FREE_SIDES: readonly DoorSide[][] = [
+  ['north', 'west'],
+  ['north', 'east'],
+  ['south', 'east'],
+  ['south', 'west'],
+];
+
+function pickFrom<T>(options: readonly T[], rng: Rng): T {
+  return options[Math.floor(rng() * options.length)];
+}
+
+/**
+ * Construye una topología DEPENDIENTE de `rng` (bug playtest 2026-07-14: la
+ * 2ª mazmorra de una run se veía casi igual que la 1ª porque inicio/llave/
+ * jefe/tienda solo tenían un candidato fijo en el pool — con esto la FORMA
+ * del grafo también varía por semilla, no solo qué sala rellena cada rol):
+ * un bucle de 4 celdas (garantiza el ciclo exigido por el GDD, forma fija,
+ * ver `LOOP_CELLS`/`LOOP_EDGES`) con:
+ *  - Inicio: rotado aleatoriamente a cualquiera de las 4 celdas del bucle.
+ *  - Llave: en cualquiera de las 3 celdas restantes (opuesta o adyacente al
+ *    inicio) — nunca en el propio inicio, así que rodear el bucle sigue
+ *    siendo obligatorio para alcanzarla (invariante del GDD).
+ *  - Cola (combate…+jefe, jefe como hoja terminal): cuelga de una celda del
+ *    bucle que no sea la de inicio, por uno de sus 2 lados libres (nunca
+ *    hacia dentro del bucle, ver `LOOP_FREE_SIDES`).
+ *  - Tienda (docs/plans/ECONOMY_PLAN.md F4): nodo ADICIONAL (no cuenta para
+ *    `roomCount`), callejón sin salida colgado de una celda del bucle que no
+ *    sea ni la de inicio ni la de la cola, por un lado libre.
+ */
+function buildTopology(roomCount: number, rng: Rng): Topology {
+  const startIndex = Math.floor(rng() * LOOP_CELLS.length);
+  const keyIndex = pickFrom(
+    [0, 1, 2, 3].filter((i) => i !== startIndex),
+    rng,
+  );
+
+  const nodes: TopologyNode[] = LOOP_CELLS.map((cell, i) => ({
+    cx: cell.cx,
+    cy: cell.cy,
+    role: i === startIndex ? 'inicio' : i === keyIndex ? 'llave' : 'combate',
+  }));
+  const edges: TopologyEdge[] = LOOP_EDGES.map((e) => ({ ...e }));
+  const occupied = new Set(LOOP_CELLS.map((c) => `${c.cx},${c.cy}`));
+
+  // Cola de combate + jefe: cuelga de una celda del bucle distinta del
+  // inicio, por uno de sus lados libres.
+  const tailCellIndex = pickFrom(
+    [0, 1, 2, 3].filter((i) => i !== startIndex),
+    rng,
+  );
+  const tailDir = pickFrom(LOOP_FREE_SIDES[tailCellIndex], rng);
+  const tailOffset = DIR_OFFSET[tailDir];
+
+  const tailLength = Math.max(1, roomCount - nodes.length);
+  let prevIndex = tailCellIndex;
+  let cx = LOOP_CELLS[tailCellIndex].cx + tailOffset.dx;
+  let cy = LOOP_CELLS[tailCellIndex].cy + tailOffset.dy;
+  for (let i = 0; i < tailLength; i++) {
+    const isLast = i === tailLength - 1;
+    const nodeIndex = nodes.length;
+    nodes.push({ cx, cy, role: isLast ? 'jefe' : 'combate' });
+    edges.push({ a: prevIndex, b: nodeIndex, side: tailDir });
+    occupied.add(`${cx},${cy}`);
+    prevIndex = nodeIndex;
+    cx += tailOffset.dx;
+    cy += tailOffset.dy;
+  }
+
+  // Tienda: callejón sin salida colgado de una celda del bucle que no sea ni
+  // el inicio ni la de la cola, por un lado libre (evitando, si es posible,
+  // el lado que ya pisa una celda ocupada por la cola).
+  const shopCellIndex = pickFrom(
+    [0, 1, 2, 3].filter((i) => i !== startIndex && i !== tailCellIndex),
+    rng,
+  );
+  const shopFreeSides = LOOP_FREE_SIDES[shopCellIndex].filter((side) => {
+    const off = DIR_OFFSET[side];
+    const cell = `${LOOP_CELLS[shopCellIndex].cx + off.dx},${LOOP_CELLS[shopCellIndex].cy + off.dy}`;
+    return !occupied.has(cell);
+  });
+  const shopDir = pickFrom(shopFreeSides.length > 0 ? shopFreeSides : LOOP_FREE_SIDES[shopCellIndex], rng);
+  const shopOffset = DIR_OFFSET[shopDir];
+  const shopIndex = nodes.length;
+  nodes.push({
+    cx: LOOP_CELLS[shopCellIndex].cx + shopOffset.dx,
+    cy: LOOP_CELLS[shopCellIndex].cy + shopOffset.dy,
+    role: 'tienda',
+  });
+  edges.push({ a: shopCellIndex, b: shopIndex, side: shopDir });
+
+  const bossIndex = nodes.findIndex((n) => n.role === 'jefe');
+  return { nodes, edges, startIndex, bossIndex, keyIndex };
+}
+
+/**
+ * Topología FIJA original (sin `rng`): inicio en (0,0), llave en (1,1)
+ * (diagonalmente opuesta), cola colgando al este de (1,0), tienda colgando al
+ * sur de (0,1). Usada solo por `buildFallbackDungeon` — el layout de
+ * emergencia puede seguir fijo (siempre válido por construcción con las
+ * salas fabricadas de `makeFallbackRoom`).
+ */
+function buildFixedTopology(roomCount: number): Topology {
   const nodes: TopologyNode[] = [
     { cx: 0, cy: 0, role: 'inicio' },
     { cx: 1, cy: 0, role: 'combate' },
     { cx: 1, cy: 1, role: 'llave' },
     { cx: 0, cy: 1, role: 'combate' },
   ];
-  const edges: TopologyEdge[] = [
-    { a: 0, b: 1, side: 'east' },
-    { a: 1, b: 2, side: 'south' },
-    { a: 2, b: 3, side: 'west' },
-    { a: 3, b: 0, side: 'north' },
-  ];
+  const edges: TopologyEdge[] = LOOP_EDGES.map((e) => ({ ...e }));
 
-  // Cadena de combate + jefe colgando al este de (1,0).
   const tailLength = Math.max(1, roomCount - nodes.length);
-  let prevIndex = 1; // (1,0), nodo del bucle del que cuelga la cola
+  let prevIndex = 1;
   let cx = 2;
   for (let i = 0; i < tailLength; i++) {
     const isLast = i === tailLength - 1;
@@ -148,7 +251,6 @@ function buildTopology(roomCount: number): Topology {
     cx += 1;
   }
 
-  // Tienda: callejón sin salida colgado al sur de (0,1) (índice 3 del bucle).
   const shopIndex = nodes.length;
   nodes.push({ cx: 0, cy: 2, role: 'tienda' });
   edges.push({ a: 3, b: shopIndex, side: 'south' });
@@ -197,7 +299,7 @@ function pickRoomForRole(
  */
 function makeFallbackRoom(id: string, name: string, tags: RoomTag[]): RoomData {
   const items: ItemSpawn[] = tags.includes('tienda')
-    ? [{ id: 'shopkeeper', kind: 'shopkeeper', position: { x: 0, y: -2 } }]
+    ? [{ id: 'shopkeeper', kind: 'shopkeeper', position: { x: 0, y: 0 } }]
     : [];
   return {
     version: 1,
@@ -517,7 +619,7 @@ function bfsReachableExcludingKeyDoors(map: DungeonMap, startId: string): Set<st
 
 /** Layout de emergencia: mismo bucle+cola pero con salas fabricadas al vuelo, siempre válido. */
 function buildFallbackDungeon(seed: number, roomCount: number): DungeonMap {
-  const topology = buildTopology(roomCount);
+  const topology = buildFixedTopology(roomCount);
   const fallbackRooms = topology.nodes.map((node, i) =>
     makeFallbackRoom(`fallback-${i}`, `Sala ${i + 1}`, [node.role]),
   );
@@ -555,9 +657,18 @@ export function generateDungeon(
   bossId?: BossId,
 ): DungeonMap {
   const rng = createRng(seed);
-  const topology = buildTopology(roomCount);
 
+  // Cada intento sortea una topología NUEVA (no solo qué sala rellena cada
+  // celda, ver `buildTopology`): con roles/candidatos casi fijos por rol
+  // (inicio/llave/tienda/jefe suelen tener un único candidato en el pool de
+  // serie), una única forma de grafo por seed dejaría la materialización
+  // atada a si ESA forma concreta encaja con esos tamaños de sala fijos —
+  // rejugar solo la selección de combate no lo arregla. Rejugar la forma
+  // también multiplica las combinaciones que MAX_GENERATION_ATTEMPTS puede
+  // probar, y sigue siendo determinista (mismo rng con semilla, mismo orden
+  // de sorteos).
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
+    const topology = buildTopology(roomCount, rng);
     const map = tryMaterialize(pool, topology, rng, bossId);
     if (map) {
       map.seed = seed;

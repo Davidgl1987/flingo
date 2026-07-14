@@ -217,8 +217,19 @@ function EnemyMesh({
       }
     }
 
+    // Umbral de estabilidad de orientación (bug playtest 2026-07-14: "los ojos
+    // bailan cada frame", sobre todo en las larvas de la Reina): la cara de
+    // cada enemigo se orienta según su velocidad instantánea, pero al
+    // patrullar/orbitar a baja velocidad (steering, nacimiento/muerte
+    // constante de larvas) ese vector puede cambiar de signo cada tick sin
+    // que el enemigo se vea desplazándose realmente. Por debajo del umbral se
+    // conserva la última orientación estable en vez de recalcularla cada
+    // frame (root cause: hipótesis (c) del diagnóstico — sin suavizado ni
+    // umbral suficiente, no (a) aleatorio recalculado ni (b) keying por
+    // índice, ver EnemyViews como key={enemy.id}).
+    const ORIENTATION_SPEED_THRESHOLD = 0.2;
     const speed = Math.hypot(enemy.velocity.x, enemy.velocity.y);
-    if (speed > 0.05) {
+    if (speed > ORIENTATION_SPEED_THRESHOLD) {
       group.rotation.y = Math.atan2(enemy.velocity.x, enemy.velocity.y);
     }
 

@@ -341,3 +341,102 @@ describe('sellado de puerta de la sala de jefe (GDD §15.1 punto 7)', () => {
     expect(doorAfter.open).toBe(true);
   });
 });
+
+describe('contención de daño por sala (bug playtest 2026-07-14: se podía dañar al jefe desde fuera con la puerta ya abierta)', () => {
+  function makeDungeonPool(): RoomData[] {
+    const combat = (id: string): RoomData => ({
+      version: 1,
+      id,
+      name: id,
+      width: 9,
+      height: 9,
+      playerStart: { x: 0, y: 0 },
+      tags: ['combate'] as RoomTag[],
+      doorSlots: [
+        { side: 'north', offset: 0 },
+        { side: 'south', offset: 0 },
+        { side: 'east', offset: 0 },
+        { side: 'west', offset: 0 },
+      ],
+      enemies: [],
+      hazards: [],
+      items: [],
+    });
+    const bossRoom: RoomData = {
+      ...combat('boss-room'),
+      tags: ['jefe'],
+      boss: 'test-boss',
+      enemies: [{ id: 'boss-1', kind: 'boss', bossId: 'test-boss', position: { x: 0, y: 0 } }],
+    };
+    const keyRoom: RoomData = {
+      ...combat('key-room'),
+      tags: ['llave'],
+      items: [{ id: 'key-item', kind: 'key', position: { x: 0, y: 0 } }],
+    };
+    const shopRoom: RoomData = {
+      ...combat('shop-room'),
+      tags: ['tienda'],
+      items: [{ id: 'shopkeeper', kind: 'shopkeeper', position: { x: 0, y: 0 } }],
+    };
+    return [
+      { ...combat('start-room'), tags: ['inicio'] },
+      combat('combat-1'),
+      combat('combat-2'),
+      combat('combat-3'),
+      keyRoom,
+      bossRoom,
+      shopRoom,
+    ];
+  }
+
+  it('el jefe no recibe daño de NINGUNA fuente (ni siquiera con bypass de ventana) si el héroe está en otra sala', () => {
+    const dungeon = generateDungeon(20, makeDungeonPool());
+    const world = createDungeonWorld(dungeon, 20);
+    initBossEnemies(world);
+    const events = createEventQueue(64);
+
+    const boss = world.enemies.find((e) => isBoss(e))!;
+    boss.bossVulnerable = true; // aunque esté en ventana, la contención por sala manda primero
+    const hpBefore = boss.hp;
+
+    world.currentRoomId = dungeon.startRoomId; // el héroe NO está en la sala del jefe
+    expect(world.currentRoomId).not.toBe(boss.roomId);
+
+    applyDamageToEnemy(world, boss, 999, 0, 0, events); // flecha/hechizo/embestida normal
+    expect(boss.hp).toBe(hpBefore);
+
+    applyDamageToEnemy(world, boss, 999, 0, 0, events, true); // bypass de ventana (barril)
+    expect(boss.hp).toBe(hpBefore);
+  });
+
+  it('el jefe recibe daño normal cuando el héroe SÍ está en su sala (respeta la ventana de vulnerabilidad existente)', () => {
+    const dungeon = generateDungeon(21, makeDungeonPool());
+    const world = createDungeonWorld(dungeon, 21);
+    initBossEnemies(world);
+    const events = createEventQueue(64);
+
+    const boss = world.enemies.find((e) => isBoss(e))!;
+    world.currentRoomId = boss.roomId!;
+
+    boss.bossVulnerable = true;
+    const hpAfterEntering = boss.hp;
+    applyDamageToEnemy(world, boss, 5, 0, 0, events);
+    expect(boss.hp).toBe(hpAfterEntering - 5);
+
+    // Fuera de ventana: sigue aplicando el factor existente (test-boss = 0 → inmune), sin relación con la sala.
+    boss.bossVulnerable = false;
+    const hpBeforeOutOfWindow = boss.hp;
+    applyDamageToEnemy(world, boss, 5, 0, 0, events);
+    expect(boss.hp).toBe(hpBeforeOutOfWindow);
+  });
+
+  it('enemigos normales (no jefe) no se ven afectados por la contención de sala', () => {
+    const world = createWorld(makeRoom({ tags: ['combate'], enemies: [{ id: 'd1', kind: 'dummy', position: { x: 0, y: 0 } }] }));
+    world.currentRoomId = 'sala-cualquiera'; // no coincide con enemy.roomId, pero es dummy (kind !== 'boss')
+    const events = createEventQueue(64);
+    const enemy = world.enemies[0];
+    const hpBefore = enemy.hp;
+    applyDamageToEnemy(world, enemy, 1, 0, 0, events);
+    expect(enemy.hp).toBe(hpBefore - 1);
+  });
+});
