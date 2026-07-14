@@ -22,7 +22,7 @@ import { initBossEnemies, stepBosses } from '@/game/features/bosses/lifecycle';
 import { getBossDef } from '@/game/features/bosses/registry';
 import { collectTypes } from '@/game/features/bosses/test-helpers';
 import { queenState, stepQueenColumns } from './columns';
-import { QUEEN_CHASER_PER_WAVE_BY_PHASE, QUEEN_COLUMN_DAMAGE_FRACTION, QUEEN_COLUMN_HIT_COOLDOWN, QUEEN_COLUMN_HP, QUEEN_COLUMN_STUN_DURATION, QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_GUARDIAN_MAX, QUEEN_GUARDIAN_ORBIT_RADIUS, QUEEN_GUARDIAN_SPAWN_INTERVAL, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_LARVA_HP, QUEEN_LARVA_MAX, QUEEN_GUARDIAN_CHARGE_COOLDOWN, QUEEN_MAX_HP, QUEEN_RADIUS, QUEEN_STALK_SPEED_BASE, QUEEN_STALK_SPEED_PER_COLUMN, QUEEN_TRAIL_DROP_INTERVAL, QUEEN_TRAIL_DROP_INTERVAL_PHASE2, QUEEN_TRAIL_PUDDLE_LIFETIME, QUEEN_TRAIL_PUDDLE_RADIUS, QUEEN_WAVE_INTERVAL } from './constants';
+import { QUEEN_CHASER_PER_WAVE_BY_PHASE, QUEEN_COLUMN_DAMAGE_FRACTION, QUEEN_COLUMN_HIT_COOLDOWN, QUEEN_COLUMN_HP, QUEEN_COLUMN_STUN_DURATION, QUEEN_DAMAGE_OUTSIDE_WINDOW, QUEEN_GUARDIAN_MAX, QUEEN_GUARDIAN_ORBIT_RADIUS, QUEEN_GUARDIAN_SPAWN_INTERVAL, QUEEN_HIT_DAMAGE_CAP_FRACTION, QUEEN_LARVA_HP, QUEEN_LARVA_MAX, QUEEN_GUARDIAN_CHARGE_COOLDOWN, QUEEN_GUARDIAN_SPEED, QUEEN_MAX_HP, QUEEN_RADIUS, QUEEN_STALK_SPEED_BASE, QUEEN_STALK_SPEED_PER_COLUMN, QUEEN_TRAIL_DROP_INTERVAL, QUEEN_TRAIL_DROP_INTERVAL_PHASE2, QUEEN_TRAIL_PUDDLE_LIFETIME, QUEEN_TRAIL_PUDDLE_RADIUS, QUEEN_WAVE_INTERVAL } from './constants';
 
 const FIXED_DT = 1 / 60;
 
@@ -801,6 +801,90 @@ describe('Reina: guardianas de columna (T4, rediseño 2026-07-10)', () => {
     ramColumn(world, events, col, QUEEN_COLUMN_HP);
     expect(col.broken).toBe(true);
     expect(guardiansOfCol().length).toBe(0);
+  });
+});
+
+// ── Órbita continua de guardianas (bug playtest 2026-07-14, 2º intento) ─────
+// El steering anterior alternaba dos modos discretos (radial/tangente) con un
+// umbral en radio+0.1: la tangente pura espiralaba hacia fuera, cruzaba el
+// umbral y el rumbo pegaba bandazos de ~90° cada pocos ticks para siempre
+// ("los ojos bailan"). El controlador nuevo persigue un punto que avanza
+// sobre la circunferencia exacta: rumbo continuo, radio que converge solo.
+
+describe('Reina: la guardiana orbita con rumbo CONTINUO (sin bandazos, bug playtest 2026-07-14)', () => {
+  /** Mundo con una guardiana y el héroe lejísimos (> QUEEN_GUARDIAN_CHARGE_RANGE): nunca telegrafía. */
+  function makeGuardianWorld() {
+    const world = makeQueenWorldWithColumns();
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+    const guardian = liveLarvae(world).find((l) => !l.chasing)!;
+    expect(guardian).toBeDefined();
+    return { world, guardian };
+  }
+
+  it.each([[1.5], [0.5]])(
+    'empezando a %f× del radio de órbita, converge a ±0.15 del radio en ~5 s y se mantiene',
+    (factor) => {
+      const { world, guardian } = makeGuardianWorld();
+      const events = createEventQueue(64);
+      guardian.position.x = guardian.patrolFrom.x + QUEEN_GUARDIAN_ORBIT_RADIUS * factor;
+      guardian.position.y = guardian.patrolFrom.y;
+
+      advance(world, events, Math.round(5 / FIXED_DT)); // 5 s de asentamiento
+      const distTo = () => Math.hypot(guardian.position.x - guardian.patrolFrom.x, guardian.position.y - guardian.patrolFrom.y);
+      expect(distTo()).toBeGreaterThan(QUEEN_GUARDIAN_ORBIT_RADIUS - 0.15);
+      expect(distTo()).toBeLessThan(QUEEN_GUARDIAN_ORBIT_RADIUS + 0.15);
+
+      // Y SE MANTIENE: todos los ticks de los 2 s siguientes dentro de la banda.
+      for (let i = 0; i < Math.round(2 / FIXED_DT); i++) {
+        advance(world, events, 1);
+        expect(distTo()).toBeGreaterThan(QUEEN_GUARDIAN_ORBIT_RADIUS - 0.15);
+        expect(distTo()).toBeLessThan(QUEEN_GUARDIAN_ORBIT_RADIUS + 0.15);
+      }
+    },
+  );
+
+  it('tras 2 s de asentamiento, el cambio de rumbo por tick es < 0.2 rad en TODOS los ticks de 3 s (antes: saltos de ~π/2)', () => {
+    const { world, guardian } = makeGuardianWorld();
+    const events = createEventQueue(64);
+
+    advance(world, events, Math.round(2 / FIXED_DT)); // asentamiento
+    let prevHeading = Math.atan2(guardian.velocity.y, guardian.velocity.x);
+    const TAU = Math.PI * 2;
+    for (let i = 0; i < Math.round(3 / FIXED_DT); i++) {
+      advance(world, events, 1);
+      const heading = Math.atan2(guardian.velocity.y, guardian.velocity.x);
+      // Δ de rumbo normalizado a (-π, π].
+      let delta = (heading - prevHeading + Math.PI) % TAU;
+      if (delta < 0) delta += TAU;
+      delta -= Math.PI;
+      expect(Math.abs(delta)).toBeLessThan(0.2);
+      prevHeading = heading;
+    }
+  });
+
+  it('el ángulo respecto al ancla avanza de forma monótona (orbita de verdad, no se queda clavada)', () => {
+    const { world, guardian } = makeGuardianWorld();
+    const events = createEventQueue(64);
+
+    advance(world, events, Math.round(2 / FIXED_DT)); // asentamiento
+    const angleTo = () => Math.atan2(guardian.position.y - guardian.patrolFrom.y, guardian.position.x - guardian.patrolFrom.x);
+    let prevAngle = angleTo();
+    let accumulated = 0;
+    const TAU = Math.PI * 2;
+    for (let i = 0; i < Math.round(3 / FIXED_DT); i++) {
+      advance(world, events, 1);
+      const angle = angleTo();
+      let delta = (angle - prevAngle + Math.PI) % TAU;
+      if (delta < 0) delta += TAU;
+      delta -= Math.PI;
+      expect(delta).toBeGreaterThan(0); // avanza SIEMPRE (monótono), nunca retrocede
+      accumulated += delta;
+      prevAngle = angle;
+    }
+    // En 3 s a omega = SPEED/RADIUS avanza ~2.4 rad: exige progreso real.
+    const omega = QUEEN_GUARDIAN_SPEED / QUEEN_GUARDIAN_ORBIT_RADIUS;
+    expect(accumulated).toBeGreaterThan(omega * 3 * 0.7);
   });
 });
 

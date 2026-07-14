@@ -202,17 +202,38 @@ export function queenStepLarvae(world: World, boss: Enemy, dt: number, events: E
     } else {
       // GUARDIANA en reposo: orbita su ancla; si el héroe se acerca y el cooldown
       // venció, telegrafía una embestida (playtest 2026-07-10).
+      //
+      // Controlador de órbita CONTINUO (bug playtest 2026-07-14, 2º intento —
+      // "los ojos bailan"): el steering anterior alternaba entre dos modos
+      // discretos (radial hacia el ancla si dist > radio+0.1, tangente pura si
+      // no). La tangente pura integrada en pasos discretos ESPIRALA hacia
+      // fuera → cruza el umbral → radial → vuelve a entrar → tangente…, y el
+      // rumbo pegaba bandazos de ~90° cada pocos ticks para siempre (los ojos
+      // del dummy, anclados al frente del cuerpo, se recolocaban alrededor de
+      // la cabeza con cada bandazo). Fix: perseguir un punto objetivo que
+      // AVANZA sobre la circunferencia exacta — el rumbo cambia de forma
+      // continua, el radio converge solo (el objetivo siempre está EN el
+      // círculo) y no hay umbral que cruzar.
       larva.bossTimer -= dt;
       const ax = larva.position.x - larva.patrolFrom.x;
       const ay = larva.position.y - larva.patrolFrom.y;
       const dist = Math.hypot(ax, ay);
-      const inv = dist > 1e-6 ? 1 / dist : 0;
-      if (dist > QUEEN_GUARDIAN_ORBIT_RADIUS + 0.1) {
-        dirX = -ax * inv; // acercarse al ancla
-        dirY = -ay * inv;
+      // Ángulo actual respecto al ancla (degenerado en el centro exacto: 0).
+      const theta = dist > 1e-6 ? Math.atan2(ay, ax) : 0;
+      // Velocidad angular equivalente a la lineal de órbita actual.
+      const omega = QUEEN_GUARDIAN_SPEED / QUEEN_GUARDIAN_ORBIT_RADIUS;
+      const thetaNext = theta + omega * dt;
+      const targetX = larva.patrolFrom.x + QUEEN_GUARDIAN_ORBIT_RADIUS * Math.cos(thetaNext);
+      const targetY = larva.patrolFrom.y + QUEEN_GUARDIAN_ORBIT_RADIUS * Math.sin(thetaNext);
+      const tx = targetX - larva.position.x;
+      const ty = targetY - larva.position.y;
+      const tlen = Math.hypot(tx, ty);
+      if (tlen > 1e-6) {
+        dirX = tx / tlen;
+        dirY = ty / tlen;
       } else {
-        dirX = -ay * inv; // tangente (girar alrededor)
-        dirY = ax * inv;
+        dirX = larva.facing.x; // ya exactamente sobre el objetivo: conserva rumbo
+        dirY = larva.facing.y;
       }
       speed = QUEEN_GUARDIAN_SPEED;
       const dxh = world.hero.position.x - larva.position.x;
