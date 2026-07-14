@@ -111,6 +111,33 @@ export const aimDotMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 
+// ── Feedback visual de mejoras sobre el héroe (docs/plans/ECONOMY_PLAN.md F5) ──
+
+/**
+ * Pincho del Erizo de Acero (cuerpo-dano): proporciones pensadas para vivir
+ * como HIJO del mesh del héroe (esfera unitaria), así hereda gratis su
+ * squash/stretch y el escalado extra de Canto Rodado sin cálculo aparte
+ * (ver HeroView). Centrado en la superficie de la esfera unitaria: mitad
+ * incrustado, mitad asomando.
+ */
+export const heroSpikeGeometry = new THREE.ConeGeometry(0.13, 0.4, 6);
+/** Acento "acero" de los pinchos: gris-azulado metálico, legible sobre cualquier color de arma del cuerpo. */
+export const heroSpikeMaterial = new THREE.MeshLambertMaterial({ color: '#c9d3e6' });
+
+/**
+ * Burbuja de Cuarzo (escudo): esfera semitransparente que envuelve la bola
+ * mientras `hero.modifiers.shieldCharges > 0`. MUTABLE (opacidad ajustada
+ * por HeroView según nº de cargas), igual que `heroMaterial`/`aimDotMaterial`
+ * — un único héroe activo a la vez, así que es seguro mutar el material
+ * compartido en vez de recrearlo cada frame.
+ */
+export const heroShieldMaterial = new THREE.MeshBasicMaterial({
+  color: '#8fe3ff',
+  transparent: true,
+  opacity: 0.3,
+  depthWrite: false,
+});
+
 // ── Enemigos (GDD §7): silueta/color inconfundibles por arquetipo ─────────
 
 export const dummyMaterial = new THREE.MeshLambertMaterial({ color: '#ff5964' });

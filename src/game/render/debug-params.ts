@@ -1,11 +1,15 @@
 /**
  * Helpers de depuración por parámetros de URL (herramientas de playtest):
  * `?seed=N` fuerza la semilla de la mazmorra, `?boss=<id|alias>` salta directo
- * a la arena de un jefe y `?phase=2|3` fuerza su fase inicial.
+ * a la arena de un jefe, `?phase=2|3` fuerza su fase inicial y `?upgrades=...`
+ * (F5, docs/plans/ECONOMY_PLAN.md) fuerza niveles de mejora para verificar su
+ * feedback visual sin tener que jugar hasta conseguirlas.
  */
 
 import { getRoomPool } from '@/game/features/dungeon/rooms';
-import type { RoomData } from '@/game/world/types';
+import { applyUpgrade, UPGRADE_POOL, type UpgradeId } from '@/game/session/upgrades';
+import type { EventQueue } from '@/engine/events';
+import type { RoomData, World } from '@/game/world/types';
 
 /** Semilla forzada vía ?seed=N (para verificar una mazmorra concreta); null si no hay o no es un entero. */
 export function readForcedSeed(): number | null {
@@ -44,4 +48,63 @@ export function readForcedBossPhase(): 2 | 3 | null {
   if (raw === '2') return 2;
   if (raw === '3') return 3;
   return null;
+}
+
+/**
+ * Tope defensivo para el nivel forzado de mejoras SIN `maxLevel` finito
+ * (escudo: `maxLevel` Infinity) — sin esto, un `?upgrades=escudo:999999999`
+ * en la URL dispararía cientos de miles de `applyUpgrade` al crear la sesión
+ * (ver aviso de F4 sobre bucles acotados por `maxLevel`).
+ */
+const UNCAPPED_FORCED_LEVEL_LIMIT = 20;
+
+/**
+ * Parsea el valor de `?upgrades=id:nivel,id:nivel,...` (F5, herramienta de
+ * playtest/verificación: `?upgrades=cuerpo-dano:3,escudo:2,flecha-dano:1`) a
+ * un mapa `UpgradeId → nivel`. Ids que no existen en `UPGRADE_POOL` se
+ * ignoran; el nivel se clampa a `maxLevel` de la mejora (o a
+ * `UNCAPPED_FORCED_LEVEL_LIMIT` si `maxLevel` es Infinity). Función PURA (no
+ * toca `window`) para poder testear el parseo sin mockear la URL.
+ */
+export function parseForcedUpgrades(raw: string | null): Partial<Record<UpgradeId, number>> {
+  const result: Partial<Record<UpgradeId, number>> = {};
+  if (!raw) return result;
+  for (const entry of raw.split(',')) {
+    const [idRaw, levelRaw] = entry.split(':');
+    const def = UPGRADE_POOL.find((d) => d.id === idRaw);
+    if (!def) continue;
+    const level = Number.parseInt(levelRaw, 10);
+    if (!Number.isFinite(level) || level <= 0) continue;
+    const cap = Number.isFinite(def.maxLevel) ? def.maxLevel : UNCAPPED_FORCED_LEVEL_LIMIT;
+    result[def.id] = Math.min(level, cap);
+  }
+  return result;
+}
+
+/** Mapa de mejoras forzadas vía `?upgrades=...` (F5); `{}` si no hay parámetro. Solo dev (herramienta de playtest). */
+export function readForcedUpgrades(): Partial<Record<UpgradeId, number>> {
+  return parseForcedUpgrades(new URLSearchParams(window.location.search).get('upgrades'));
+}
+
+/**
+ * Aplica el mapa de `readForcedUpgrades`/`parseForcedUpgrades` a un mundo
+ * recién creado, subiendo cada mejora de 1 en 1 nivel vía `applyUpgrade` (así
+ * `upgradeLevels` Y los modificadores del héroe quedan coherentes, igual que
+ * si se hubiesen comprado/recibido en el juego real). Pensada para llamarse
+ * UNA sola vez justo tras crear la sesión (GameRoot); no-op si `forced` está
+ * vacío. Los niveles ya llegan clampados desde `parseForcedUpgrades`, así que
+ * el bucle interno siempre es acotado (≤ `maxLevel` o `UNCAPPED_FORCED_LEVEL_LIMIT`).
+ */
+export function applyForcedUpgrades(
+  world: World,
+  events: EventQueue,
+  forced: Partial<Record<UpgradeId, number>>,
+): void {
+  for (const [id, targetLevel] of Object.entries(forced) as [UpgradeId, number | undefined][]) {
+    const def = UPGRADE_POOL.find((d) => d.id === id);
+    if (!def || !targetLevel) continue;
+    for (let i = 0; i < targetLevel; i++) {
+      applyUpgrade(world, def, events);
+    }
+  }
 }

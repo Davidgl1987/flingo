@@ -23,6 +23,14 @@
  * Presupuesto: nada de `new` en useFrame; el zigzag/chispas usan un número
  * FIJO de sub-meshes por slot (creados una vez en el JSX), mutados con
  * position/rotation/scale/visible cada frame.
+ *
+ * Identificador visual de mejoras (F5, docs/plans/ECONOMY_PLAN.md): la flecha
+ * se ensancha por nivel de Colmillo de Hierro (flecha-dano) — SOLO en la
+ * escala transversal (ejes X/Y del grupo, perpendiculares al vuelo), nunca en
+ * el largo. El hechizo (Orbe Voraz / hechizo-dano) NO tiene lógica propia
+ * aquí: su radio de sim ya crece con `spellRadiusBonus` (`p.radius`, ver
+ * combat.ts) y `spellGroup.scale.setScalar(p.radius)` de más abajo ya lo
+ * refleja — añadir otro factor duplicaría el efecto.
  */
 
 import { useFrame } from '@react-three/fiber';
@@ -30,7 +38,9 @@ import { useRef } from 'react';
 import type { Group, Mesh } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Projectile } from '@/game/world/types';
+import { getUpgradeLevel } from '@/game/session/upgrades';
 import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileMaterial, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCone, unitSphere } from '@/game/render/assets';
+import { arrowWidthScaleForLevel } from './upgrade-visuals';
 
 type ProjectileKind = Projectile['kind'];
 
@@ -196,7 +206,12 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
     const arrowGroup = arrowGroupRef.current;
     if (arrowGroup) {
       arrowGroup.visible = p.kind === 'arrow';
-      if (p.kind === 'arrow') arrowGroup.scale.setScalar(p.radius);
+      if (p.kind === 'arrow') {
+        // Colmillo de Hierro (F5): ensancha SOLO la sección transversal
+        // (X/Y del grupo), el largo (Z, dirección de vuelo) se queda en p.radius.
+        const widthScale = p.radius * arrowWidthScaleForLevel(getUpgradeLevel(session.world.hero, 'flecha-dano'));
+        arrowGroup.scale.set(widthScale, widthScale, p.radius);
+      }
     }
     const spellGroup = spellGroupRef.current;
     if (spellGroup) {

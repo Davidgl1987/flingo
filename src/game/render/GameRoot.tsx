@@ -18,7 +18,7 @@
 import { Canvas } from '@react-three/fiber';
 import { useCallback, useState } from 'react';
 import { getRoomPool } from '@/game/features/dungeon/rooms';
-import { readForcedBossPhase, readForcedBossRoom, readForcedSeed } from './debug-params';
+import { applyForcedUpgrades, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades } from './debug-params';
 import { AimInput } from '@/game/features/hero/AimInput';
 import { ParticleView } from '@/game/features/effects/ParticleView';
 import { ShockwaveView } from '@/game/features/effects/ShockwaveView';
@@ -70,15 +70,26 @@ export function GameRoot({
 }) {
   // useState con inicializador: la sesión se crea una sola vez y nunca causa re-render.
   const [session] = useState(() => {
-    if (playtestRoom) return createGameSession(playtestRoom);
-    const bossRoom = readForcedBossRoom();
-    if (bossRoom) {
-      const bossSession = createGameSession(bossRoom);
-      const phase = readForcedBossPhase();
-      if (phase) forceBossPhase(bossSession.world, phase);
-      return bossSession;
+    let s: GameSession;
+    if (playtestRoom) {
+      s = createGameSession(playtestRoom);
+    } else {
+      const bossRoom = readForcedBossRoom();
+      if (bossRoom) {
+        s = createGameSession(bossRoom);
+        const phase = readForcedBossPhase();
+        if (phase) forceBossPhase(s.world, phase);
+      } else {
+        s = createDungeonGameSession(getRoomPool(), readForcedSeed());
+      }
     }
-    return createDungeonGameSession(getRoomPool(), readForcedSeed());
+    // Herramienta de playtest/verificación (F5, docs/plans/ECONOMY_PLAN.md):
+    // `?upgrades=cuerpo-dano:3,escudo:2,flecha-dano:1` fuerza niveles de
+    // mejora justo tras crear la sesión, vía `applyUpgrade` (sube nivel Y
+    // modificadores coherentes, como una compra/recompensa real). No-op si
+    // no hay parámetro.
+    applyForcedUpgrades(s.world, s.events, readForcedUpgrades());
+    return s;
   });
   // Secuencia de run: cambia solo al reiniciar tras game-over/victoria (remonta el canvas).
   const [runSeq, setRunSeq] = useState(0);
