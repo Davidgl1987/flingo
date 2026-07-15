@@ -402,8 +402,25 @@ export interface BossState {
   readonly bossId: BossId;
 }
 
-/** `'shopping'` (docs/plans/ECONOMY_PLAN.md F4): ShopModal abierto tras tocar al tendero; misma pausa de sim que el resto de fases != 'playing'. */
-export type GamePhase = 'playing' | 'paused' | 'boss-reward' | 'dungeon-cleared' | 'game-over' | 'victory' | 'shopping';
+/**
+ * `'shopping'` (docs/plans/ECONOMY_PLAN.md F4): ShopModal abierto tras tocar
+ * al tendero; misma pausa de sim que el resto de fases != 'playing'.
+ * `'boss-victory-pause'` (playtest 2026-07-15, David: "al acabar con un jefe
+ * sale inmediatamente la ventana de siguiente mazmorra, debería salir con un
+ * poco de retraso, para poder ver el efecto al matar al jefe y quizá algún
+ * gesto de victoria antes de la modal que lo tapa todo"): fase transitoria
+ * entre `boss-defeated` y la apertura de BossRewardModal/VictoryModal — ver
+ * `BOSS_VICTORY_PAUSE_DURATION` en world/step.ts.
+ */
+export type GamePhase =
+  | 'playing'
+  | 'paused'
+  | 'boss-victory-pause'
+  | 'boss-reward'
+  | 'dungeon-cleared'
+  | 'game-over'
+  | 'victory'
+  | 'shopping';
 
 export interface RunStats {
   roomsCleared: number;
@@ -468,6 +485,18 @@ export interface World {
   bossDefeatedEmitted: Set<string>;
   /** Tiempo de simulación acumulado (s). */
   time: number;
+  /**
+   * world.time en el que termina la fase 'boss-victory-pause' (0 = no hay
+   * pausa en curso). `stepWorld` compara contra `world.time` cada tick para
+   * decidir cuándo saltar a `bossVictoryNextPhase` (ver
+   * BOSS_VICTORY_PAUSE_DURATION en world/step.ts).
+   */
+  bossVictoryPauseUntil: number;
+  /**
+   * Fase destino ('boss-reward' o 'victory') a la que salta `stepWorld` al
+   * cumplirse `bossVictoryPauseUntil`. null fuera de 'boss-victory-pause'.
+   */
+  bossVictoryNextPhase: 'boss-reward' | 'victory' | null;
   /**
    * Run multi-mazmorra (GDD §10, feature de encadenado de jefes): true si esta
    * es la última mazmorra de la secuencia de jefes de la run. Al limpiar la

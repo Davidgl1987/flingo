@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { generateDungeon } from './dungeon';
 import { createDungeonWorld } from './dungeon-world';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
-import { stepWorld } from '@/game/world/step';
+import { BOSS_VICTORY_PAUSE_DURATION, stepWorld } from '@/game/world/step';
 import { DOOR_CONTACT_MARGIN, DOOR_TOUCH_MARGIN } from '@/game/world/constants';
 import type { EnemySpawn, RoomData, RoomTag } from '@/game/world/types';
 
@@ -68,6 +68,27 @@ function collect(events: ReturnType<typeof createEventQueue>): GameEvent['type']
   const types: GameEvent['type'][] = [];
   drainEvents(events, (e) => types.push(e.type));
   return types;
+}
+
+/**
+ * Avanza `stepWorld` hasta que `world.phase` deje de ser 'boss-victory-pause'
+ * (retraso de clímax, playtest 2026-07-15). Usa un bucle guiado por el propio
+ * `world.phase` en vez de un nº de ticks calculado a mano: la suma repetida
+ * de FIXED_DT (1/60, fracción periódica en binario) arrastra error de coma
+ * flotante, así que `BOSS_VICTORY_PAUSE_DURATION / FIXED_DT` ticks exactos NO
+ * basta (cruza el umbral un tick más tarde en la práctica). `maxTicks` es una
+ * red de seguridad anti-bucle infinito, no el mecanismo real de parada.
+ */
+function advanceThroughBossVictoryPause(
+  world: ReturnType<typeof createDungeonWorld>,
+  events: ReturnType<typeof createEventQueue>,
+  maxTicks = 300,
+): void {
+  let guard = 0;
+  while (world.phase === 'boss-victory-pause' && guard < maxTicks) {
+    stepWorld(world, events);
+    guard++;
+  }
 }
 
 describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
@@ -251,7 +272,7 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     }
   });
 
-  it('limpiar la sala del jefe pone la fase en victory', () => {
+  it('limpiar la sala del jefe pone la fase en boss-victory-pause y, tras BOSS_VICTORY_PAUSE_DURATION de tiempo de sim, en victory (playtest 2026-07-15: retraso de clímax)', () => {
     const dungeon = generateDungeon(10, makePool());
     const world = createDungeonWorld(dungeon, 10);
     const events = createEventQueue(64);
@@ -272,11 +293,32 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
 
     stepWorld(world, events);
 
+    // Retraso de clímax (playtest 2026-07-15, David): la fase NO salta
+    // directa a 'victory' — pasa primero por 'boss-victory-pause', sin
+    // emitir todavía el evento 'victory' (el enemigo de esta sala de jefe es
+    // un 'dummy' de fixture, no un jefe real con kind==='boss', así que aquí
+    // no hay 'boss-defeated' que comprobar; ese clímax se cubre en
+    // lifecycle.test.ts con un jefe real).
+    expect(world.phase).toBe('boss-victory-pause');
+    expect(collect(events)).not.toContain('victory');
+
+    // Avanza hasta bien ANTES del umbral (medio segundo de margen para no
+    // depender de redondeos de coma flotante en la suma de FIXED_DT): sigue
+    // congelado, sin transición.
+    const SAFETY_MARGIN = 0.5;
+    while (world.time < BOSS_VICTORY_PAUSE_DURATION - SAFETY_MARGIN) {
+      stepWorld(world, events);
+    }
+    expect(world.phase).toBe('boss-victory-pause');
+    expect(collect(events)).not.toContain('victory');
+
+    // Sigue avanzando hasta cruzar el umbral: ahora sí salta a 'victory' y emite su evento.
+    advanceThroughBossVictoryPause(world, events);
     expect(world.phase).toBe('victory');
     expect(collect(events)).toContain('victory');
   });
 
-  it('limpiar la sala del jefe pone la fase en boss-reward si NO es la mazmorra final (run multi-mazmorra, docs/plans/ECONOMY_PLAN.md F3)', () => {
+  it('limpiar la sala del jefe pone la fase en boss-reward (tras la pausa) si NO es la mazmorra final (run multi-mazmorra, docs/plans/ECONOMY_PLAN.md F3)', () => {
     const dungeon = generateDungeon(10, makePool());
     const world = createDungeonWorld(dungeon, 10);
     // Run multi-mazmorra (GDD §10): quedan más jefes por delante de esta mazmorra.
@@ -295,6 +337,12 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     }
 
     stepWorld(world, events);
+
+    expect(world.phase).toBe('boss-victory-pause');
+    expect(collect(events)).not.toContain('dungeon-cleared');
+
+    // Agota la pausa de clímax en tiempo de sim.
+    advanceThroughBossVictoryPause(world, events);
 
     expect(world.phase).toBe('boss-reward');
     // El evento 'dungeon-cleared' se conserva aunque la fase real sea

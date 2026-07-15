@@ -67,6 +67,19 @@ const SQUASH_FLATTEN = 0.62;
 const SHIELD_BUBBLE_SCALE = 1.4;
 
 /**
+ * Gesto de victoria (playtest 2026-07-15, David: "quizá algún gesto de
+ * victoria antes de la modal") durante 'boss-victory-pause' (world/step.ts,
+ * BOSS_VICTORY_PAUSE_DURATION): saltitos suaves. SOLO render — no toca
+ * velocity/posición de la sim, y usa `world.time` (no un reloj propio),
+ * mismo patrón determinista que el bob de items (ItemView.tsx). abs(sin) da
+ * un rebote que siempre sale del suelo hacia arriba (nunca se hunde por
+ * debajo de la posición de reposo), corte limpio al abrirse el modal porque
+ * `world.phase` deja de ser 'boss-victory-pause' ese mismo frame.
+ */
+const VICTORY_HOP_HEIGHT = 0.16;
+const VICTORY_HOP_FREQUENCY = 6.5; // rad/s: ritmo alegre, no frenético
+
+/**
  * Direcciones (en la esfera unitaria) de los 12 pinchos del Erizo de Acero
  * (F5): 3 "anillos ecuatoriales" de 4 pinchos, con un pequeño desfase de
  * ángulo entre anillos para que no queden alineados verticalmente. El orden
@@ -215,9 +228,13 @@ export function HeroView({ session }: { session: GameSession }) {
     const invulnerable = world.time < hero.invulnerableUntil;
     const blinkOn = !invulnerable || Math.floor(world.time * IFRAME_BLINK_HZ) % 2 === 0;
 
+    // Saltito de victoria: ver comentario de VICTORY_HOP_HEIGHT más arriba.
+    const victoryHop =
+      world.phase === 'boss-victory-pause' ? Math.abs(Math.sin(world.time * VICTORY_HOP_FREQUENCY)) * VICTORY_HOP_HEIGHT : 0;
+
     if (body) {
       body.visible = blinkOn;
-      body.position.set(x, visualRadius, z);
+      body.position.set(x, visualRadius + victoryHop, z);
 
       if (world.time < squashUntil.current) {
         // Aplastamiento: bajo y ancho, conservando volumen aproximado.

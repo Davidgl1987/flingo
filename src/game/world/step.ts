@@ -41,6 +41,19 @@ function currentPhase(world: World): GamePhase {
 }
 
 /**
+ * Duración en tiempo de SIM (no wall-clock/setTimeout) de la fase
+ * 'boss-victory-pause' (ver stepDungeonRoomClear más abajo): playtest
+ * 2026-07-15 (David, run completa de 4 jefes) — "debería salir con un poco
+ * de retraso, para poder ver el efecto al matar al jefe y quizá algún gesto
+ * de victoria antes de la modal que lo tapa todo". 2.5s deja tiempo de sobra
+ * para que se aprecien el hit-stop largo (BOSS_DEFEATED_HIT_STOP_DURATION,
+ * reactToEvent.ts) + el burst de partículas doradas + el saltito de victoria
+ * del héroe (HeroView.tsx) antes de que el modal lo tape todo, sin que la
+ * espera se sienta como un cuelgue.
+ */
+export const BOSS_VICTORY_PAUSE_DURATION = 2.5;
+
+/**
  * Enemigos con hp<=0 en el tick anterior, para no soltar moneda dos veces por
  * el mismo cadáver. Suelta `COIN_DROPS_BY_KIND[enemy.kind]` monedas esparcidas
  * en un anillo alrededor del cadáver (offsets deterministas vía `world.rng`).
@@ -110,7 +123,10 @@ function stepDungeonRoomClear(world: World, events: EventQueue): void {
   if (runtime.id === dungeon.bossRoomId) {
     // GDD §15.1 punto 8: el jefe derrotado abre también su propia puerta
     // (sellada mientras vivía, ver stepBossDoorSeal) — la victoria no deja al
-    // héroe encerrado.
+    // héroe encerrado. Se abre YA, no al final de la pausa de clímax: no hay
+    // ganancia jugable en retenerla (el mundo está congelado durante la
+    // pausa, ver stepWorld) y así, si algún día la pausa deja de congelar la
+    // sim, la puerta ya está lista.
     for (const door of runtime.doors) {
       if (door.requiresKey) openConnection(world, door.connectionIndex);
     }
@@ -120,15 +136,24 @@ function stepDungeonRoomClear(world: World, events: EventQueue): void {
     // 1). Si no, hay más jefes por delante: recompensa gratis primero
     // ('boss-reward'); `chooseBossReward` (session.ts) pasa a 'dungeon-cleared'
     // tras la elección, que a su vez encadena la siguiente mazmorra
-    // (advanceToNextDungeon). Se conserva el evento 'dungeon-cleared' (los
-    // effects ya reaccionan a él) aunque la fase real sea 'boss-reward'.
-    if (world.isFinalDungeon) {
-      world.phase = 'victory';
-      pushEvent(events, 'victory', world.hero.position.x, world.hero.position.y, 1);
-    } else {
-      world.phase = 'boss-reward';
-      pushEvent(events, 'dungeon-cleared', world.hero.position.x, world.hero.position.y, 1);
-    }
+    // (advanceToNextDungeon).
+    //
+    // Playtest 2026-07-15 (David, run completa): "al acabar con un jefe sale
+    // inmediatamente la ventana de siguiente mazmorra, debería salir con un
+    // poco de retraso, para poder ver el efecto al matar al jefe y quizá
+    // algún gesto de victoria antes de la modal que lo tapa todo". En vez de
+    // saltar directo a 'boss-reward'/'victory' (lo que dispara el modal ese
+    // mismo frame, tapando el clímax de 'boss-defeated' que apenas empieza),
+    // se entra en 'boss-victory-pause': stepWorld la trata como cualquier
+    // fase != 'playing' (mundo congelado, solo avanza el reloj) durante
+    // BOSS_VICTORY_PAUSE_DURATION segundos de tiempo de SIM, y solo entonces
+    // salta a la fase real y emite el evento 'victory'/'dungeon-cleared' (se
+    // difieren junto con la fase para que ambos lleguen sincronizados al
+    // frame en que el modal aparece; los effects ya reaccionan a
+    // 'dungeon-cleared' aunque la fase real sea 'boss-reward').
+    world.phase = 'boss-victory-pause';
+    world.bossVictoryPauseUntil = world.time + BOSS_VICTORY_PAUSE_DURATION;
+    world.bossVictoryNextPhase = world.isFinalDungeon ? 'victory' : 'boss-reward';
   }
 }
 
@@ -212,6 +237,28 @@ function stepRoomTransition(world: World, events: EventQueue): void {
 }
 
 export function stepWorld(world: World, events: EventQueue): void {
+  // 'boss-victory-pause' (ver stepDungeonRoomClear/BOSS_VICTORY_PAUSE_DURATION
+  // más arriba): congelada igual que cualquier fase != 'playing' de abajo,
+  // pero con un reloj propio que, al cumplirse, salta a la fase real
+  // ('boss-reward'/'victory') y AHORA sí emite su evento — se difiere junto
+  // con la fase para que el modal y el evento lleguen sincronizados al mismo
+  // frame, en vez de disparar el evento (y su burst dorado) mientras el
+  // clímax de 'boss-defeated' todavía está en pantalla.
+  if (world.phase === 'boss-victory-pause') {
+    world.time += FIXED_DT;
+    if (world.time >= world.bossVictoryPauseUntil) {
+      const nextPhase = world.bossVictoryNextPhase ?? 'boss-reward';
+      world.phase = nextPhase;
+      world.bossVictoryNextPhase = null;
+      if (nextPhase === 'victory') {
+        pushEvent(events, 'victory', world.hero.position.x, world.hero.position.y, 1);
+      } else {
+        pushEvent(events, 'dungeon-cleared', world.hero.position.x, world.hero.position.y, 1);
+      }
+    }
+    return;
+  }
+
   // La sim se pausa con un modal abierto (pausa/mazmorra superada) o tras la
   // muerte/victoria: solo avanza el reloj para que los timers de UI no se
   // congelen raro al volver.

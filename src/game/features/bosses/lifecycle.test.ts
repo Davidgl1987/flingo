@@ -311,7 +311,7 @@ describe('sellado de puerta de la sala de jefe (GDD §15.1 punto 7)', () => {
     expect(collectTypes(events)).not.toContain('boss-door-sealed');
   });
 
-  it('integración vía stepWorld: matar al jefe limpia la sala, emite boss-defeated y victory, y reabre su puerta', () => {
+  it('integración vía stepWorld: matar al jefe limpia la sala, emite boss-defeated de inmediato y victory tras la pausa de clímax (playtest 2026-07-15), y reabre su puerta ya', () => {
     const dungeon = generateDungeon(12, makeDungeonPool());
     const world = createDungeonWorld(dungeon, 12);
     initBossEnemies(world);
@@ -333,12 +333,30 @@ describe('sellado de puerta de la sala de jefe (GDD §15.1 punto 7)', () => {
 
     stepWorld(world, events);
 
+    // El clímax (boss-defeated) es inmediato; la puerta también se reabre ya
+    // (GDD §15.1 punto 8). La transición de fase a 'victory' (y su modal) se
+    // retrasa: retraso de clímax pedido en playtest 2026-07-15 ("debería
+    // salir con un poco de retraso... antes de la modal que lo tapa todo").
     const types = collectTypes(events);
     expect(types).toContain('boss-defeated');
-    expect(types).toContain('victory');
-    expect(world.phase).toBe('victory');
+    expect(types).not.toContain('victory');
+    expect(world.phase).toBe('boss-victory-pause');
     const doorAfter = world.roomRuntimes.get(dungeon.bossRoomId)!.doors[0];
     expect(doorAfter.open).toBe(true);
+
+    // Agota la pausa en tiempo de sim: ahora sí llega la fase y el evento
+    // 'victory'. Bucle guiado por world.phase (no un nº de ticks calculado a
+    // mano): la suma repetida de FIXED_DT arrastra error de coma flotante, así
+    // que BOSS_VICTORY_PAUSE_DURATION/FIXED_DT ticks exactos cruzan el umbral
+    // un tick tarde en la práctica. `guard` es solo red anti-bucle infinito.
+    let guard = 0;
+    while (world.phase === 'boss-victory-pause' && guard < 300) {
+      stepWorld(world, events);
+      guard++;
+    }
+
+    expect(collectTypes(events)).toContain('victory');
+    expect(world.phase).toBe('victory');
   });
 });
 

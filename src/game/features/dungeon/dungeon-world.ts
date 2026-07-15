@@ -251,6 +251,8 @@ export function createDungeonWorld(dungeon: DungeonMap, seed: number = dungeon.s
     deadEnemiesDropped: new Set(),
     bossDefeatedEmitted: new Set(),
     time: 0,
+    bossVictoryPauseUntil: 0,
+    bossVictoryNextPhase: null,
     dungeon,
     roomRuntimes,
     currentRoomId: dungeon.startRoomId,

@@ -272,6 +272,8 @@ export function createWorld(room: RoomData, seed = 1): World {
     deadEnemiesDropped: new Set(),
     bossDefeatedEmitted: new Set(),
     time: 0,
+    bossVictoryPauseUntil: 0,
+    bossVictoryNextPhase: null,
     dungeon: null,
     roomRuntimes: new Map(),
     currentRoomId: room.id,
