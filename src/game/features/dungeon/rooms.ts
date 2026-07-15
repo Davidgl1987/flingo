@@ -116,9 +116,10 @@ const SERIES_LEVEL_JSON: readonly unknown[] = [
  * §15.3), `boss-prisma.json` (Fase B3, GDD §15.4) y `boss-storm.json` (Fase
  * B4, GDD §15.5) ya están en `SERIES_LEVEL_JSON` con `boss` definido:
  * `deriveBossSequence` (session.ts) encadena una mazmorra por cada jefe de
- * diseño disponible en el pool, en orden aleatorio por semilla (GDD §15.1
- * punto 9: "un pool de jefes, uno por mazmorra, encadenados dentro de la
- * misma run"). `boss-den.json` sigue en el pool con tag 'jefe' pero SIN
+ * diseño disponible en el pool, en el orden fijo de dificultad
+ * `BOSS_DIFFICULTY_ORDER` (registry.ts; GDD §15.1 punto 9: "un pool de jefes,
+ * uno por mazmorra, encadenados dentro de la misma run"). `boss-den.json`
+ * sigue en el pool con tag 'jefe' pero SIN
  * `boss` — queda inerte (nunca se sortea para ningún rol) a propósito: con
  * los 4 jefes de diseño ya cubiertos (B1-B4), no hay un 5.º jefe que colgarle;
  * se conserva sin tocar por ser una decisión ya tomada en B0.

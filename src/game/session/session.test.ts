@@ -99,12 +99,11 @@ describe('bossSequence (run multi-mazmorra, GDD §10)', () => {
     expect(a.bossSequence).toEqual(b.bossSequence);
   });
 
-  it('el orden puede variar entre semillas distintas', () => {
-    const orders = new Set<string>();
+  it('el orden es SIEMPRE el orden fijo de dificultad (playtest 2026-07-15: La Tormenta la más difícil, siempre última), sea cual sea la semilla', () => {
+    const expected = ['guardian', 'queen', 'prisma', 'storm'];
     for (let seed = 0; seed < 30; seed++) {
-      orders.add(createDungeonGameSession(seriesRooms, seed).bossSequence.join(','));
+      expect(createDungeonGameSession(seriesRooms, seed).bossSequence).toEqual(expected);
     }
-    expect(orders.size).toBeGreaterThan(1);
   });
 
   it('la mazmorra del primer stage tiene la sala del primer jefe de la secuencia', () => {
@@ -210,7 +209,7 @@ describe('shopStock (tienda, docs/plans/ECONOMY_PLAN.md F4)', () => {
 });
 
 describe('restartSession (run multi-mazmorra, GDD §10)', () => {
-  it('vuelve a stageIndex 0 y re-baraja bossSequence', () => {
+  it('vuelve a stageIndex 0 y recalcula bossSequence (mismo orden fijo de dificultad)', () => {
     const session = createDungeonGameSession(seriesRooms, 42);
     advanceToNextDungeon(session);
     expect(session.stageIndex).toBe(1);
@@ -218,7 +217,7 @@ describe('restartSession (run multi-mazmorra, GDD §10)', () => {
     restartSession(session);
 
     expect(session.stageIndex).toBe(0);
-    expect(session.bossSequence.length).toBe(4);
+    expect(session.bossSequence).toEqual(['guardian', 'queen', 'prisma', 'storm']);
     const bossRoom = session.world.dungeon!.rooms.find((r) => r.room.id === session.world.dungeon!.bossRoomId)!;
     expect(bossRoom.room.boss).toBe(session.bossSequence[0]);
   });

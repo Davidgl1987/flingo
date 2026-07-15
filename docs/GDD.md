@@ -16,7 +16,7 @@ Eres una bola héroe en una mazmorra vista desde arriba. No caminas: **te lanzas
 4. **Juice constante.** Cada impacto, muerte y rebote se siente: sacudida, partículas, flash, pausa de impacto.
 5. **Contenido editable.** Las salas se crean en un editor visual y se combinan proceduralmente en mazmorras.
 
-**Sesión objetivo:** una run encadena varias mazmorras de ~6 salas cada una (una por cada jefe del pool, en orden aleatorio), muerte permanente, mejoras ganadas al derrotar jefes y compradas en tienda, jefe final de la run da la victoria.
+**Sesión objetivo:** una run encadena varias mazmorras de ~6 salas cada una (una por cada jefe del pool, en orden fijo de dificultad creciente — la mazmorra en sí es aleatoria; ver §10.2), muerte permanente, mejoras ganadas al derrotar jefes y compradas en tienda, jefe final de la run da la victoria.
 
 ---
 
@@ -181,7 +181,7 @@ Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos r
 ### 10.2 Mazmorra procedural
 
 - Cada **mazmorra** encadena **~6 salas** elegidas de un pool (salas hechas a mano en el editor + salas incluidas de serie): inicio → combates → sala de la llave → … → jefe, más la sala de tienda colgada aparte (ver "Tienda" más abajo).
-- Una **run** encadena **varias mazmorras**, una por cada jefe del pool de jefes en orden aleatorio (§15.1, punto 9): al derrotar el jefe de una mazmorra que no es la última, se genera la siguiente mazmorra (mapa nuevo, misma regla de ~6 salas) y el héroe conserva vida, mejoras y monedero (§10.3).
+- Una **run** encadena **varias mazmorras**, una por cada jefe del pool de jefes en orden FIJO de dificultad creciente (§15.1, punto 9; decisión tomada tras playtest de David 2026-07-15): al derrotar el jefe de una mazmorra que no es la última, se genera la siguiente mazmorra (mapa nuevo y ALEATORIO, misma regla de ~6 salas) y el héroe conserva vida, mejoras y monedero (§10.3).
 - Las salas se conectan por puertas alineadas formando un **mapa con al menos un ciclo** (que se pueda rodear, no un pasillo lineal), y el jefe como callejón final.
 - **Reglas de validación del mapa:** todo alcanzable; el jefe solo accesible con la llave; la llave alcanzable sin pasar por el jefe; sin solapes de salas.
 - **Flujo de puertas:** las puertas de una sala se abren al limpiarla (matar a todos sus enemigos). Cruzar una puerta te lleva físicamente a la sala contigua (mundo continuo, sin pantalla de carga). Aviso con el nombre de la sala al entrar.
@@ -317,7 +317,7 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 6. **Ningún ataque de jefe mata de un golpe con vida llena.** Techo de daño de un único impacto: 60 % de la vida máxima del héroe en la fase 1 (escala un poco en fases posteriores, nunca hasta el 100 %). Perder debe sentirse "me confié", nunca "no pude hacer nada".
 7. **La puerta de la sala del jefe se sella al entrar** y solo se abre al vencerlo — no hay ir y volver a por mejoras a mitad combate. Si mueres, la run entera se reinicia como siempre (sin checkpoint intra-jefe): coherente con la permadeath del resto del juego.
 8. **La derrota del jefe es el clímax audiovisual de la mazmorra**: la mayor combinación de partículas, sacudida de cámara y pausa de impacto de todo el juego, una cosecha grande de monedas, y la puerta trasera que abre paso. Si el jefe **no** es el último de la run, además se ofrece la recompensa gratis de mejora (§11) antes de pasar a la mazmorra siguiente; el jefe final de la run no ofrece mejora — da la victoria directamente (§10.3), porque no habría mazmorra donde usarla.
-9. **Un pool de cuatro jefes, uno por mazmorra, encadenados dentro de la misma run** *(actualizado; antes cada run sorteaba un único jefe)*: los jefes de esta sección entran como salas de la etiqueta "jefe" en el pool de la mazmorra procedural. Una run baraja los jefes de diseño DISPONIBLES en el pool y encadena una mazmorra por cada uno, en ese orden — el jugador se enfrenta a todos antes de que la run termine, cada vez con una mazmorra nueva alrededor (hoy Guardián y Reina; Prisma y Tormenta entran solos al implementarse, Fases B3-B4 de docs/plans/BOSSES_PLAN.md). Cada jefe enseña un pilar distinto: rebote/embestida (Guardián), gestión de espacio (Reina), dominio de las 3 armas (Prisma), esquive puro (Tormenta).
+9. **Un pool de cuatro jefes, uno por mazmorra, encadenados dentro de la misma run** *(actualizado; antes cada run sorteaba un único jefe)*: los jefes de esta sección entran como salas de la etiqueta "jefe" en el pool de la mazmorra procedural. Una run encadena una mazmorra por cada jefe de diseño DISPONIBLE en el pool, en **orden FIJO de dificultad creciente: Guardián → Reina → Prisma → Tormenta** *(actualizado tras playtest de David 2026-07-15: "como este [La Tormenta] es el más difícil, me gustaría que estuviera el último, así que mejor los jefes por orden, y entre jefes, mazmorras aleatorias"; antes el orden se barajaba con la semilla de la run)* — el jugador se enfrenta a todos antes de que la run termine, cada vez con una mazmorra ALEATORIA nueva alrededor. Cada jefe enseña un pilar distinto: rebote/embestida (Guardián), gestión de espacio (Reina), dominio de las 3 armas (Prisma), esquive puro (Tormenta) — y ese mismo orden es también el de dificultad creciente.
 
 ### 15.2 Guardián de Canto — el jefe de embestida
 
@@ -408,6 +408,6 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 
 **Hazards:** foso 1 daño, margen de perdón 0.18 u, caída ~1.05 s · pinchos 1 daño + empuje 5.2 u/s · barril daño 3, radio 2.0 · barro ×0.92/tick · boost +8 u/s²
 
-**Mundo:** ~6 salas/mazmorra · puerta 2.0 u de ancho · muro 0.42 u · una mazmorra por jefe de la run, encadenadas en orden aleatorio
+**Mundo:** ~6 salas/mazmorra · puerta 2.0 u de ancho · muro 0.42 u · una mazmorra por jefe de la run, jefes en orden fijo de dificultad (Guardián → Reina → Prisma → Tormenta, playtest 2026-07-15), mazmorras entre jefes aleatorias
 
 **Economía (§9, §10.4, §11):** drops de moneda al morir por dureza — Dummy 1, Chaser/Trail 2, Spike/Shooter 3, jefe 10 (esparcidas radio 0.25–0.6 u) · recompensa de jefe no final: 1 de hasta 3 (una por categoría de ataque) · stock de tienda: 4 mejoras sorteadas por mazmorra · precio cuerpo/flecha/hechizo: nivel × 10 (10/20/30) · precio escudo 8 fijo · precio corazón 12 fijo · precio imán 5 + nivel × 5 (10/15/20) · imán: radio por nivel 2.5/4/6 u, velocidad de atracción 7 u/s · comprar resta el precio a la puntuación (clamp 0)

@@ -19,6 +19,19 @@ import { stormOnInit, stormOnPhaseChanged, stormStepPattern } from '@/game/featu
 import { testBossStepPattern } from '@/game/features/bosses/test-boss/pattern';
 import type { BossDef } from './types';
 
+/**
+ * Orden canónico de dificultad de los jefes de diseño (`test-boss` queda
+ * fuera, es el jefe trivial de dev/tests — ver rooms.ts). Feedback de
+ * playtest de David (2026-07-15): "como este [La Tormenta] es el más
+ * difícil, me gustaría que estuviera el último, así que mejor los jefes por
+ * orden, y entre jefes, mazmorras aleatorias". Vive aquí (junto a
+ * `BOSS_DEFS`, la tabla de referencia de todos los jefes) en vez de en
+ * session.ts, porque es una propiedad de DISEÑO de los jefes, no del flujo de
+ * la run: session.ts la consume en `deriveBossSequence` para ordenar los
+ * jefes presentes en el pool de cada partida.
+ */
+export const BOSS_DIFFICULTY_ORDER: readonly BossId[] = ['guardian', 'queen', 'prisma', 'storm'];
+
 export const BOSS_DEFS: Record<BossId, BossDef> = {
   'test-boss': {
     id: 'test-boss',

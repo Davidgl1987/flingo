@@ -9,11 +9,11 @@ import { createEffectsState, type EffectsState } from '@/game/features/effects/e
 import { ParticlePool } from '@/game/features/effects/particles';
 import { ShockwavePool } from '@/game/features/effects/shockwave';
 import { TrailPool } from '@/game/features/effects/trail';
+import { BOSS_DIFFICULTY_ORDER } from '@/game/features/bosses/registry';
 import { initBossEnemies } from '@/game/features/bosses/lifecycle';
 import { generateDungeon } from '@/game/features/dungeon/dungeon';
 import { createDungeonWorld } from '@/game/features/dungeon/dungeon-world';
 import { createEventQueue, type EventQueue } from '@/engine/events';
-import { createRng, type Rng } from '@/engine/rng';
 import { applyUpgrade, rollBossReward, rollShopStock, type UpgradeDef } from '@/game/session/upgrades';
 import { createWorld } from '@/game/world/create';
 import type { BossId, RoomData, World } from '@/game/world/types';
@@ -71,8 +71,10 @@ export interface GameSession {
   effects: EffectsSession;
   /**
    * Run multi-mazmorra (GDD §10): orden de jefes de la run (uno por mazmorra
-   * encadenada), barajado con una semilla derivada de la de la run. Vacío en
-   * modo sala única (playtest/`?boss=`): esos modos no encadenan mazmorras.
+   * encadenada), FIJO por dificultad creciente (`BOSS_DIFFICULTY_ORDER`,
+   * registry.ts — playtest de David 2026-07-15: La Tormenta, la más difícil,
+   * siempre la última). Vacío en modo sala única (playtest/`?boss=`): esos
+   * modos no encadenan mazmorras.
    */
   bossSequence: BossId[];
   /** Índice del jefe/mazmorra actual dentro de `bossSequence` (0 = primera). */
@@ -141,25 +143,20 @@ function designBossesInPool(pool: readonly RoomData[]): BossId[] {
   return bosses;
 }
 
-/** Baraja (Fisher-Yates a través de splice, mismo estilo que `rollBossReward`) consumiendo `rng` en orden. */
-function shuffleBosses(bosses: readonly BossId[], rng: Rng): BossId[] {
-  const pool = bosses.slice();
-  const shuffled: BossId[] = [];
-  while (pool.length > 0) {
-    const index = Math.floor(rng() * pool.length);
-    shuffled.push(pool[index]);
-    pool.splice(index, 1);
-  }
-  return shuffled;
-}
-
 /**
  * Secuencia de jefes de una run (GDD §10, run multi-mazmorra): todos los
- * jefes de diseño del pool, en orden aleatorio, determinista para la semilla
- * dada (RNG propio, independiente del que usa `generateDungeon`).
+ * jefes de diseño del pool, en el orden FIJO de dificultad creciente
+ * `BOSS_DIFFICULTY_ORDER` (registry.ts) — playtest de David 2026-07-15: "como
+ * este [La Tormenta] es el más difícil, me gustaría que estuviera el último,
+ * así que mejor los jefes por orden, y entre jefes, mazmorras aleatorias".
+ * Robusto a pools que no traigan los 4 (p.ej. antes de implementar un jefe):
+ * ordena los presentes, ignora los ausentes. Las mazmorras ENTRE jefes siguen
+ * siendo aleatorias (`generateDungeon` con su propia semilla) — esto solo
+ * fija el orden de los jefes, no el contenido de cada mazmorra.
  */
-function deriveBossSequence(pool: readonly RoomData[], seed: number): BossId[] {
-  return shuffleBosses(designBossesInPool(pool), createRng(seed));
+function deriveBossSequence(pool: readonly RoomData[]): BossId[] {
+  const present = new Set(designBossesInPool(pool));
+  return BOSS_DIFFICULTY_ORDER.filter((boss) => present.has(boss));
 }
 
 /**
@@ -168,13 +165,15 @@ function deriveBossSequence(pool: readonly RoomData[], seed: number): BossId[] {
  * reinicios; sin ella, cada run sortea una semilla nueva.
  *
  * Run multi-mazmorra: deriva `bossSequence` (todos los jefes de diseño del
- * pool, barajados) de la semilla de la run, y genera la mazmorra del primer
- * stage con la sala de ESE jefe concreto (`generateDungeon(..., bossId)`).
- * `isFinalDungeon` es true solo si hay un único jefe en la secuencia.
+ * pool, en el orden fijo de dificultad `BOSS_DIFFICULTY_ORDER`), y genera la
+ * mazmorra del primer stage con la sala de ESE jefe concreto
+ * (`generateDungeon(..., bossId)`) — la mazmorra en sí sigue siendo aleatoria
+ * (semilla de la run). `isFinalDungeon` es true solo si hay un único jefe en
+ * la secuencia.
  */
 export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | null = null): GameSession {
   const seed = forcedSeed ?? randomSeed();
-  const bossSequence = deriveBossSequence(pool, seed);
+  const bossSequence = deriveBossSequence(pool);
   const stageIndex = 0;
   const dungeon = generateDungeon(seed, pool, ROOMS_PER_RUN, bossSequence[stageIndex]);
   const world = createDungeonWorld(dungeon, seed);
@@ -222,16 +221,18 @@ export function resumeGame(session: GameSession): void {
 /**
  * Reinicia la run completa. En modo mazmorra (dungeonPool no nulo) genera un
  * mapa NUEVO con una semilla nueva (GDD §10.3: reinicio de run = nueva run,
- * no repetir el mismo mapa) Y re-baraja `bossSequence` desde el stage 0 (morir
- * o reiniciar pierde el progreso de la secuencia de jefes); en modo sala
- * única recrea la misma sala.
+ * no repetir el mismo mapa) y recalcula `bossSequence` desde el stage 0
+ * (morir o reiniciar pierde el progreso de la secuencia de jefes) — el orden
+ * es siempre el mismo fijo por dificultad (`BOSS_DIFFICULTY_ORDER`), así que
+ * el recálculo es solo por simetría con el stage 0; en modo sala única
+ * recrea la misma sala.
  */
 export function restartSession(session: GameSession): void {
   let world: World;
   session.stageIndex = 0;
   if (session.dungeonPool) {
     session.seed = session.forcedSeed ?? randomSeed();
-    session.bossSequence = deriveBossSequence(session.dungeonPool, session.seed);
+    session.bossSequence = deriveBossSequence(session.dungeonPool);
     const dungeon = generateDungeon(session.seed, session.dungeonPool, ROOMS_PER_RUN, session.bossSequence[0]);
     world = createDungeonWorld(dungeon, session.seed);
     world.isFinalDungeon = session.stageIndex >= session.bossSequence.length - 1;
