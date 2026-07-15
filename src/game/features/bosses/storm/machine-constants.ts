@@ -13,21 +13,23 @@ export const STORM_MAX_HP = 40;
 /** Techo de daño de un golpe de La Tormenta al héroe, por fase (GDD §15.1 punto 6; mismo criterio que el resto de jefes). */
 export const STORM_HIT_DAMAGE_CAP_FRACTION: [number, number, number] = [0.6, 0.65, 0.7];
 /**
- * Fracción del daño recibido fuera de la ventana de recarga: 0 (inmune
- * mientras un patrón está en marcha). A diferencia del Guardián/Prisma (0.2,
- * daño residual "para que se note si mejoras el arma" mientras persiguen/
- * rotan de color), La Tormenta es el jefe de esquive puro del juego (GDD
- * §15.5): su lectura pedida es binaria — "sobrevive al patrón, castiga la
- * recarga" — y la propia recarga (STORM_RELOAD_DURATION_BY_PHASE) ya es
- * frecuente (patrón cada ~4s, GDD §15.6) y suficientemente larga para golpear
- * sin urgencia de dejar pasar daño residual mientras el jugador esquiva.
- * Dejar pasar chip damage DURANTE un patrón activo premiaría plantarse a
- * tanquear balas en vez de leer el hueco — justo lo contrario de la regla de
- * honestidad del GDD ("el examen es sobrevivir"). Mismo criterio que la Reina
- * (cuerpo aturdido/no aturdido) y el jefe de pruebas: 0 = inmune, la ventana
- * manda del todo.
+ * Fracción del daño recibido fuera de la ventana de recarga. Subido de 0 a
+ * 0.2 tras playtest 2026-07-15 (David: "haría que los ataques siempre hagan
+ * daño, pero hagan más daño cuando esté con la luz verde"): igualado al
+ * mismo valor que Guardián/Prisma (`GUARDIAN_DAMAGE_OUTSIDE_WINDOW`/
+ * `PRISMA_DAMAGE_OUTSIDE_WINDOW`, 0.2) por el mismo motivo — "que se note si
+ * mejoras el arma" incluso fuera de ventana, sin que 0 se lea como inmunidad
+ * total. Antes de este tuning el criterio era binario a propósito (0 =
+ * inmune fuera de patrón, la propia recarga ya era frecuente y suficiente
+ * para golpear sin prisa); el playtest mostró que esa binariedad se sentía
+ * mal en vez de "limpia": SIEMPRE entra algo de daño (recompensa perseverar/
+ * arriesgarse a golpear a destiempo), y en ventana (recarga, "luz verde")
+ * entra el daño COMPLETO (`bossVulnerable=true` no se ve afectado por este
+ * factor, ver `applyDamageToEnemy`/`combat.ts`) — sigue siendo mucho más que
+ * el 20% fuera de ventana, así que la ventana sigue siendo lo que de verdad
+ * castiga.
  */
-export const STORM_DAMAGE_OUTSIDE_WINDOW = 0;
+export const STORM_DAMAGE_OUTSIDE_WINDOW = 0.2;
 
 // ── Ciclo: IDLE breve → telegraph → ejecución → recarga (ventana) ──────────
 

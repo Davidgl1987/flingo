@@ -21,6 +21,7 @@ import { getBossDef } from '@/game/features/bosses/registry';
 import { collectTypes } from '@/game/features/bosses/test-helpers';
 import { STORM_RADIUS } from './constants';
 import {
+  STORM_DAMAGE_OUTSIDE_WINDOW,
   STORM_HIT_DAMAGE_CAP_FRACTION,
   STORM_IDLE_DURATION_BY_PHASE,
   STORM_MAX_HP,
@@ -84,8 +85,10 @@ describe('La Tormenta: definición', () => {
     expect(def.hitDamageCapFraction).toEqual(STORM_HIT_DAMAGE_CAP_FRACTION);
     expect(def.hitDamageCapFraction).toEqual([0.6, 0.65, 0.7]);
     // Sin puzzle de arma/color (a diferencia del Prisma): cualquier arma daña
-    // igual, pero la recarga sigue siendo LA ventana — fuera de ella, inmune.
-    expect(def.damageOutsideWindow).toBe(0);
+    // igual. Tras playtest 2026-07-15 SIEMPRE entra algo de daño (0.2, mismo
+    // valor que Guardián/Prisma) y la recarga (ventana) sigue siendo donde
+    // entra el daño completo — ver describe de más abajo.
+    expect(def.damageOutsideWindow).toBe(0.2);
   });
 });
 
@@ -297,8 +300,8 @@ describe('La Tormenta: ritmo de patrón (GDD §15.6, recalculado tras subir tele
   });
 });
 
-describe('La Tormenta: daño gateado por la ventana de recarga (damageOutsideWindow=0)', () => {
-  it('fuera de la ventana no recibe daño; dentro de la ventana sí (cualquier arma, sin puzzle de color)', () => {
+describe('La Tormenta: daño gateado por la ventana de recarga (damageOutsideWindow=0.2, tuning post-playtest 2026-07-15)', () => {
+  it('fuera de la ventana SIEMPRE entra el 20% del golpe (cualquier arma, sin puzzle de color), nunca 0', () => {
     const world = makeStormWorld();
     const events = createEventQueue(64);
     const boss = world.enemies[0];
@@ -306,15 +309,37 @@ describe('La Tormenta: daño gateado por la ventana de recarga (damageOutsideWin
 
     boss.bossVulnerable = false;
     applyDamageToEnemy(world, boss, 5, 0, 0, events, false, 'ram');
-    expect(boss.hp).toBe(hpBefore);
-    applyDamageToEnemy(world, boss, 5, 0, 0, events, false, 'arrow');
-    expect(boss.hp).toBe(hpBefore);
-    applyDamageToEnemy(world, boss, 5, 0, 0, events, false, 'spell');
-    expect(boss.hp).toBe(hpBefore);
+    expect(boss.hp).toBeCloseTo(hpBefore - 5 * STORM_DAMAGE_OUTSIDE_WINDOW);
+    expect(boss.hp).toBeCloseTo(hpBefore - 1);
+    expect(boss.hp).toBeLessThan(hpBefore); // no inmune: David pidió que "siempre hagan daño"
+  });
+
+  it('arma diminuta (D=1) fuera de ventana baja HP fraccionario (>0), no se redondea a 0 → no parece inmune', () => {
+    const world = makeStormWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    const hpBefore = boss.hp;
+
+    boss.bossVulnerable = false;
+    applyDamageToEnemy(world, boss, 1, 0, 0, events, false, 'spell');
+    expect(boss.hp).toBeCloseTo(hpBefore - 0.2);
+    expect(boss.hp).toBeLessThan(hpBefore);
+  });
+
+  it('dentro de la ventana entra el golpe COMPLETO (más que fuera de ventana), cualquier arma', () => {
+    const world = makeStormWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    const hpBefore = boss.hp;
 
     boss.bossVulnerable = true;
     applyDamageToEnemy(world, boss, 5, 0, 0, events, false, 'ram');
-    expect(boss.hp).toBe(hpBefore - 5);
+    expect(boss.hp).toBe(hpBefore - 5); // completo
+    applyDamageToEnemy(world, boss, 5, 0, 0, events, false, 'arrow');
+    expect(boss.hp).toBe(hpBefore - 10);
+    applyDamageToEnemy(world, boss, 5, 0, 0, events, false, 'spell');
+    expect(boss.hp).toBe(hpBefore - 15);
+    expect(5).toBeGreaterThan(5 * STORM_DAMAGE_OUTSIDE_WINDOW); // más que fuera de ventana
   });
 });
 

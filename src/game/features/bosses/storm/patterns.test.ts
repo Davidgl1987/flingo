@@ -32,6 +32,7 @@ import {
 import {
   createStormState,
   fireRadialBurst,
+  resetBurst,
   resetRings,
   resetSpiral,
   stepRings,
@@ -232,7 +233,9 @@ describe('ráfaga radial: K pasillos completos', () => {
     for (const phase of PHASES) {
       for (let seed = 1; seed <= SEEDS; seed++) {
         const c = makeCollector();
-        fireRadialBurst(CENTER_X, CENTER_Y, phase, c.emit, createRng(seed));
+        const s = createStormState();
+        resetBurst(s, CENTER_X, CENTER_Y, createRng(seed));
+        fireRadialBurst(s, phase, c.emit);
         c.flush();
         expect(c.waves.length).toBe(1);
         const angles = c.waves[0].map((b) => b.angle);

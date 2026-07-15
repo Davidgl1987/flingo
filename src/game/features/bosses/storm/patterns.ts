@@ -27,10 +27,18 @@
  *    (fireEnemyProjectile devuelve false si el pool está lleno; se ignora a
  *    propósito: degradación silenciosa, igual criterio que `acquirePuddle`.)
  *
- * 3. ARRANCAR un patrón: llama a `resetSpiral(s, cx, cy, rng)` o
- *    `resetRings(s, cx, cy, phase, rng)` con el centro del jefe (`boss.position`)
- *    y `world.rng`. La ráfaga radial NO tiene estado: se dispara de una vez con
- *    `fireRadialBurst(cx, cy, phase, emit, rng)`.
+ * 3. ARRANCAR un patrón: llama a `resetSpiral(s, cx, cy, rng)`,
+ *    `resetRings(s, cx, cy, phase, rng)` o `resetBurst(s, cx, cy, rng)` con el
+ *    centro del jefe (`boss.position`) y `world.rng` — los tres DECIDEN YA el
+ *    ángulo (base de brazos / hueco / pasillos) y lo guardan en `StormState`
+ *    (`spiralBaseAngle`/`ringGapAngle`/`burstBaseAngle` respectivamente),
+ *    legible por el render ANTES de que se emita una sola bala (tuning
+ *    post-playtest 2026-07-15, "anillo de Saturno segmentado": el integrador
+ *    llama al reset correspondiente en cuanto decide el próximo patrón —
+ *    `storm/pattern.ts::stormEnterReload` — no al arrancar su ejecución, para
+ *    poder pintar los ángulos reales desde la insinuación). La ráfaga radial
+ *    sigue sin reloj propio (una sola ola): `resetBurst` solo fija centro y
+ *    ángulo base; `fireRadialBurst(s, phase, emit)` dispara con lo ya decidido.
  *
  * 4. AVANZAR: cada tick mientras el patrón esté activo llama a
  *    `stepSpiral(s, dt, phase, emit)` / `stepRings(s, dt, phase, emit, rng)`.
@@ -127,6 +135,9 @@ export interface StormState {
   ringsEmitted: number;
   /** Desplazamiento máximo del hueco por anillo (rad), fijado según la fase al resetear. */
   ringGapShiftMax: number;
+  // ── Ráfaga radial ──
+  /** Ángulo base de los `STORM_BURST_CORRIDORS` pasillos (rad), decidido por `resetBurst`; legible por el render antes de disparar. */
+  burstBaseAngle: number;
 }
 
 /** Crea el estado preasignado (una vez, en `onInit`). Único punto que asigna. */
@@ -142,6 +153,7 @@ export function createStormState(): StormState {
     ringGapAngle: 0,
     ringsEmitted: 0,
     ringGapShiftMax: 0,
+    burstBaseAngle: 0,
   };
 }
 
@@ -258,16 +270,32 @@ export function stepRings(s: StormState, dt: number, phase: 1 | 2 | 3, emit: Sto
 // ── Ráfaga radial ───────────────────────────────────────────────────────────
 
 /**
+ * Arranca (o reinicia) la ráfaga radial: fija el centro de emisión y
+ * aleatoriza CON `rng` el ángulo base de los `STORM_BURST_CORRIDORS` pasillos
+ * — mismo criterio que `resetSpiral`/`resetRings` (decidir ANTES de emitir,
+ * tuning post-playtest 2026-07-15: el render necesita el ángulo real desde la
+ * insinuación, no solo al disparar). Sin más estado que fijar: la ráfaga no
+ * tiene reloj propio (una sola ola).
+ */
+export function resetBurst(s: StormState, centerX: number, centerY: number, rng: Rng): void {
+  s.centerX = centerX;
+  s.centerY = centerY;
+  s.burstBaseAngle = rng() * Math.PI * 2;
+}
+
+/**
  * Dispara una ráfaga radial de una vez: `STORM_BURST_CORRIDORS` huecos
  * equiespaciados (cada uno ≥ pasillo mínimo) y el resto relleno tupido. Sin
- * estado (una sola ola); el ángulo inicial se aleatoriza con `rng`.
+ * reloj propio (una sola ola); el ángulo base y el centro YA se decidieron en
+ * `resetBurst` (llamado por el integrador al decidir este patrón, no aquí)
+ * — este generador ya no consume `rng`.
  */
-export function fireRadialBurst(centerX: number, centerY: number, phase: 1 | 2 | 3, emit: StormEmit, rng: Rng): void {
+export function fireRadialBurst(s: StormState, phase: 1 | 2 | 3, emit: StormEmit): void {
   const gap = stormCorridorMinAngle(STORM_MIN_EMISSION_RADIUS) * STORM_CORRIDOR_SAFETY; // hueco de diseño
   const sector = (Math.PI * 2) / STORM_BURST_CORRIDORS; // arco por (hueco + muro)
   const filled = sector - gap; // muro entre dos huecos contiguos
   const spacing = STORM_BURST_BULLET_SPACING[phase - 1];
-  const base = rng() * Math.PI * 2;
+  const base = s.burstBaseAngle;
   const count = Math.max(1, Math.ceil(filled / spacing));
   const step = filled / count;
   for (let c = 0; c < STORM_BURST_CORRIDORS; c++) {
@@ -275,7 +303,7 @@ export function fireRadialBurst(centerX: number, centerY: number, phase: 1 | 2 |
     // dejando un hueco de `gap` centrado en `base + c·sector`.
     const wallStart = base + c * sector + gap / 2;
     for (let i = 0; i <= count; i++) {
-      emitBulletAtAngle(emit, centerX, centerY, wallStart + i * step);
+      emitBulletAtAngle(emit, s.centerX, s.centerY, wallStart + i * step);
     }
   }
 }

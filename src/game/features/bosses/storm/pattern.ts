@@ -72,6 +72,7 @@ import { dropPotionAt } from '@/game/features/items/items';
 import {
   createStormState,
   fireRadialBurst,
+  resetBurst,
   resetRings,
   resetSpiral,
   stepRings,
@@ -105,11 +106,51 @@ import {
  */
 const EMPTY_STORM_STATE: StormState = Object.freeze(createStormState());
 
-/** Accessor tipado del estado de La Tormenta desde el slot opaco `world.bossState` (el único `as` de este módulo). */
-function stormState(world: World): StormState {
+/**
+ * Accessor tipado del estado de La Tormenta desde el slot opaco `world.bossState`
+ * (el único `as` de este módulo). EXPORTADO (tuning post-playtest 2026-07-15,
+ * "anillo de Saturno segmentado"): el render (`EnemyViews.tsx`) lo usa
+ * directamente para leer los ángulos reales del patrón (`spiralBaseAngle`/
+ * `ringGapAngle`/`burstBaseAngle`) y pintar qué secciones del anillo se
+ * iluminan — mismo criterio que `queen/columns.ts::queenState`, ya exportado
+ * y consumido por `QueenColumnsView.tsx`.
+ */
+export function stormState(world: World): StormState {
   const state = world.bossState;
   if (state !== null && state.bossId === 'storm') return state as StormState;
   return EMPTY_STORM_STATE;
+}
+
+/**
+ * Arranca el generador del patrón `boss.bossCounter` con ángulos recién
+ * decididos (centro = posición ACTUAL del jefe): comparte el mismo punto de
+ * entrada el primer ciclo (`stormEnterTelegraph`, sin recarga previa que lo
+ * adelante) y el resto (`stormEnterReload`, que decide el patrón del PRÓXIMO
+ * ciclo nada más terminar el actual). Tuning post-playtest 2026-07-15
+ * ("anillo de Saturno segmentado", David: iluminar las secciones reales por
+ * las que van a salir las bolas): antes los tres generadores se arrancaban
+ * SOLO al terminar el telegraph (`stormExecuteOrFire`); ahora se arrancan
+ * aquí, en cuanto se decide el patrón, para que `render` pueda leer
+ * `spiralBaseAngle`/`ringGapAngle`/`burstBaseAngle` desde la insinuación
+ * (2ª mitad de la recarga anterior) — `stormExecuteOrFire` YA NO vuelve a
+ * llamar a `resetSpiral`/`resetRings` (reasignaría el ángulo, desincronizando
+ * lo que el aro insinuó de lo que de verdad se dispara) y `fireRadialBurst`
+ * consume directamente lo decidido aquí. El pequeño deriva de posición entre
+ * este momento y el arranque real de EXECUTE (hasta idle+telegraph completos,
+ * ≤1.35s a `STORM_DRIFT_SPEED`=0.7u/s) es el mismo orden de magnitud que el
+ * jefe YA arrastraba durante una EXECUTE de hasta 2.4s con centro congelado
+ * (ver cabecera de `patterns.ts`), así que no introduce un caso nuevo de
+ * "las balas salen de donde ya no está el cuerpo".
+ */
+function stormResetPatternState(world: World, boss: Enemy, state: StormState): void {
+  const pattern = boss.bossCounter;
+  if (pattern === STORM_PATTERN_SPIRAL) {
+    resetSpiral(state, boss.position.x, boss.position.y, world.rng);
+  } else if (pattern === STORM_PATTERN_RINGS) {
+    resetRings(state, boss.position.x, boss.position.y, boss.bossPhase, world.rng);
+  } else {
+    resetBurst(state, boss.position.x, boss.position.y, world.rng);
+  }
 }
 
 /**
@@ -186,10 +227,16 @@ function stormPickPattern(rng: Rng, previous: number): number {
  * decidirlo aquí es el primer ciclo tras `onInit` (`bossCounter === -1`,
  * "sin previo": no hubo recarga anterior que lo adelantara), y ese caso no
  * excluye ningún patrón (los 3 son igual de probables la primera vez, mismo
- * criterio que antes de este cambio).
+ * criterio que antes de este cambio). Ese primer ciclo tampoco tuvo una
+ * `stormEnterReload` previa que arrancara su generador (ver
+ * `stormResetPatternState`), así que se arranca aquí mismo, justo tras
+ * decidir el patrón.
  */
 function stormEnterTelegraph(world: World, boss: Enemy, events: EventQueue): void {
-  if (boss.bossCounter < 0) boss.bossCounter = stormPickPattern(world.rng, -1);
+  if (boss.bossCounter < 0) {
+    boss.bossCounter = stormPickPattern(world.rng, -1);
+    stormResetPatternState(world, boss, stormState(world));
+  }
   const duration = STORM_TELEGRAPH_DURATION_BY_PHASE[boss.bossPhase - 1];
   boss.bossTelegraphKind = STORM_TELEGRAPH_KIND[boss.bossCounter];
   boss.bossTelegraphUntil = world.time + duration;
@@ -227,25 +274,31 @@ function stormEnterReload(world: World, boss: Enemy): void {
   boss.bossVulnerableUntil = world.time + STORM_RELOAD_DURATION_BY_PHASE[boss.bossPhase - 1];
   boss.bossCounter = stormPickPattern(world.rng, boss.bossCounter);
   boss.patrolForward = false;
+  // Arranca YA el generador del patrón recién decidido (ver comentario de
+  // `stormResetPatternState`): el render puede leer sus ángulos reales desde
+  // la 2ª mitad de esta misma recarga.
+  stormResetPatternState(world, boss, stormState(world));
 }
 
-/** Fin del telegraph: arranca el patrón elegido (espiral/anillos entran en EXECUTE; la ráfaga es instantánea y va directa a RELOAD). */
+/**
+ * Fin del telegraph: arranca el patrón elegido (espiral/anillos entran en
+ * EXECUTE; la ráfaga es instantánea y va directa a RELOAD). YA NO llama a
+ * `resetSpiral`/`resetRings`/`resetBurst` (tuning post-playtest 2026-07-15):
+ * el generador arrancó al decidirse el patrón (`stormEnterReload`/
+ * `stormEnterTelegraph` → `stormResetPatternState`), así que reasignar aquí
+ * el ángulo lo desincronizaría de lo que el aro llevaba insinuando.
+ */
 function stormExecuteOrFire(world: World, boss: Enemy, state: StormState): void {
   boss.bossTelegraphUntil = 0;
   const pattern = boss.bossCounter;
-  if (pattern === STORM_PATTERN_SPIRAL) {
-    resetSpiral(state, boss.position.x, boss.position.y, world.rng);
-    boss.bossStage = STORM_STAGE_EXECUTE;
-    return;
-  }
-  if (pattern === STORM_PATTERN_RINGS) {
-    resetRings(state, boss.position.x, boss.position.y, boss.bossPhase, world.rng);
+  if (pattern === STORM_PATTERN_SPIRAL || pattern === STORM_PATTERN_RINGS) {
     boss.bossStage = STORM_STAGE_EXECUTE;
     return;
   }
   // Único patrón que queda (STORM_PATTERN_BURST): ráfaga radial (GDD §15.5),
-  // explosión lenta y densa de una sola ola, sin fase EXECUTE propia.
-  fireRadialBurst(boss.position.x, boss.position.y, boss.bossPhase, stormEmit, world.rng);
+  // explosión lenta y densa de una sola ola, sin fase EXECUTE propia. El
+  // centro/ángulo ya están en `state` (decididos en `stormEnterReload`).
+  fireRadialBurst(state, boss.bossPhase, stormEmit);
   stormEnterReload(world, boss);
 }
 
@@ -339,10 +392,23 @@ export function stormStepPattern(world: World, boss: Enemy, dt: number, events: 
  * Vida de recompensa (mismo criterio que Guardián/Reina, GDD §15.2/§15.3):
  * suelta una poción al cruzar a fase 2 y a fase 3 — sostiene una pelea de
  * puro esquive sin ventanas de golpe frecuentes.
+ *
+ * `bossCounter = -1` (tuning post-playtest 2026-07-15, necesario tras mover
+ * el arranque del generador a `stormEnterReload`/`stormEnterTelegraph` — ver
+ * `stormResetPatternState`): un cambio de fase puede interrumpir un patrón a
+ * MITAD de EXECUTE (`spiralElapsed`/`ringEmitTimer` a mitad de recorrido). Si
+ * `bossCounter` sobreviviera al cambio de fase, el siguiente
+ * `stormEnterTelegraph` lo reutilizaría sin re-arrancar su generador (rama
+ * `bossCounter<0` no saltaría) y el EXECUTE que sigue heredaría esos relojes
+ * a medias — antes esto no importaba porque `stormExecuteOrFire` SIEMPRE
+ * reseteaba el generador al arrancar; ahora que solo lo hace
+ * `stormResetPatternState`, hay que forzar aquí el mismo "sin previo" que usa
+ * el primer ciclo tras `onInit`, coherente con "resetea limpio el ciclo".
  */
 export function stormOnPhaseChanged(world: World, boss: Enemy): void {
   boss.bossStage = STORM_STAGE_IDLE;
   boss.bossTimer = STORM_IDLE_DURATION_BY_PHASE[boss.bossPhase - 1];
+  boss.bossCounter = -1;
   boss.bossTelegraphUntil = 0;
   boss.bossTelegraphKind = '';
   boss.bossVulnerableUntil = 0;

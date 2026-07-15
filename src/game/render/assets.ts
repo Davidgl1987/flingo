@@ -301,54 +301,83 @@ export const stormBodyMaterial = new THREE.MeshLambertMaterial({ color: '#3a4a63
  */
 export const stormReloadCoreMaterial = new THREE.MeshBasicMaterial({ color: '#dce8f2' });
 /**
- * Halo/vórtice que envuelve el cuerpo (silueta de "ojo de la tormenta",
- * distinta de cuernos/corona/gemas del resto de jefes): MUTABLE (opacidad
- * actualizada cada frame según el patrón telegrafiado/en curso, ver
- * EnemyViews.tsx), mismo criterio de mutación que `prismaCoreMaterial` — un
- * único jefe La Tormenta vivo a la vez, así que es seguro mutar el material
- * compartido en vez de intercambiarlo.
+ * Halo "anillo de Saturno segmentado" que envuelve el cuerpo (silueta de "ojo
+ * de la tormenta", distinta de cuernos/corona/gemas del resto de jefes).
+ * Rediseño post-playtest 2026-07-15 (David: "haría que el anillo fuera
+ * siempre como el anillo de Saturno, en horizontal, y que se iluminara por
+ * partes... de la forma en la que van a salir las bolas"): el toro-arco
+ * giratorio anterior se leía INCLINADO/verticalizado en playtest (causa
+ * raíz: combinar una `rotation-x` estática con una `rotation.y` mutada cada
+ * frame en el MISMO mesh compone en espacio de Euler local, y NO equivale a
+ * "girar un anillo plano sobre su propio eje" — ver comentario largo en
+ * `EnemyViews.tsx::applyStormHaloMotion`, ahora eliminado). El nuevo diseño
+ * NUNCA rota el mesh tras montarlo: `STORM_HALO_SEGMENTS` copias
+ * INSTANCIADAS de un pequeño arco, cada una en un ángulo FIJO de un grid
+ * (`i · 2π/N`), con la geometría pre-rotada UNA vez (`rotateZ`+`rotateX`, ver
+ * abajo) para quedar SIEMPRE plana en el plano horizontal (XZ) — "cuál
+ * sección se ilumina" se decide en `EnemyViews.tsx` mutando SOLO el color por
+ * instancia cada frame (mismo patrón `setColorAt`/`instanceColor` que
+ * `TrailView.tsx`/`ParticleView.tsx`), nunca la rotación: cero riesgo de
+ * cabeceo, sea cual sea el patrón telegrafiado.
+ */
+export const STORM_HALO_SEGMENTS = 32;
+/** Fracción de cada sección del grid que ocupa el arco visible (deja hueco entre secciones contiguas, para que se lean como bloques separados). */
+const STORM_HALO_SEGMENT_FILL = 0.7;
+/** Ángulo (rad) del arco visible de una sola sección instanciada. */
+const STORM_HALO_SEGMENT_ARC = ((Math.PI * 2) / STORM_HALO_SEGMENTS) * STORM_HALO_SEGMENT_FILL;
+/**
+ * Geometría de UNA sección del anillo, pre-rotada dos veces al crearla (coste
+ * único, cero por frame):
+ * 1. `rotateZ(-arc/2)` centra el arco en el ángulo local 0 (por defecto
+ *    `TorusGeometry` empieza su arco en 0 y crece hasta `arc`).
+ * 2. `rotateX(π/2)` tumba el anillo (por defecto en el plano XY, "de pie"
+ *    mirando a cámara) al plano XZ horizontal (estilo anillo de Saturno).
+ * Con esto, el CENTRO visual del arco queda en el ángulo de mundo 0 cuando la
+ * instancia no lleva ninguna rotación extra — cada instancia solo necesita UN
+ * `rotation.y` para colocarse en su sección del grid (ver EnemyViews.tsx).
+ */
+export const stormHaloSegmentGeometry = new THREE.TorusGeometry(1, 0.09, 6, 4, STORM_HALO_SEGMENT_ARC);
+stormHaloSegmentGeometry.rotateZ(-STORM_HALO_SEGMENT_ARC / 2);
+stormHaloSegmentGeometry.rotateX(Math.PI / 2);
+/**
+ * Material compartido del `InstancedMesh` del halo: MUTABLE (opacidad global
+ * actualizada cada frame según la fase del ciclo, ver EnemyViews.tsx), mismo
+ * criterio que `prismaCoreMaterial` — un único jefe La Tormenta vivo a la
+ * vez. `color` en blanco A PROPÓSITO: el tono real de cada sección lo aporta
+ * `instanceColor` (mutado por instancia en EnemyViews.tsx); un material.color
+ * no-blanco lo multiplicaría y ensuciaría el color de todas las secciones por
+ * igual.
  */
 export const stormHaloMaterial = new THREE.MeshBasicMaterial({
-  color: '#8fd8ff',
+  color: '#ffffff',
   transparent: true,
   opacity: 0.4,
   depthWrite: false,
 });
 /**
- * Halo: toro ALREDEDOR DEL CUERPO con un hueco visible (arco < 2π), NO un
- * toro completo. Causa raíz del bug de legibilidad de playtest 2026-07-05
- * ("telegrafía un poco más... por el movimiento del aro"): un toro COMPLETO
- * de color uniforme es una superficie de revolución simétrica respecto a su
- * propio eje — girarlo alrededor de ESE eje (que es justo lo que hacía
- * `halo.rotation.y` en EnemyViews) no cambia NADA visible, así que el giro
- * nunca se leyó. El arco al 80% de la vuelta deja un hueco perceptible que
- * sí delata sentido y velocidad de giro al rotar.
- */
-export const stormHaloGeometry = new THREE.TorusGeometry(1, 0.07, 8, 28, Math.PI * 2 * 0.8);
-/**
- * Tinte verdoso de "ventana de recarga abierta" con el que se mezcla
- * `stormHaloMaterial.color` durante la recarga (mismo verde que
- * `bossVulnerableMaterial`, GDD §15.5): mientras la ventana sigue abierta el
- * halo nunca pierde del todo este tinte, aunque ya esté insinuando el
- * próximo patrón (EnemyViews.tsx) — así la pose de recarga ("cuerpo pálido +
- * halo verde") sigue siendo reconocible.
+ * Tinte verdoso de "ventana de recarga abierta" (mismo verde que
+ * `bossVulnerableMaterial`, GDD §15.5): en la 1ª mitad de la recarga TODAS
+ * las secciones lo llevan uniforme (anillo verde sólido); en la 2ª mitad las
+ * secciones se van fundiendo desde este verde hacia el color resuelto
+ * (iluminada/apagada) del próximo patrón — mientras la ventana siga abierta
+ * el halo nunca pierde del todo este tinte (EnemyViews.tsx).
  */
 export const stormHaloReloadColor = new THREE.Color('#4dd68a');
 /**
- * Tinte al que converge `stormHaloMaterial.color` cuando el aro insinúa (o
- * confirma) un patrón, índice = STORM_PATTERN_* (machine-constants.ts):
- * espiral/anillos comparten el azul ambiental del halo (su lectura es el
- * MOVIMIENTO — giro con sentido real vs. pulso rítmico —, no el color, para
- * no sumar una cuarta señal a distinguir); la ráfaga usa un ámbar propio,
- * distinto de cualquier otro estado del jefe, porque su lectura (aro que se
- * tensa y estalla) es más súbita y se beneficia de un color de alerta
- * distintivo.
+ * Tinte de SECCIÓN ILUMINADA (por ahí van a salir balas), índice =
+ * STORM_PATTERN_* (machine-constants.ts): espiral/anillos comparten el azul
+ * base del halo (su lectura ahora es puramente espacial — qué secciones se
+ * iluminan —, no hace falta un cuarto color que distinguir); la ráfaga usa un
+ * ámbar propio, de alerta, porque es el patrón más súbito (sin fase EXECUTE
+ * propia: telegrafía y dispara).
  */
 export const STORM_HALO_PATTERN_COLOR: readonly [THREE.Color, THREE.Color, THREE.Color] = [
   new THREE.Color('#8fd8ff'),
   new THREE.Color('#8fd8ff'),
   new THREE.Color('#ffb37a'),
 ];
+/** Tinte de SECCIÓN APAGADA (zona segura, sin balas): gris-azulado oscuro y neutro, para que las secciones iluminadas destaquen con claridad. */
+export const STORM_HALO_DIM_COLOR = new THREE.Color('#1b2530');
 
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la
