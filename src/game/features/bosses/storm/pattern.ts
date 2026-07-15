@@ -15,25 +15,43 @@
  *   Durante EXECUTE no se usa (los steppers de `patterns.ts` llevan su propio
  *   reloj en `StormState`, colgado de `world.bossState`); avanzar/terminar el
  *   patrón se decide por el valor de retorno de `stepSpiral`/`stepRings`.
- * - `bossCounter`: índice del patrón ACTIVO/ÚLTIMO usado (STORM_PATTERN_*).
- *   Al elegir el siguiente en `stormEnterTelegraph`, el valor que trae
- *   TODAVÍA es el del ciclo anterior — se lee como "previo" antes de
- *   sobrescribirlo, así se garantiza no repetir el mismo dos veces seguidas
- *   sin necesitar un campo aparte. -1 (solo en `onInit`) = "sin previo".
+ * - `bossCounter`: índice del patrón de ESTE ciclo (STORM_PATTERN_*) — el que
+ *   se está telegrafiando/ejecutando, o el YA DECIDIDO para el ciclo que
+ *   viene mientras el jefe todavía está en IDLE/RELOAD. Tuning post-playtest
+ *   2026-07-15 (David: "telegrafía un poco más el siguiente ataque por el
+ *   movimiento del aro"): la selección se ADELANTÓ de `stormEnterTelegraph`
+ *   a `stormEnterReload` (se decide el próximo patrón nada más terminar el
+ *   actual, no al final del idle que sigue a la recarga) para que el render
+ *   (`EnemyViews.tsx`) pueda leer YA `enemy.bossCounter` durante la segunda
+ *   mitad de la recarga y animar el aro en consecuencia — sin esto no había
+ *   forma de insinuar el patrón antes de que arrancara su telegraph propio.
+ *   No hizo falta un campo nuevo: `bossCounter` ya viaja en `Enemy` y su
+ *   significado ("el patrón de este ciclo") no cambia, solo CUÁNDO se fija.
+ *   Único caso en que sigue "vacío": justo tras `onInit`, antes del primer
+ *   ciclo, vale -1 ("sin decidir todavía" — no hay recarga previa que lo
+ *   haya podido adelantar) y es `stormEnterTelegraph` quien lo decide como
+ *   fallback, igual que antes de este cambio.
  * - `bossTelegraphUntil`/`bossTelegraphKind`: telegraph estándar del
  *   framework durante TELEGRAPH (kind = STORM_TELEGRAPH_KIND[patrón]); en
  *   EXECUTE se conserva el mismo `bossTelegraphKind` (con `bossTelegraphUntil`
  *   a 0, así el anillo ámbar genérico se apaga pero el render puede seguir
  *   distinguiendo qué patrón está en marcha) y en RELOAD pasa a
- *   STORM_RELOAD_KIND (pose de recarga, GDD §15.5 "aviso visual claro").
+ *   STORM_RELOAD_KIND (pose de recarga, GDD §15.5 "aviso visual claro"). A
+ *   diferencia de `bossCounter`, este string SÍ se limpia a '' durante el
+ *   tramo IDLE (ver el `case STORM_STAGE_RELOAD` de más abajo) — el render
+ *   no lo necesita para insinuar el patrón (usa `bossCounter` directamente,
+ *   ver arriba), así que no hacía falta tocar ese reseteo.
  * - `bossVulnerable`/`bossVulnerableUntil`: ventana de vulnerabilidad
  *   estándar (derivada del reloj absoluto cada tick, igual criterio que
  *   Prisma/Reina): SOLO abierta durante RELOAD.
  * - `patrolForward` (reutilizado como booleano libre; La Tormenta no
  *   patrulla): true = "ya encadenó este ciclo" (fase 3, GDD §15.5: espiral→
- *   anillos sin pausa antes de recargar). Se resetea a false al entrar en un
- *   ciclo nuevo desde IDLE, para que el encadenado solo pueda pasar una vez
- *   por ciclo.
+ *   anillos sin pausa antes de recargar). Se resetea a false en
+ *   `stormEnterReload` (antes vivía en `stormEnterTelegraph`; se movió junto
+ *   con la selección de patrón, ver arriba — el momento que importa es
+ *   "antes de que la próxima EXECUTE pueda encadenar", y eso sigue
+ *   cumpliéndose igual de temprano) para que el encadenado solo pueda pasar
+ *   una vez por ciclo.
  *
  * Estado propio (los campos del generador: centro de emisión congelado,
  * relojes de ola de espiral/anillo) vive en `world.bossState` como
@@ -76,7 +94,7 @@ import {
   STORM_STAGE_IDLE,
   STORM_STAGE_RELOAD,
   STORM_STAGE_TELEGRAPH,
-  STORM_TELEGRAPH_DURATION,
+  STORM_TELEGRAPH_DURATION_BY_PHASE,
   STORM_TELEGRAPH_KIND,
 } from './machine-constants';
 
@@ -160,36 +178,55 @@ function stormPickPattern(rng: Rng, previous: number): number {
   return idx;
 }
 
-/** Entra en TELEGRAPH: elige patrón (sin repetir el anterior), lo anuncia y arma el reloj. */
+/**
+ * Entra en TELEGRAPH: anuncia el patrón y arma el reloj. Normalmente el
+ * patrón YA fue decidido por `stormEnterReload` al terminar el ciclo
+ * anterior (`boss.bossCounter` ya trae un índice válido, ver comentario de
+ * cabecera del fichero) — aquí solo se consume. El único caso en que hay que
+ * decidirlo aquí es el primer ciclo tras `onInit` (`bossCounter === -1`,
+ * "sin previo": no hubo recarga anterior que lo adelantara), y ese caso no
+ * excluye ningún patrón (los 3 son igual de probables la primera vez, mismo
+ * criterio que antes de este cambio).
+ */
 function stormEnterTelegraph(world: World, boss: Enemy, events: EventQueue): void {
-  const previous = boss.bossCounter;
-  const picked = stormPickPattern(world.rng, previous);
-  boss.bossCounter = picked;
-  boss.bossTelegraphKind = STORM_TELEGRAPH_KIND[picked];
-  boss.bossTelegraphUntil = world.time + STORM_TELEGRAPH_DURATION;
+  if (boss.bossCounter < 0) boss.bossCounter = stormPickPattern(world.rng, -1);
+  const duration = STORM_TELEGRAPH_DURATION_BY_PHASE[boss.bossPhase - 1];
+  boss.bossTelegraphKind = STORM_TELEGRAPH_KIND[boss.bossCounter];
+  boss.bossTelegraphUntil = world.time + duration;
   boss.bossStage = STORM_STAGE_TELEGRAPH;
-  boss.bossTimer = STORM_TELEGRAPH_DURATION;
-  boss.patrolForward = false; // reinicia el flag de encadenado de fase 3 para este ciclo
+  boss.bossTimer = duration;
   pushEvent(events, 'boss-telegraph', boss.position.x, boss.position.y, 1, boss.bossTelegraphKind);
 }
 
 /**
- * Entra en RELOAD: cierra el telegraph/execute en curso y abre la ventana de
- * vulnerabilidad. A propósito NO usa `bossTimer` para la duración de este
- * tramo (a diferencia de IDLE/TELEGRAPH): `bossVulnerableUntil` es la ÚNICA
- * fuente de verdad, releída con la MISMA comparación (`world.time <
- * bossVulnerableUntil`) tanto para derivar `bossVulnerable` (arriba, en
- * `stormStepPattern`) como para decidir cuándo sale de RELOAD (más abajo, en
- * el propio `case STORM_STAGE_RELOAD`) — dos relojes independientes (bossTimer
- * decreciente + bossVulnerableUntil absoluto) podían desincronizarse un tick
- * y dejar `bossVulnerable===true` con `bossStage` ya en IDLE (bug detectado
- * en test).
+ * Entra en RELOAD: cierra el telegraph/execute en curso, abre la ventana de
+ * vulnerabilidad y decide YA el patrón del PRÓXIMO ciclo (tuning post-
+ * playtest 2026-07-15, ver comentario de cabecera del fichero): `boss.
+ * bossCounter` todavía trae el patrón que acaba de terminar de ejecutarse —
+ * se lee como "previo" antes de sobrescribirlo con la nueva elección
+ * (mismo criterio de exclusión que antes, solo que adelantado en el
+ * tiempo), así el render ya puede leer `enemy.bossCounter` para insinuar el
+ * aro desde la segunda mitad de esta misma recarga. `patrolForward` se
+ * resetea aquí también (antes vivía en `stormEnterTelegraph`): tiene que
+ * estar en false antes de que la próxima EXECUTE pueda encadenar en fase 3,
+ * y este punto sigue siendo lo bastante temprano para eso.
+ *
+ * A propósito NO usa `bossTimer` para la duración de este tramo (a
+ * diferencia de IDLE/TELEGRAPH): `bossVulnerableUntil` es la ÚNICA fuente de
+ * verdad, releída con la MISMA comparación (`world.time < bossVulnerableUntil`)
+ * tanto para derivar `bossVulnerable` (arriba, en `stormStepPattern`) como
+ * para decidir cuándo sale de RELOAD (más abajo, en el propio `case
+ * STORM_STAGE_RELOAD`) — dos relojes independientes (bossTimer decreciente +
+ * bossVulnerableUntil absoluto) podían desincronizarse un tick y dejar
+ * `bossVulnerable===true` con `bossStage` ya en IDLE (bug detectado en test).
  */
 function stormEnterReload(world: World, boss: Enemy): void {
   boss.bossTelegraphUntil = 0;
   boss.bossTelegraphKind = STORM_RELOAD_KIND;
   boss.bossStage = STORM_STAGE_RELOAD;
   boss.bossVulnerableUntil = world.time + STORM_RELOAD_DURATION_BY_PHASE[boss.bossPhase - 1];
+  boss.bossCounter = stormPickPattern(world.rng, boss.bossCounter);
+  boss.patrolForward = false;
 }
 
 /** Fin del telegraph: arranca el patrón elegido (espiral/anillos entran en EXECUTE; la ráfaga es instantánea y va directa a RELOAD). */

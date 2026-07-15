@@ -42,17 +42,30 @@
  *   (`bossWeaponGateB!==''`): alterna los dos colores activos a un ritmo más
  *   calmado. 3 gemas orbitando el núcleo dan silueta propia, distinta de
  *   cuernos/corona.
- * - La Tormenta (GDD §15.5, Fase B4, `bossId==='storm'`): jefe de esquive
- *   puro, cuerpo tormentoso propio (gris-azulado) envuelto en un halo/vórtice
- *   (toro) cuya rotación/pulso/opacidad delatan el patrón telegrafiado o en
- *   curso (`enemy.bossTelegraphKind`: espiral gira cada vez más rápido,
- *   anillos pulsan concéntricos y calmados, ráfaga parpadea urgente) — así el
- *   jugador lee QUÉ va a esquivar antes de que empiece a disparar, no solo
- *   QUE algo va a pasar (el anillo ámbar genérico ya cubre eso). Pose de
+ * - La Tormenta (GDD §15.5, Fase B4, `bossId==='storm'`; tuning post-playtest
+ *   2026-07-05, David: "telegrafiar un poco más el siguiente ataque por el
+ *   movimiento del aro"): jefe de esquive puro, cuerpo tormentoso propio
+ *   (gris-azulado) envuelto en un halo/vórtice (toro CON HUECO — un toro
+ *   completo de color uniforme es simétrico bajo su propio giro y por eso el
+ *   giro nunca se leía, ver comentario de `stormHaloGeometry` en assets.ts)
+ *   cuya rotación/pulso/opacidad/color delatan el patrón `enemy.bossCounter`
+ *   (`applyStormHaloMotion`: espiral GIRA acelerando en el sentido real de
+ *   los brazos, anillos PULSAN expandiéndose a la cadencia real de emisión,
+ *   ráfaga se CONTRAE/tensa antes de estallar) — así el jugador lee QUÉ va a
+ *   esquivar antes de que empiece a disparar, no solo QUE algo va a pasar
+ *   (el anillo ámbar genérico ya cubre eso). El patrón de CADA ciclo se
+ *   decide al entrar en recarga, no al empezar su telegraph propio
+ *   (`storm/pattern.ts::stormEnterReload`), así que el aro puede empezar a
+ *   insinuarlo desde la 2ª mitad de la recarga anterior (tinte que se funde
+ *   del verde de "ventana abierta" al color del patrón, intensidad
+ *   creciente) y llegar a insinuación plena en el IDLE breve que sigue,
+ *   antes incluso de que arranque el telegraph con lectura completa. Pose de
  *   recarga (ventana de vulnerabilidad, GDD §15.5 "aviso visual claro"):
- *   cuerpo sustituido por un tono pálido/apagado y halo quieto y translúcido
- *   — inconfundible frente al resto de estados, encima del anillo verde
- *   genérico ya heredado.
+ *   cuerpo sustituido por un tono pálido/apagado y halo quieto en su 1ª
+ *   mitad — inconfundible frente al resto de estados, encima del anillo
+ *   verde genérico ya heredado; el tinte verdoso del halo NUNCA desaparece
+ *   del todo mientras la ventana siga abierta, para que insinuar el próximo
+ *   patrón no camufle que sigue siendo el momento de golpear.
  *
  * Todo con geometrías/materiales compartidos de assets.ts; cero asignaciones
  * en useFrame (solo escalares y mutación de refs/materiales ya existentes).
@@ -94,13 +107,25 @@ import {
   stormBodyMaterial,
   stormHaloGeometry,
   stormHaloMaterial,
+  stormHaloReloadColor,
   stormReloadCoreMaterial,
+  STORM_HALO_PATTERN_COLOR,
   trailMaterial,
   unitCircle,
   unitSphere,
   WEAPON_COLOR,
 } from '@/game/render/assets';
-import { STORM_STAGE_EXECUTE, STORM_STAGE_RELOAD, STORM_STAGE_TELEGRAPH, STORM_TELEGRAPH_KIND } from '@/game/features/bosses/storm/machine-constants';
+import {
+  STORM_PATTERN_RINGS,
+  STORM_PATTERN_SPIRAL,
+  STORM_RELOAD_DURATION_BY_PHASE,
+  STORM_STAGE_EXECUTE,
+  STORM_STAGE_IDLE,
+  STORM_STAGE_RELOAD,
+  STORM_STAGE_TELEGRAPH,
+  STORM_TELEGRAPH_DURATION_BY_PHASE,
+} from '@/game/features/bosses/storm/machine-constants';
+import { STORM_RING_INTERVAL, STORM_SPIRAL_ANGULAR_SPEED } from '@/game/features/bosses/storm/constants';
 import { ChaserMesh } from '@/game/features/enemies/chaser/Mesh';
 import { DummyMesh } from '@/game/features/enemies/dummy/Mesh';
 import { ShooterMesh } from '@/game/features/enemies/shooter/Mesh';
@@ -170,6 +195,78 @@ const PRISMA_COLOR_TELEGRAPH_BLINK_SPEED = 63;
 const PRISMA_OVERLAP_BLINK_SPEED = 25;
 /** Velocidad angular de la órbita visual de las gemas del Prisma. */
 const PRISMA_GEM_ORBIT_SPEED = 1.4;
+
+/**
+ * La Tormenta (GDD §15.5): opacidad "plena" del halo por patrón durante
+ * telegraph/ejecución (índice = STORM_PATTERN_*) — mismos valores que antes
+ * del tuning post-playtest 2026-07-05 (espiral/anillos algo más discretos
+ * que la ráfaga, que es la más súbita). Punto de llegada del fundido desde
+ * `STORM_HALO_RELOAD_OPACITY` durante la insinuación de la 2ª mitad de la
+ * recarga.
+ */
+const STORM_HALO_FULL_OPACITY: readonly [number, number, number] = [0.6, 0.6, 0.65];
+/** Opacidad del halo en la 1ª mitad de la recarga (pose quieta, sin insinuar nada todavía) y arranque del fundido hacia STORM_HALO_FULL_OPACITY. */
+const STORM_HALO_RELOAD_OPACITY = 0.18;
+
+/**
+ * Anima el halo/vórtice de La Tormenta con la firma de movimiento propia de
+ * `pattern` (STORM_PATTERN_*, machine-constants.ts) — "lo visual debe
+ * prometer lo mecánico" (AGENTS.md): cada patrón se lee distinto antes de
+ * que dispare una sola bala. Cero asignaciones (solo mutación de `halo` y
+ * escalares).
+ *
+ * - Espiral: el halo GIRA acelerando, en el mismo SENTIDO que los brazos de
+ *   verdad (`patterns.ts::stepSpiral`: `spiralBaseAngle +=
+ *   STORM_SPIRAL_ANGULAR_SPEED*dt`, siempre positivo). La conversión de un
+ *   ángulo de sim (dx=cosθ, dy=sinθ) al yaw de three.js es la MISMA que ya
+ *   usa este fichero para orientar por velocidad, `Math.atan2(dx, dy)`:
+ *   para θ creciente ese yaw vale π/2−θ y por tanto DISMINUYE a la misma
+ *   velocidad (comprobado numéricamente). El halo tiene que girar en
+ *   `rotation.y` NEGATIVO para prometer el sentido real — el código previo
+ *   giraba en positivo (además de ser invisible por el toro completo
+ *   simétrico, ver comentario de `stormHaloGeometry` en assets.ts, giraba
+ *   al revés). `progress` (0..1, tiempo dentro del ciclo) acelera el giro —
+ *   la "aceleración" pedida en el playtest — muy por encima de la velocidad
+ *   real de los brazos a propósito: el aro no promete velocidad 1:1, solo
+ *   sentido y urgencia creciente.
+ * - Anillos: pulso de escala que se EXPANDE rítmicamente a la cadencia REAL
+ *   de emisión (`STORM_RING_INTERVAL[fase]`, no un número inventado): el
+ *   halo "respira" al mismo ritmo con el que van a llegar los anillos de
+ *   verdad.
+ * - Ráfaga: se CONTRAE/tensa a medida que `progress` avanza hacia 1 (como
+ *   tomando impulso); no hay un "release" animado porque la ráfaga no tiene
+ *   EXECUTE propio (dispara y pasa a recarga en el mismo tick en que acaba
+ *   el telegraph) — el estallido real ES el corte a la pose de recarga.
+ *
+ * `intensity` (0..1) atenúa el movimiento durante la insinuación de la 2ª
+ * mitad de la recarga; en TELEGRAPH/EXECUTE siempre vale 1 (lectura plena).
+ */
+function applyStormHaloMotion(
+  halo: Mesh,
+  pattern: number,
+  bodyRadius: number,
+  worldTime: number,
+  delta: number,
+  phase: 1 | 2 | 3,
+  progress: number,
+  intensity: number,
+): void {
+  if (pattern === STORM_PATTERN_SPIRAL) {
+    const speed = STORM_SPIRAL_ANGULAR_SPEED * (0.5 + 2.5 * progress) * intensity;
+    halo.rotation.y -= delta * speed; // signo: ver comentario de cabecera (promete el sentido real de los brazos)
+    halo.scale.setScalar(bodyRadius * 1.3);
+  } else if (pattern === STORM_PATTERN_RINGS) {
+    halo.rotation.y += delta * 0.4 * intensity;
+    const cadence = (Math.PI * 2) / STORM_RING_INTERVAL[phase - 1]; // un pulso completo por intervalo real entre anillos
+    const pulse = 0.5 + 0.5 * Math.sin(worldTime * cadence);
+    halo.scale.setScalar(bodyRadius * (1.15 + 0.35 * pulse * intensity));
+  } else {
+    // Ráfaga radial (STORM_PATTERN_BURST): se tensa/encoge según `progress`.
+    halo.rotation.y += delta * 0.4 * intensity;
+    const tension = 1 - 0.4 * progress * intensity;
+    halo.scale.setScalar(bodyRadius * 1.25 * tension);
+  }
+}
 
 function EnemyMesh({
   session,
@@ -463,37 +560,67 @@ function EnemyMesh({
     }
 
     if (kind === 'boss' && bossId === 'storm') {
-      // Halo/vórtice: distinto comportamiento de giro/pulso por patrón
-      // telegrafiado o en curso (GDD §15.5: "cada uno anunciado con una pose/
-      // brillo distinto"), y pose de recarga inconfundible (quieto y apagado)
-      // mientras dura la ventana de vulnerabilidad.
+      // Halo/vórtice (tuning post-playtest 2026-07-05, David: "telegrafiar
+      // un poco más el siguiente ataque por el movimiento del aro"):
+      // `enemy.bossCounter` es el patrón de ESTE ciclo — decidido al entrar
+      // en RELOAD (ver `storm/pattern.ts::stormEnterReload`), no al empezar
+      // el telegraph — así que ya es válido durante IDLE y la 2ª mitad de la
+      // recarga, no solo durante TELEGRAPH/EXECUTE. Firma de movimiento
+      // DISTINTA por patrón en `applyStormHaloMotion` (arriba); aquí solo se
+      // decide CUÁNTO se insinúa (0..1) según la fase del ciclo, y el tinte
+      // de color se funde entre `stormHaloReloadColor` (verde, "ventana
+      // abierta") y `STORM_HALO_PATTERN_COLOR[patrón]` para que la
+      // insinuación nunca camufle que la recarga sigue abierta.
       const stage = enemy.bossStage;
-      const kindTag = enemy.bossTelegraphKind;
+      const pattern = enemy.bossCounter;
+      const hasPattern = pattern >= 0 && pattern < STORM_HALO_PATTERN_COLOR.length;
       const halo = stormHaloRef.current;
       if (halo) {
         if (stage === STORM_STAGE_RELOAD) {
-          halo.scale.setScalar(bodyRadius * 1.15);
-          stormHaloMaterial.opacity = 0.18;
-        } else if (kindTag === STORM_TELEGRAPH_KIND[0] && (stage === STORM_STAGE_TELEGRAPH || stage === STORM_STAGE_EXECUTE)) {
-          // Espiral: el halo gira cada vez más deprisa — promete el patrón.
-          halo.rotation.y += delta * 9;
-          halo.scale.setScalar(bodyRadius * 1.3);
-          stormHaloMaterial.opacity = 0.6;
-        } else if (kindTag === STORM_TELEGRAPH_KIND[1] && (stage === STORM_STAGE_TELEGRAPH || stage === STORM_STAGE_EXECUTE)) {
-          // Anillos: pulso concéntrico, calmado.
-          halo.rotation.y += delta * 0.5;
-          halo.scale.setScalar(bodyRadius * (1.2 + 0.3 * Math.sin(world.time * 7)));
-          stormHaloMaterial.opacity = 0.6;
-        } else if (kindTag === STORM_TELEGRAPH_KIND[2] && stage === STORM_STAGE_TELEGRAPH) {
-          // Ráfaga radial: parpadeo urgente y de mayor amplitud, distinto del pulso de anillos.
-          halo.rotation.y += delta * 0.5;
-          halo.scale.setScalar(bodyRadius * (1.2 + 0.35 * Math.sin(world.time * 22)));
-          stormHaloMaterial.opacity = 0.65;
+          const reloadDuration = STORM_RELOAD_DURATION_BY_PHASE[enemy.bossPhase - 1];
+          const remaining = Math.max(0, enemy.bossVulnerableUntil - world.time);
+          const reloadFrac = reloadDuration > 0 ? 1 - remaining / reloadDuration : 1; // 0 al abrir, 1 al cerrar
+          if (!hasPattern || reloadFrac < 0.5) {
+            // 1ª mitad: pose de recarga pura, quieta (sin `rotation.y +=`:
+            // se congela donde esté), para que el arranque de la insinuación
+            // en la 2ª mitad se note como un "despertar" del aro.
+            halo.scale.setScalar(bodyRadius * 1.15);
+            stormHaloMaterial.opacity = STORM_HALO_RELOAD_OPACITY;
+            stormHaloMaterial.color.copy(stormHaloReloadColor);
+          } else {
+            // 2ª mitad: insinúa YA el próximo patrón, mezclado con el verde
+            // de recarga (nunca se despega del todo mientras la ventana
+            // siga abierta) a intensidad creciente hasta el cierre.
+            const hintT = (reloadFrac - 0.5) / 0.5; // 0..1 dentro de la 2ª mitad
+            applyStormHaloMotion(halo, pattern, bodyRadius, world.time, delta, enemy.bossPhase, hintT, hintT);
+            const fullOpacity = STORM_HALO_FULL_OPACITY[pattern];
+            stormHaloMaterial.opacity = STORM_HALO_RELOAD_OPACITY + (fullOpacity - STORM_HALO_RELOAD_OPACITY) * hintT;
+            stormHaloMaterial.color.copy(stormHaloReloadColor).lerp(STORM_HALO_PATTERN_COLOR[pattern], hintT);
+          }
+        } else if (stage === STORM_STAGE_IDLE && hasPattern) {
+          // Brevísimo (0.2-0.35s) pero el patrón YA se decidió en la recarga
+          // anterior: sin parón visual, sigue a intensidad plena hasta que
+          // arranque su propio telegraph.
+          applyStormHaloMotion(halo, pattern, bodyRadius, world.time, delta, enemy.bossPhase, 1, 1);
+          stormHaloMaterial.opacity = STORM_HALO_FULL_OPACITY[pattern];
+          stormHaloMaterial.color.copy(STORM_HALO_PATTERN_COLOR[pattern]);
+        } else if ((stage === STORM_STAGE_TELEGRAPH || stage === STORM_STAGE_EXECUTE) && hasPattern) {
+          const telegraphDuration = STORM_TELEGRAPH_DURATION_BY_PHASE[enemy.bossPhase - 1];
+          const remaining = Math.max(0, enemy.bossTelegraphUntil - world.time);
+          // En EXECUTE `bossTelegraphUntil` ya está a 0 (ver pattern.ts): remaining=0 → progress=1, coherente con "ya en marcha".
+          const progress = stage === STORM_STAGE_TELEGRAPH && telegraphDuration > 0 ? 1 - remaining / telegraphDuration : 1;
+          applyStormHaloMotion(halo, pattern, bodyRadius, world.time, delta, enemy.bossPhase, progress, 1);
+          stormHaloMaterial.opacity = STORM_HALO_FULL_OPACITY[pattern];
+          stormHaloMaterial.color.copy(STORM_HALO_PATTERN_COLOR[pattern]);
         } else {
-          // Ambiente (idle entre patrones): giro lento constante.
-          halo.rotation.y += delta * 0.5;
+          // Ambiente (solo el primerísimo ciclo tras onInit, con bossCounter
+          // todavía sin decidir): giro lento neutro, mismo azul base que
+          // espiral/anillos (STORM_HALO_PATTERN_COLOR[0], reutilizado en vez
+          // de parsear un string nuevo cada frame).
+          halo.rotation.y += delta * 0.4;
           halo.scale.setScalar(bodyRadius * 1.2);
           stormHaloMaterial.opacity = 0.4;
+          stormHaloMaterial.color.copy(STORM_HALO_PATTERN_COLOR[STORM_PATTERN_SPIRAL]);
         }
       }
       const body = bodyRef.current;

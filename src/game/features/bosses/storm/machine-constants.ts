@@ -38,10 +38,30 @@ export const STORM_STAGE_RELOAD = 3;
 
 /** Pausa breve antes de telegrafiar el próximo patrón, por fase (se acorta en fase 2/3, GDD §15.5 "la recarga se acorta" — el mismo criterio de urgencia se aplica al idle). */
 export const STORM_IDLE_DURATION_BY_PHASE: readonly [number, number, number] = [0.35, 0.2, 0.2];
-/** Aviso antes de cualquier patrón (framework: mínimo 0.6s, GDD §15.1 punto 2). Igual para los 3: lo que cambia es el KIND (ver STORM_TELEGRAPH_KIND), no la duración. */
-export const STORM_TELEGRAPH_DURATION = 0.7;
-/** Recarga = ventana de vulnerabilidad (GDD §15.6: "~1.2s"), por fase (fase 2/3: "recarga−"). */
-export const STORM_RELOAD_DURATION_BY_PHASE: readonly [number, number, number] = [1.2, 0.9, 0.9];
+/**
+ * Aviso antes de cualquier patrón, por fase (framework: mínimo 0.6s, GDD
+ * §15.1 punto 2). Subido de un único 0.7s fijo a 1.0s en fase 1 tras
+ * playtest 2026-07-15 (David: "telegrafía un poco más el siguiente ataque
+ * por el movimiento del aro"): con el aro ahora insinuando YA el patrón
+ * durante la segunda mitad de la recarga anterior (ver `stormEnterReload`
+ * en `pattern.ts`), 1.0s de telegraph con lectura completa es el tramo
+ * donde el jugador termina de confirmar qué viene y se coloca. Fases 2/3 se
+ * quedan en 0.8s (por encima del suelo de 0.6s del framework): el ritmo más
+ * denso de esas fases premia reaccionar más rápido, y el aro ya llevaba
+ * insinuando el patrón desde la recarga anterior (más corta, pero con la
+ * misma proporción de "segunda mitad" relativa) — no hace falta el mismo
+ * margen que en fase 1 para que siga siendo legible.
+ */
+export const STORM_TELEGRAPH_DURATION_BY_PHASE: readonly [number, number, number] = [1.0, 0.8, 0.8];
+/**
+ * Recarga = ventana de vulnerabilidad (GDD §15.6: "~1.8s" en fase 1, subido
+ * desde "~1.2s" tras playtest 2026-07-15: David la encontró "demasiado
+ * difícil", pidiendo "un poco más de ventana de daño"). +50% sobre los
+ * valores previos (1.2→1.8, 0.9→1.35) en las 3 fases por igual, así que
+ * fase 2/3 siguen siendo más cortas que fase 1 (GDD §15.5 "la recarga se
+ * acorta") con la misma proporción relativa de antes (0.75×).
+ */
+export const STORM_RELOAD_DURATION_BY_PHASE: readonly [number, number, number] = [1.8, 1.35, 1.35];
 
 // ── Selección de patrón (world.rng, nunca se repite el mismo dos veces seguidas) ─
 

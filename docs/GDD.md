@@ -371,11 +371,11 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 *El único jefe donde no hay puzzle de daño: cualquier arma le hace daño siempre. El examen es sobrevivir a sus patrones.*
 
 - **Arena:** sala circular/octogonal completamente despejada — los patrones son la arquitectura; cualquier obstáculo los volvería injustos.
-- **Comportamiento base:** flota lentamente cerca del centro encadenando patrones de proyectiles densos pero legibles, cada uno anunciado ~0.6 s antes con una pose/brillo distinto:
+- **Comportamiento base:** flota lentamente cerca del centro encadenando patrones de proyectiles densos pero legibles, cada uno anunciado con tiempo de sobra (~1 s en fase 1, ~0.8 s en fases 2-3; subido tras playtest 2026-07-15, antes ~0.6-0.7 s) con una pose/brillo distinto — y el aro que rodea al jefe ya empieza a insinuar cuál es desde la segunda mitad de la recarga anterior, no solo durante el propio aviso:
   - **Espiral giratoria:** brazos de balas que rotan; se sobrevive encontrando el hueco y girando con él.
   - **Anillos concéntricos:** ondas que se expanden desde su posición; se teje entre los huecos de cada anillo.
   - **Ráfaga radial:** explosión lenta y densa en todas direcciones; se esquiva leyendo los pasillos entre balas.
-- **Recarga = ventana de vulnerabilidad:** tras cada patrón, se detiene a recargar ~1.2 s con un aviso visual claro — ahí se le castiga con cualquier arma (la embestida es lo que más daño hace, pero cruzar el campo de balas para llegar es el riesgo).
+- **Recarga = ventana de vulnerabilidad:** tras cada patrón, se detiene a recargar ~1.8 s (subido desde ~1.2 s tras playtest 2026-07-15: "demasiado difícil, más ventana de daño") con un aviso visual claro — ahí se le castiga con cualquier arma (la embestida es lo que más daño hace, pero cruzar el campo de balas para llegar es el riesgo).
 - **Fase 2 (66 %):** los patrones se densifican y la recarga se acorta.
 - **Fase 3 (33 %):** combina dos patrones seguidos sin pausa (espiral → anillos) antes de recargar; la ventana es la misma pero llegar vivo a ella cuesta más.
 - **Regla de honestidad:** las balas son lentas comparadas con el héroe (esquivables en todo momento con movimiento normal), los huecos siempre existen (los patrones se generan con pasillo garantizado) y ninguna bala aparece a bocajarro sin aviso.
@@ -388,7 +388,7 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 | Guardián de Canto | 40 | 1 → 2 (empuje de carga; bajado de 2→3 tras playtest 2026-07-06) | ~1.4 s tras chocar (~2.2 s si arrolla un barril) | carga cada ~2.5 s, encadenada en fase 2; barril perimetral cada ~8 s |
 | Reina del Enjambre | 55 | sin ataque directo fuerte; larvas 1 daño de contacto | permanente (sin aturdimiento) | oleada cada ~3 s, rastro continuo |
 | El Prisma | 45 | 1–2 según modo | fin de cada ataque + color correcto | modo cada ~6 s (→ ~4 s en fase 3), solapes en fase 3 |
-| La Tormenta | 40 | 1 por bala | recarga ~1.2 s tras cada patrón | patrón cada ~4 s; balas ≤ 4.5 u/s |
+| La Tormenta | 40 | 1 por bala | recarga ~1.8 s tras cada patrón (subida de ~1.2 s tras playtest 2026-07-15) | patrón cada ~4.8 s de media (~3.2 s ráfaga, ~5.6 s espiral/anillos); balas ≤ 4.5 u/s |
 
 *Vida alta comparada con los enemigos normales (Dummy 2, Chaser 3) a propósito: un jefe debe aguantar varias coreografías completas, no morir en el primer aturdimiento. Estos números son el punto de partida para implementar y ajustar jugando — igual que el resto de la tabla de tuning del apéndice.*
 

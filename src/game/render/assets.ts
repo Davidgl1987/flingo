@@ -314,8 +314,41 @@ export const stormHaloMaterial = new THREE.MeshBasicMaterial({
   opacity: 0.4,
   depthWrite: false,
 });
-/** Halo: toro fino alrededor del cuerpo (se escala/gira/pulsa por patrón en EnemyViews). */
-export const stormHaloGeometry = new THREE.TorusGeometry(1, 0.07, 8, 28);
+/**
+ * Halo: toro ALREDEDOR DEL CUERPO con un hueco visible (arco < 2π), NO un
+ * toro completo. Causa raíz del bug de legibilidad de playtest 2026-07-05
+ * ("telegrafía un poco más... por el movimiento del aro"): un toro COMPLETO
+ * de color uniforme es una superficie de revolución simétrica respecto a su
+ * propio eje — girarlo alrededor de ESE eje (que es justo lo que hacía
+ * `halo.rotation.y` en EnemyViews) no cambia NADA visible, así que el giro
+ * nunca se leyó. El arco al 80% de la vuelta deja un hueco perceptible que
+ * sí delata sentido y velocidad de giro al rotar.
+ */
+export const stormHaloGeometry = new THREE.TorusGeometry(1, 0.07, 8, 28, Math.PI * 2 * 0.8);
+/**
+ * Tinte verdoso de "ventana de recarga abierta" con el que se mezcla
+ * `stormHaloMaterial.color` durante la recarga (mismo verde que
+ * `bossVulnerableMaterial`, GDD §15.5): mientras la ventana sigue abierta el
+ * halo nunca pierde del todo este tinte, aunque ya esté insinuando el
+ * próximo patrón (EnemyViews.tsx) — así la pose de recarga ("cuerpo pálido +
+ * halo verde") sigue siendo reconocible.
+ */
+export const stormHaloReloadColor = new THREE.Color('#4dd68a');
+/**
+ * Tinte al que converge `stormHaloMaterial.color` cuando el aro insinúa (o
+ * confirma) un patrón, índice = STORM_PATTERN_* (machine-constants.ts):
+ * espiral/anillos comparten el azul ambiental del halo (su lectura es el
+ * MOVIMIENTO — giro con sentido real vs. pulso rítmico —, no el color, para
+ * no sumar una cuarta señal a distinguir); la ráfaga usa un ámbar propio,
+ * distinto de cualquier otro estado del jefe, porque su lectura (aro que se
+ * tensa y estalla) es más súbita y se beneficia de un color de alerta
+ * distintivo.
+ */
+export const STORM_HALO_PATTERN_COLOR: readonly [THREE.Color, THREE.Color, THREE.Color] = [
+  new THREE.Color('#8fd8ff'),
+  new THREE.Color('#8fd8ff'),
+  new THREE.Color('#ffb37a'),
+];
 
 // ── Personalidad de enemigos (punto 11 de playtest): geometrías/materiales
 // compartidos para micro-detalles por arquetipo, sin tocar la sim ni la

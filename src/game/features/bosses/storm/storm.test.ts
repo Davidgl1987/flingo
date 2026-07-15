@@ -32,7 +32,7 @@ import {
   STORM_STAGE_IDLE,
   STORM_STAGE_RELOAD,
   STORM_STAGE_TELEGRAPH,
-  STORM_TELEGRAPH_DURATION,
+  STORM_TELEGRAPH_DURATION_BY_PHASE,
   STORM_TELEGRAPH_KIND,
 } from './machine-constants';
 
@@ -131,8 +131,8 @@ describe('La Tormenta: ventana de vulnerabilidad EXACTAMENTE en la recarga (GDD 
     boss.bossCounter = STORM_PATTERN_SPIRAL;
     boss.bossTelegraphKind = STORM_TELEGRAPH_KIND[STORM_PATTERN_SPIRAL];
     boss.bossStage = STORM_STAGE_TELEGRAPH;
-    boss.bossTimer = STORM_TELEGRAPH_DURATION;
-    boss.bossTelegraphUntil = world.time + STORM_TELEGRAPH_DURATION;
+    boss.bossTimer = STORM_TELEGRAPH_DURATION_BY_PHASE[0];
+    boss.bossTelegraphUntil = world.time + STORM_TELEGRAPH_DURATION_BY_PHASE[0];
 
     let vulnerableOutsideReload = false;
     let sawReloadVulnerable = false;
@@ -232,37 +232,49 @@ describe('La Tormenta: fase 3 encadena espiral→anillos sin recarga intermedia 
 });
 
 describe('La Tormenta: selección de patrón (GDD §15.5 "nunca el mismo dos veces seguidas")', () => {
-  it('en 200 ciclos consecutivos, ningún patrón se repite inmediatamente', () => {
+  it('el patrón decidido AL ENTRAR en recarga (tuning post-playtest 2026-07-15: se adelantó desde el telegraph para que el aro pueda insinuarlo, ver pattern.ts) nunca repite el anterior, y en varios ciclos aparecen los 3', () => {
     const world = makeStormWorld();
     const events = createEventQueue(64);
     const boss = world.enemies[0];
-    boss.bossStage = STORM_STAGE_IDLE;
-    boss.bossTimer = 0;
 
+    let wasReload = boss.bossStage === STORM_STAGE_RELOAD;
     let previous = -1;
+    const decided: number[] = [];
     const sawAllThree = new Set<number>();
-    for (let i = 0; i < 200; i++) {
+    // Deja correr la máquina de estados COMPLETA (idle→telegraph→ejecución→
+    // recarga real, sin atajos): la selección ya no pasa por
+    // `stormEnterTelegraph` en cada ciclo (solo en el primerísimo, "sin
+    // previo"), así que hay que capturarla en el tick exacto en que
+    // `bossStage` entra en RELOAD, que es donde `stormEnterReload` la fija.
+    // Presupuesto de ticks generoso: en el peor caso (60 ciclos seguidos de
+    // espiral/anillos, ~5.55s cada uno en fase 1) hacen falta ~20000 ticks.
+    for (let i = 0; i < 30000 && decided.length < 60; i++) {
       stepBosses(world, FIXED_DT, events);
       world.time += FIXED_DT;
-      expect(boss.bossStage).toBe(STORM_STAGE_TELEGRAPH);
-      if (previous >= 0) expect(boss.bossCounter).not.toBe(previous);
-      sawAllThree.add(boss.bossCounter);
-      previous = boss.bossCounter;
-      // Vuelve a IDLE con timer a 0 para el próximo ciclo, sin simular
-      // telegraph/ejecución/recarga completos (solo interesa la selección).
-      boss.bossStage = STORM_STAGE_IDLE;
-      boss.bossTimer = 0;
+      const isReload = boss.bossStage === STORM_STAGE_RELOAD;
+      if (isReload && !wasReload) {
+        if (previous >= 0) expect(boss.bossCounter).not.toBe(previous);
+        decided.push(boss.bossCounter);
+        sawAllThree.add(boss.bossCounter);
+        previous = boss.bossCounter;
+      }
+      wasReload = isReload;
     }
-    expect(sawAllThree.size).toBe(3); // los 3 patrones aparecen en 200 tiradas
+    expect(decided.length).toBeGreaterThanOrEqual(60);
+    expect(sawAllThree.size).toBe(3); // los 3 patrones aparecen en 60+ ciclos
   });
 });
 
-describe('La Tormenta: ritmo ~4s por patrón (GDD §15.6)', () => {
-  it('el intervalo medio entre telegraphs consecutivos (ciclo completo natural) ronda los 4s', () => {
+describe('La Tormenta: ritmo de patrón (GDD §15.6, recalculado tras subir telegraph/recarga en el tuning post-playtest 2026-07-15)', () => {
+  it('el intervalo medio entre telegraphs consecutivos (ciclo completo natural) ronda los ~4.5-5s', () => {
     const world = makeStormWorld();
     const events = createEventQueue(64);
     const telegraphTimes: number[] = [];
-    for (let i = 0; i < 3000 && telegraphTimes.length < 12; i++) {
+    // Presupuesto de ticks subido junto con la duración de ciclo (antes
+    // 3000 ticks/12 muestras bastaban con reload~1.2s+telegraph~0.7s; ahora
+    // un ciclo de espiral/anillos ronda 5.55s, así que 12 muestras en el
+    // peor caso piden ~4000 ticks — 6000 deja margen).
+    for (let i = 0; i < 6000 && telegraphTimes.length < 12; i++) {
       const before = world.time;
       stepBosses(world, FIXED_DT, events);
       world.time += FIXED_DT;
@@ -274,11 +286,14 @@ describe('La Tormenta: ritmo ~4s por patrón (GDD §15.6)', () => {
     const intervals: number[] = [];
     for (let i = 1; i < telegraphTimes.length; i++) intervals.push(telegraphTimes[i] - telegraphTimes[i - 1]);
     const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-    // La ráfaga (~2.2s de ciclo) y la espiral/anillos (~4.6-4.8s) promedian
-    // "cadencia ~4s" (GDD §15.6); banda ancha a propósito (mezcla aleatoria
-    // de patrones, no un valor exacto).
-    expect(avg).toBeGreaterThan(2.5);
-    expect(avg).toBeLessThan(5.5);
+    // Ciclo completo (idle+telegraph+ejecución+recarga, fase 1) por patrón:
+    // ráfaga (sin ejecución propia) = 0.35+1.0+0+1.8 = 3.15s; espiral/anillos
+    // (ejecución ~2.4s) = 0.35+1.0+2.4+1.8 = 5.55s. Con los 3 patrones a
+    // frecuencia ~1/3 a la larga (exclusión solo del inmediatamente
+    // anterior), la media teórica es (2·5.55+3.15)/3 ≈ 4.75s. Banda ancha a
+    // propósito (mezcla aleatoria de patrones + tamaño de muestra finito).
+    expect(avg).toBeGreaterThan(3.2);
+    expect(avg).toBeLessThan(6.2);
   });
 });
 
