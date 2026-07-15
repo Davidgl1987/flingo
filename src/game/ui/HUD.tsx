@@ -40,6 +40,12 @@ export function HUD({ session }: { session: GameSession }) {
   }, [hp]);
   const heartsFlashClass = hpDelta < 0 ? ' hud-hearts-damage' : hpDelta > 0 ? ' hud-hearts-heal' : '';
 
+  // Modo dios de playtest (?godmode, render/debug-params.ts): estático para
+  // toda la sesión (fijado al crear/recrear `world`, session.ts), así que
+  // basta leerlo directamente de `session.world` — no cambia por frame ni
+  // necesita pasar por el store de baja frecuencia.
+  const godMode = session.world.godMode;
+
   useEffect(() => {
     if (notice === null) return;
     const timer = setTimeout(clearNotice, NOTICE_DURATION_MS);
@@ -49,16 +55,29 @@ export function HUD({ session }: { session: GameSession }) {
   return (
     <div className="hud">
       <div className="hud-top">
-        <div
-          key={`hp-${hp}-${maxHp}`}
-          className={`hud-hearts${heartsFlashClass}`}
-          aria-label={`Vida: ${hp} de ${maxHp}`}
-        >
-          {Array.from({ length: maxHp }, (_, i) => (
-            <span key={i} className={i < hp ? 'heart-full' : 'heart-empty'}>
-              ♥
+        <div className="hud-hp-group">
+          <div
+            key={`hp-${hp}-${maxHp}`}
+            className={`hud-hearts${heartsFlashClass}`}
+            aria-label={`Vida: ${hp} de ${maxHp}`}
+          >
+            {Array.from({ length: maxHp }, (_, i) => (
+              <span key={i} className={i < hp ? 'heart-full' : 'heart-empty'}>
+                ♥
+              </span>
+            ))}
+          </div>
+          {godMode && (
+            // Hermano del div con key={hp-...}, no hijo: no debe remontarse
+            // en cada cambio de HP, es un badge estático de toda la sesión.
+            <span
+              className="hud-godmode-badge"
+              aria-label="Modo dios de playtest activo"
+              title="Modo dios (?godmode): revive al máximo en vez de game-over"
+            >
+              GOD
             </span>
-          ))}
+          )}
         </div>
         <div className="hud-top-right">
           {hasKey && (

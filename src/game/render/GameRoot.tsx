@@ -18,7 +18,7 @@
 import { Canvas } from '@react-three/fiber';
 import { useCallback, useState } from 'react';
 import { getRoomPool } from '@/game/features/dungeon/rooms';
-import { applyForcedUpgrades, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades } from './debug-params';
+import { applyForcedUpgrades, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades, readGodMode } from './debug-params';
 import { AimInput } from '@/game/features/hero/AimInput';
 import { ParticleView } from '@/game/features/effects/ParticleView';
 import { ShockwaveView } from '@/game/features/effects/ShockwaveView';
@@ -70,17 +70,21 @@ export function GameRoot({
 }) {
   // useState con inicializador: la sesión se crea una sola vez y nunca causa re-render.
   const [session] = useState(() => {
+    // Modo dios de playtest (?godmode, herramienta B5 de David 2026-07-15):
+    // se lee UNA vez aquí y se aplica a los 3 modos por igual (run completa,
+    // arena de jefe suelta vía ?boss, playtest de sala del editor).
+    const godMode = readGodMode();
     let s: GameSession;
     if (playtestRoom) {
-      s = createGameSession(playtestRoom);
+      s = createGameSession(playtestRoom, godMode);
     } else {
       const bossRoom = readForcedBossRoom();
       if (bossRoom) {
-        s = createGameSession(bossRoom);
+        s = createGameSession(bossRoom, godMode);
         const phase = readForcedBossPhase();
         if (phase) forceBossPhase(s.world, phase);
       } else {
-        s = createDungeonGameSession(getRoomPool(), readForcedSeed());
+        s = createDungeonGameSession(getRoomPool(), readForcedSeed(), godMode);
       }
     }
     // Herramienta de playtest/verificación (F5, docs/plans/ECONOMY_PLAN.md):

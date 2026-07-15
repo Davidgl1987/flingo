@@ -84,6 +84,46 @@ describe('i-frames del héroe', () => {
   });
 });
 
+describe('modo dios de playtest (world.godMode, ?godmode)', () => {
+  it('a 0 hp revive a maxHp, NO pasa a game-over y emite godmode-revive', () => {
+    const world = makeWorld();
+    world.godMode = true;
+    const events = createEventQueue(16);
+    world.hero.hp = 1;
+
+    expect(applyDamageToHero(world, 1, events)).toBe(false); // no se resuelve como muerte
+    expect(world.hero.hp).toBe(world.hero.maxHp);
+    expect(world.phase).not.toBe('game-over');
+    expect(world.phase).toBe('playing');
+
+    const types: string[] = [];
+    drainEvents(events, (e: GameEvent) => types.push(e.type));
+    expect(types).toContain('godmode-revive');
+    expect(types).not.toContain('player-died');
+  });
+
+  it('con el flag apagado (por defecto) el mismo golpe letal sigue siendo game-over', () => {
+    const world = makeWorld();
+    expect(world.godMode).toBe(false);
+    const events = createEventQueue(16);
+    world.hero.hp = 1;
+
+    expect(applyDamageToHero(world, 1, events)).toBe(true);
+    expect(world.hero.hp).toBe(0);
+    expect(world.phase).toBe('game-over');
+  });
+
+  it('daño no letal se aplica exactamente igual con el flag activo (feedback intacto)', () => {
+    const world = makeWorld();
+    world.godMode = true;
+    const events = createEventQueue(16);
+
+    expect(applyDamageToHero(world, 2, events)).toBe(false);
+    expect(world.hero.hp).toBe(world.hero.maxHp - 2);
+    expect(world.phase).toBe('playing');
+  });
+});
+
 describe('escudo (cargas)', () => {
   it('bloquea el golpe por completo, consume una carga y da i-frames cortos', () => {
     const world = makeWorld();

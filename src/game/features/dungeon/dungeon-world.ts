@@ -258,6 +258,7 @@ export function createDungeonWorld(dungeon: DungeonMap, seed: number = dungeon.s
     lockedNoticeCooldownUntil: 0,
     isFinalDungeon: true,
     shopGreeterArmed: true,
+    godMode: false,
   };
 
   // Salas limpiadas de entrada (sin enemigos): sus conexiones sin llave nacen

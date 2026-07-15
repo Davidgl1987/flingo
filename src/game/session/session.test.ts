@@ -223,6 +223,32 @@ describe('restartSession (run multi-mazmorra, GDD §10)', () => {
   });
 });
 
+describe('godMode (?godmode, herramienta de playtest B5)', () => {
+  it('createDungeonGameSession/createGameSession propagan el flag a world.godMode y session.godMode', () => {
+    const dungeonSession = createDungeonGameSession(seriesRooms, 42, true);
+    expect(dungeonSession.godMode).toBe(true);
+    expect(dungeonSession.world.godMode).toBe(true);
+
+    const roomSession = createGameSession(testRoom, true);
+    expect(roomSession.godMode).toBe(true);
+    expect(roomSession.world.godMode).toBe(true);
+
+    // Por defecto (sin ?godmode) sigue apagado en ambos modos.
+    expect(createDungeonGameSession(seriesRooms, 42).world.godMode).toBe(false);
+    expect(createGameSession(testRoom).world.godMode).toBe(false);
+  });
+
+  it('sobrevive a restartSession y advanceToNextDungeon (el flag es de sesión, no del world que se recrea)', () => {
+    const session = createDungeonGameSession(seriesRooms, 42, true);
+
+    advanceToNextDungeon(session);
+    expect(session.world.godMode).toBe(true);
+
+    restartSession(session);
+    expect(session.world.godMode).toBe(true);
+  });
+});
+
 /** Maxea las 9 mejoras de ATAQUE (cuerpo/flecha/hechizo) del héroe de la sesión: deja rollBossReward sin nada que ofrecer. */
 function maxAllAttackUpgrades(session: GameSession): void {
   for (const def of UPGRADE_POOL) {

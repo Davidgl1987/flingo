@@ -38,6 +38,11 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   'enemy-died': { color: '#ff6bcb', size: 0.12, count: 22, life: 0.5, speed: 3.4, trauma: 0.22 },
   'player-damaged': { color: '#ff3b3b', size: 0.1, count: 14, life: 0.35, speed: 2.8, trauma: 0.32 },
   'player-died': { color: '#ff3b3b', size: 0.14, count: 26, life: 0.6, speed: 3.2, trauma: 0.5 },
+  // Modo dios de playtest (?godmode, render/debug-params.ts): revive a maxHp
+  // en vez de game-over. Burst barato en el mismo lenguaje "curación" que
+  // hearts-heal (hud.css) para que quede claro que es un revivir, no un golpe;
+  // trauma bajo (es feedback informativo, no un impacto que reforzar).
+  'godmode-revive': { color: '#ff6bcb', size: 0.11, count: 18, life: 0.45, speed: 2.6, trauma: 0.15 },
   'shield-block': { color: '#8fe3ff', size: 0.09, count: 12, life: 0.3, speed: 2.4, trauma: 0.12 },
   'pit-fall': NONE,
   'pit-respawn': NONE,

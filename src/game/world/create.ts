@@ -279,5 +279,6 @@ export function createWorld(room: RoomData, seed = 1): World {
     lockedNoticeCooldownUntil: 0,
     isFinalDungeon: true,
     shopGreeterArmed: true,
+    godMode: false,
   };
 }

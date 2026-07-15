@@ -48,6 +48,7 @@ En **`#/editor`** (enlace "✎ Editor" dentro del juego) vive el editor visual d
 ## Depuración
 
 - **`?seed=N`** en la URL fuerza la semilla de la mazmorra (misma run reproducible, también tras reiniciar). Ej.: `http://localhost:5173/?seed=42`.
+- **`?godmode`** (presencia = activo, sin valor) activa el modo dios de playtest: el daño se aplica normal (hp baja, vignette, knockback) pero al llegar a 0 hp el héroe revive a vida máxima en vez de game-over — para ver cuánto quita cada ataque en una run completa. Un badge "GOD" junto a los corazones marca que la run es de testeo. Combina con `?seed=N` (run completa) y `?boss=<id>` (arena de jefe suelta).
 - En dev, `window.__flingo` expone la sesión y helpers (`tick(segundos)`, `frame(dt)`) para avanzar la sim desde la consola.
 
 ## Arquitectura en una línea

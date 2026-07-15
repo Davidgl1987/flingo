@@ -489,4 +489,15 @@ export interface World {
    * único flag global basta (no hace falta uno por item).
    */
   shopGreeterArmed: boolean;
+  /**
+   * Modo dios de playtest (`?godmode` en la URL, render/debug-params.ts;
+   * David 2026-07-15: "para ver lo que quita de vida cada ataque" en la run
+   * completa de 4 jefes). El daño se aplica SIEMPRE normal (hp baja, vignette,
+   * knockback, i-frames — todo el feedback intacto); lo único que cambia es
+   * `applyDamageToHero` (features/combat/combat.ts): en vez de dejar hp en 0 y
+   * pasar a `'game-over'`, revive a `maxHp` y la partida sigue. Seteado UNA
+   * vez al crear/recrear el mundo de la sesión (session.ts, igual que
+   * `isFinalDungeon`); nunca cambia dentro de una run.
+   */
+  godMode: boolean;
 }

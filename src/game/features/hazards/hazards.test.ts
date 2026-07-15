@@ -69,6 +69,28 @@ describe('foso: margen de perdón (0.18, decisión de diseño validada)', () => 
     drainEvents(events, (e: GameEvent) => types.push(e.type));
     expect(types).toContain('pit-fall');
   });
+
+  it('con world.godMode y 1 hp: el foso revive a maxHp en vez de game-over (misma ruta que cualquier daño, vía applyDamageToHero)', () => {
+    const world = makeWorld([PIT]);
+    world.godMode = true;
+    world.hero.hp = 1;
+    const events = createEventQueue(16);
+    world.hero.position.x = 1 - PIT_FORGIVENESS_MARGIN - 0.05;
+    world.hero.position.y = 0;
+    stepHeroHazards(world, FIXED_DT, events);
+
+    expect(world.hero.hp).toBe(world.hero.maxHp);
+    expect(world.phase).toBe('playing');
+    // La caída (fallingUntil) sigue intacta: godMode solo evita el
+    // game-over/muerte, no desactiva la animación/respawn del foso.
+    expect(world.fallingUntil).toBeCloseTo(world.time + PIT_FALL_DURATION, 9);
+
+    const types: string[] = [];
+    drainEvents(events, (e: GameEvent) => types.push(e.type));
+    expect(types).toContain('pit-fall');
+    expect(types).toContain('godmode-revive');
+    expect(types).not.toContain('player-died');
+  });
 });
 
 describe('foso: respawn en última posición segura', () => {

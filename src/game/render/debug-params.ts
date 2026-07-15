@@ -1,9 +1,14 @@
 /**
  * Helpers de depuración por parámetros de URL (herramientas de playtest):
  * `?seed=N` fuerza la semilla de la mazmorra, `?boss=<id|alias>` salta directo
- * a la arena de un jefe, `?phase=2|3` fuerza su fase inicial y `?upgrades=...`
+ * a la arena de un jefe, `?phase=2|3` fuerza su fase inicial, `?upgrades=...`
  * (F5, docs/plans/ECONOMY_PLAN.md) fuerza niveles de mejora para verificar su
- * feedback visual sin tener que jugar hasta conseguirlas.
+ * feedback visual sin tener que jugar hasta conseguirlas, y `?godmode`
+ * (presencia = activo; David 2026-07-15) hace que el héroe reviva a vida
+ * máxima en vez de game-over al llegar a 0 hp — el daño se sigue aplicando
+ * normal (hp baja, vignette, knockback) para poder ver cuánto quita cada
+ * ataque durante la run completa (4 jefes + mazmorras). Combina con `?seed`
+ * (run completa) y `?boss` (arena de jefe suelta).
  */
 
 import { getRoomPool } from '@/game/features/dungeon/rooms';
@@ -48,6 +53,16 @@ export function readForcedBossPhase(): 2 | 3 | null {
   if (raw === '2') return 2;
   if (raw === '3') return 3;
   return null;
+}
+
+/**
+ * Modo dios de playtest vía `?godmode` (presencia = activo, sin valor; David
+ * 2026-07-15: "añade un modo invulnerable para testeo [...] para ver lo que
+ * quita de vida cada ataque"). Se aplica a `world.godMode` al crear/recrear
+ * la sesión (session.ts); ver `applyDamageToHero`, features/combat/combat.ts.
+ */
+export function readGodMode(): boolean {
+  return new URLSearchParams(window.location.search).has('godmode');
 }
 
 /**

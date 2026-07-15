@@ -94,11 +94,19 @@ export interface GameSession {
    * `rollShopStock`, session/upgrades.ts).
    */
   shopStock: UpgradeDef[];
+  /**
+   * Modo dios de playtest (`?godmode`, render/debug-params.ts): fijado UNA vez
+   * al crear la sesión, sobrevive a `restartSession`/`advanceToNextDungeon`
+   * (que recrean `world` con una referencia nueva) porque cada uno de esos
+   * puntos reaplica este flag al `world.godMode` recién creado.
+   */
+  godMode: boolean;
 }
 
 /** Sesión de sala única (playtest del editor, fases 1-2): sin mazmorra multi-sala. */
-export function createGameSession(room: RoomData): GameSession {
+export function createGameSession(room: RoomData, godMode = false): GameSession {
   const world = createWorld(room);
+  world.godMode = godMode;
   initBossEnemies(world);
   return {
     world,
@@ -117,6 +125,7 @@ export function createGameSession(room: RoomData): GameSession {
     stageIndex: 0,
     bossRewardChoices: [],
     shopStock: rollShopStock(world.hero, world.rng),
+    godMode,
   };
 }
 
@@ -171,12 +180,17 @@ function deriveBossSequence(pool: readonly RoomData[]): BossId[] {
  * (semilla de la run). `isFinalDungeon` es true solo si hay un único jefe en
  * la secuencia.
  */
-export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | null = null): GameSession {
+export function createDungeonGameSession(
+  pool: RoomData[],
+  forcedSeed: number | null = null,
+  godMode = false,
+): GameSession {
   const seed = forcedSeed ?? randomSeed();
   const bossSequence = deriveBossSequence(pool);
   const stageIndex = 0;
   const dungeon = generateDungeon(seed, pool, ROOMS_PER_RUN, bossSequence[stageIndex]);
   const world = createDungeonWorld(dungeon, seed);
+  world.godMode = godMode;
   initBossEnemies(world);
   world.isFinalDungeon = stageIndex >= bossSequence.length - 1;
   return {
@@ -196,6 +210,7 @@ export function createDungeonGameSession(pool: RoomData[], forcedSeed: number | 
     stageIndex,
     bossRewardChoices: [],
     shopStock: rollShopStock(world.hero, world.rng),
+    godMode,
   };
 }
 
@@ -240,6 +255,7 @@ export function restartSession(session: GameSession): void {
   } else {
     world = createWorld(session.room);
   }
+  world.godMode = session.godMode;
   initBossEnemies(world);
   session.world = world;
   session.accumulator = 0;
@@ -310,6 +326,7 @@ export function advanceToNextDungeon(session: GameSession): void {
   const bossId = session.bossSequence[session.stageIndex];
   const dungeon = generateDungeon(session.seed, session.dungeonPool, ROOMS_PER_RUN, bossId);
   const world = createDungeonWorld(dungeon, session.seed);
+  world.godMode = session.godMode;
   initBossEnemies(world);
   world.isFinalDungeon = session.stageIndex >= session.bossSequence.length - 1;
 

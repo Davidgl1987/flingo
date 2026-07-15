@@ -411,6 +411,14 @@ export function applyKnockbackToHero(world: World, vx: number, vy: number): void
  * cargas, bloquea el golpe por completo y consume una carga (con i-frames
  * cortos propios); si no, resta HP y activa i-frames largos.
  * Devuelve true si el golpe se resolvió como muerte (hp llega a 0).
+ *
+ * Modo dios de playtest (`world.godMode`, ?godmode): el daño se aplica
+ * SIEMPRE igual que en modo normal (hp baja, i-frames, evento
+ * 'player-damaged' — el objetivo es ver cuánto quita cada ataque). Solo
+ * cambia la resolución de "hp llega a 0": en vez de fijar hp en 0 y pasar a
+ * 'game-over', revive a maxHp y la partida sigue (nunca se resuelve como
+ * muerte, devuelve false igual que un golpe no letal — así el knockback del
+ * llamador, ej. embestidas de jefe, se sigue aplicando con normalidad).
  */
 export function applyDamageToHero(world: World, damage: number, events: EventQueue): boolean {
   const hero = world.hero;
@@ -428,6 +436,11 @@ export function applyDamageToHero(world: World, damage: number, events: EventQue
   pushEvent(events, 'player-damaged', hero.position.x, hero.position.y, damage);
 
   if (hero.hp <= 0) {
+    if (world.godMode) {
+      hero.hp = hero.maxHp;
+      pushEvent(events, 'godmode-revive', hero.position.x, hero.position.y, 1);
+      return false;
+    }
     hero.hp = 0;
     world.phase = 'game-over';
     pushEvent(events, 'player-died', hero.position.x, hero.position.y, 1);

@@ -42,6 +42,11 @@
   }
 }
 
+.hud-hp-group {
+  display: flex;
+  align-items: center;
+}
+
 .hud-hearts {
   display: flex;
   gap: 2px;
@@ -105,6 +110,21 @@
 .hud-pause-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Badge del modo dios de playtest (?godmode): estático, marca claramente en
+   capturas/playtest que la run es de testeo (no una run real). */
+.hud-godmode-badge {
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #1a1330;
+  background: linear-gradient(135deg, #ffd166, #ff6bcb);
+  box-shadow: 0 0 8px rgba(255, 107, 203, 0.7);
+  align-self: center;
 }
 
 .heart-full {

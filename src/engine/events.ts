@@ -21,6 +21,12 @@ export type GameEventType =
   | 'enemy-died'
   | 'player-damaged'
   | 'player-died'
+  /**
+   * Modo dios de playtest (`?godmode`, render/debug-params.ts): el héroe
+   * llegó a 0 hp pero en vez de 'player-died'/game-over revive a maxHp y la
+   * partida sigue (`applyDamageToHero`, features/combat/combat.ts).
+   */
+  | 'godmode-revive'
   | 'shield-block'
   | 'pit-fall'
   | 'pit-respawn'
