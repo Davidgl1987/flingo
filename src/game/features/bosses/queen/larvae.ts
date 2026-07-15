@@ -35,9 +35,10 @@ function queenLiveLarvaCount(world: World, boss: Enemy): number {
  */
 export function queenSpawnChasers(world: World, boss: Enemy, events: EventQueue): void {
   const total = queenLiveLarvaCount(world, boss);
-  let toSpawn = Math.min(QUEEN_CHASER_PER_WAVE_BY_PHASE[boss.bossPhase - 1], QUEEN_LARVA_MAX - total);
-  if (toSpawn <= 0) return;
+  const wanted = Math.min(QUEEN_CHASER_PER_WAVE_BY_PHASE[boss.bossPhase - 1], QUEEN_LARVA_MAX - total);
+  if (wanted <= 0) return;
 
+  let toSpawn = wanted;
   const enemies = world.enemies;
   for (let i = 0; i < enemies.length && toSpawn > 0; i++) {
     const larva = enemies[i];
@@ -61,7 +62,11 @@ export function queenSpawnChasers(world: World, boss: Enemy, events: EventQueue)
 
     toSpawn--;
   }
-  pushEvent(events, 'boss-wave-spawn', boss.position.x, boss.position.y, 1);
+  // intensity = nº de larvas REALMENTE invocadas (GDD/events.ts: puede ser
+  // menor que `wanted` si no había slots libres suficientes bajo el cap de
+  // vivas) — antes quedaba hardcodeado a 1, en desacuerdo con el contrato
+  // documentado en `GameEventType['boss-wave-spawn']` (engine/events.ts).
+  pushEvent(events, 'boss-wave-spawn', boss.position.x, boss.position.y, wanted - toSpawn);
 }
 
 /** Nº de guardianas vivas (larvas con `chasing=false`) de esta Reina. */

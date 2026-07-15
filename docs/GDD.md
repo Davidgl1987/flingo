@@ -386,7 +386,7 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 | Jefe | Vida | Daño de golpe (fase 1 → 3) | Ventana de vulnerabilidad | Ritmo de patrón |
 |---|---|---|---|---|
 | Guardián de Canto | 40 | 1 → 2 (empuje de carga; bajado de 2→3 tras playtest 2026-07-06) | ~1.4 s tras chocar (~2.2 s si arrolla un barril) | carga cada ~2.5 s, encadenada en fase 2; barril perimetral cada ~8 s |
-| Reina del Enjambre | 55 | sin ataque directo fuerte; larvas 1 daño de contacto | permanente (sin aturdimiento) | oleada cada ~3 s, rastro continuo |
+| Reina del Enjambre | 55 | sin ataque directo fuerte; larvas 1 daño de contacto | *(actualizado, rediseño 2026-07-10: vida en 8 columnas)* 15 % del daño del arma en todo momento; al romper una columna, aturdida 1.4 s (daño completo); rotas las 8, vulnerable permanente | oleada cada ~3 s, rastro continuo, guardianas de columna embisten cada ~2.5 s |
 | El Prisma | 45 | 1–2 según modo | fin de cada ataque + color correcto | modo cada ~6 s (→ ~4 s en fase 3), solapes en fase 3 |
 | La Tormenta | 40 | 1 por bala | recarga ~1.8 s tras cada patrón (subida de ~1.2 s tras playtest 2026-07-15); daño completo ahí, 20 % fuera de ventana (tuning 2026-07-15, antes 0 = inmune) | patrón cada ~4.8 s de media (~3.2 s ráfaga, ~5.6 s espiral/anillos); balas ≤ 3.9 u/s (bajado de 4.5 tras playtest 2026-07-15, "sigue siendo demasiado difícil quizá") |
 

@@ -14,7 +14,7 @@ import { RAM_SPEED_THRESHOLD } from '@/game/features/combat/constants';
 import { getRoomPool } from '@/game/features/dungeon/rooms';
 import { applyDamageToEnemy, stepHeroEnemyContacts } from '@/game/features/combat/combat';
 import { generateDungeon } from '@/game/features/dungeon/dungeon';
-import { createEventQueue } from '@/engine/events';
+import { createEventQueue, drainEvents } from '@/engine/events';
 import { parseRoomData } from '@/game/features/dungeon/room-format';
 import type { EnemySpawn, RoomData, RoomTag } from '@/game/world/types';
 import { createWorld } from '@/game/world/create';
@@ -159,6 +159,22 @@ describe('Reina: cadencia de oleadas de larvas (GDD §15.6: "oleada cada ~3s")',
     expect(larvae.length).toBeGreaterThanOrEqual(1);
     expect(larvae.every((l) => l.chasing)).toBe(true); // perseguidoras (nacen del boss)
     expect(collectTypes(events)).toContain('boss-wave-spawn');
+  });
+
+  it('boss-wave-spawn lleva como intensity el nº de larvas REALMENTE invocadas (events.ts: "puede ser menor... si el cap ya estaba casi lleno")', () => {
+    const world = makeQueenWorld();
+    const events = createEventQueue(64);
+    world.hero.position.x = 100;
+    world.hero.position.y = 100;
+
+    const ticksPerWave = Math.round(QUEEN_WAVE_INTERVAL / FIXED_DT);
+    advance(world, events, ticksPerWave + 1);
+
+    let waveIntensity = -1;
+    drainEvents(events, (e) => {
+      if (e.type === 'boss-wave-spawn') waveIntensity = e.intensity;
+    });
+    expect(waveIntensity).toBe(QUEEN_CHASER_PER_WAVE_BY_PHASE[0]);
   });
 
   it('cada larva nace con QUEEN_LARVA_HP (1 hp, GDD §15.6 "1 daño de contacto" implica 1 golpe basta)', () => {
