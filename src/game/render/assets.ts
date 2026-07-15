@@ -321,8 +321,20 @@ export const stormReloadCoreMaterial = new THREE.MeshBasicMaterial({ color: '#dc
  * cabeceo, sea cual sea el patrón telegrafiado.
  */
 export const STORM_HALO_SEGMENTS = 32;
-/** Fracción de cada sección del grid que ocupa el arco visible (deja hueco entre secciones contiguas, para que se lean como bloques separados). */
-const STORM_HALO_SEGMENT_FILL = 0.7;
+/**
+ * Fracción del paso angular del grid (2π/32) que ocupa el arco visible de cada
+ * sección. Playtest 2026-07-15 (David: "haz que los segmentos del anillo
+ * estén unidos, que no se vea separación entre ellos"): antes 0.7 dejaba un
+ * hueco real entre secciones contiguas (se leían como "cuentas" separadas);
+ * ahora 1.02 cubre el paso completo con un pelín de solape (2%) que mata el
+ * aliasing de la costura entre dos secciones adyacentes sin acumularse en un
+ * salto visible — cada sección se centra en su propio ángulo de grid fijo
+ * (`i · 2π/32`, ver `rotateZ` de abajo), así que el solape es siempre local a
+ * cada costura, nunca una deriva que crezca vuelta tras vuelta. El anillo
+ * ahora se lee como una cinta continua; lo que cambia por tramos es el color/
+ * brillo (`setColorAt` en EnemyViews.tsx), no la geometría.
+ */
+const STORM_HALO_SEGMENT_FILL = 1.02;
 /** Ángulo (rad) del arco visible de una sola sección instanciada. */
 const STORM_HALO_SEGMENT_ARC = ((Math.PI * 2) / STORM_HALO_SEGMENTS) * STORM_HALO_SEGMENT_FILL;
 /**

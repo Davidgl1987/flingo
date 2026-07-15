@@ -3,7 +3,8 @@
  *
  * Este fichero fija TODOS los números de los tres generadores de patrones de
  * balas (espiral / anillos / ráfaga radial). El eje de diseño es la **regla de
- * honestidad** (GDD §15.5): las balas son lentas (≤ 4.5 u/s), los huecos
+ * honestidad** (GDD §15.5): las balas son lentas (≤ 3.9 u/s, bajado desde
+ * 4.5 tras playtest 2026-07-15: "sigue siendo demasiado difícil quizá"), los huecos
  * SIEMPRE existen (pasillo garantizado por construcción, no por azar) y ninguna
  * bala nace a bocajarro. Cada constante lleva su porqué; los que se derivan de
  * otras (ángulo de pasillo, tope de balas vivas) se calculan con las funciones
@@ -26,11 +27,16 @@ import { PROJECTILE_LIFETIME } from '@/game/features/combat/constants';
 
 /**
  * Rapidez de cada bala (u/s). Tope duro de la regla de honestidad (GDD §15.6:
- * "balas ≤ 4.5 u/s"): lentas frente al héroe (lanzamiento 3.6–7.5 u/s, tope
+ * "balas ≤ 3.9 u/s"): lentas frente al héroe (lanzamiento 3.6–7.5 u/s, tope
  * 13.5 u/s, GDD apéndice) para que sean esquivables en todo momento con
- * movimiento normal.
+ * movimiento normal. Bajado de 4.5 a 3.9 tras playtest 2026-07-15 (David:
+ * "sigue siendo demasiado difícil quizá"): el héroe ya esquivaba de sobra a
+ * 4.5, así que hay margen para aflojar sin que el patrón deje de leerse como
+ * "bullet hell" — sigue muy por encima del suelo de legibilidad (sensiblemente
+ * más lenta que el lanzamiento MÍNIMO del héroe, 3.6 u/s, así que el hueco
+ * nunca "adelanta" al jugador que se aparta).
  */
-export const STORM_BULLET_SPEED = 4.5;
+export const STORM_BULLET_SPEED = 3.9;
 /** Daño por bala (GDD §15.6: "1 por bala"). */
 export const STORM_BULLET_DAMAGE = 1;
 /**
@@ -85,13 +91,18 @@ export const STORM_HERO_DIAMETER = HERO_RADIUS * 2; // 0.76
  * Margen generoso del pasillo por encima del diámetro del héroe (req. 1). Las
  * balas son lentas y "esquivables en todo momento con movimiento normal"
  * (GDD §15.5), así que el pasillo se dimensiona con holgura, no al filo del
- * cuerpo: 0.6 u de aire extra ≈ 0.8 radios de héroe a cada lado.
+ * cuerpo. Subido de 0.6 a 0.85 u tras playtest 2026-07-15 (David: "sigue
+ * siendo demasiado difícil quizá"): esta es la palanca que ensancha el hueco
+ * de diseño de TODOS los patrones que lo usan (anillos y ráfaga —
+ * `emitRing`/`fireRadialBurst` leen `stormCorridorMinAngle`, que depende de
+ * este margen; la espiral no, su hueco es geométrico 2π/N), así que aflojarlo
+ * aquí se nota en el juego entero sin tener que tocar cada generador aparte.
  */
-export const STORM_CORRIDOR_MARGIN = 0.6;
+export const STORM_CORRIDOR_MARGIN = 0.85;
 /**
  * Ancho LINEAL mínimo de aire libre del pasillo (entre los BORDES de las balas
  * que lo flanquean), en unidades de mundo: diámetro del héroe + margen.
- * 0.76 + 0.6 = 1.36 u.
+ * 0.76 + 0.85 = 1.61 u.
  */
 export const STORM_CORRIDOR_MIN_WIDTH = STORM_HERO_DIAMETER + STORM_CORRIDOR_MARGIN;
 /**
@@ -118,7 +129,8 @@ export const STORM_HERO_DODGE_SPEED = 3.0;
 /**
  * Nº de brazos de la espiral. Los brazos van igualmente espaciados, así que el
  * hueco entre dos brazos contiguos es 2π/N. Con N=4 el hueco es π/2 ≈ 1.571
- * rad, muy por encima del ángulo de pasillo mínimo a r_min (~1.10 rad, ver
+ * rad, muy por encima del ángulo de pasillo mínimo a r_min (~1.29 rad tras
+ * subir `STORM_CORRIDOR_MARGIN` en el playtest 2026-07-15, ver
  * `stormCorridorMinAngle`): 4 brazos dejan siempre pasillo de sobra.
  */
 export const STORM_SPIRAL_ARMS = 4;
@@ -133,9 +145,13 @@ export const STORM_SPIRAL_ANGULAR_SPEED = 0.45;
  * Intervalo entre olas de la espiral por fase (s). Cada ola dispara los N
  * brazos a la vez; densificar (fase 2/3, GDD §15.5) = olas más juntas en el
  * tiempo, SIN tocar el nº de brazos (así el pasillo 2π/N no cambia). Índice
- * 0/1/2 = fase 1/2/3.
+ * 0/1/2 = fase 1/2/3. Fase 1 subida de 0.16 a 0.18 (+12.5%) tras playtest
+ * 2026-07-15 (David: "sigue siendo demasiado difícil quizá"): densidad de
+ * fase 1 más floja, dentro del ~10-15% pedido — solo fase 1 (índice 0), fase
+ * 2/3 se quedan igual de densas a propósito (ahí el jugador ya domina el
+ * patrón y la presión extra es la que distingue esas fases).
  */
-export const STORM_SPIRAL_EMIT_INTERVAL: readonly [number, number, number] = [0.16, 0.12, 0.12];
+export const STORM_SPIRAL_EMIT_INTERVAL: readonly [number, number, number] = [0.18, 0.12, 0.12];
 /** Duración de emisión de la espiral antes de darse por terminada (s), por fase. */
 export const STORM_SPIRAL_DURATION: readonly [number, number, number] = [2.4, 2.4, 2.4];
 
@@ -152,10 +168,15 @@ export const STORM_RING_INTERVAL: readonly [number, number, number] = [0.6, 0.45
  * Separación angular objetivo entre balas CONTIGUAS del cuerpo del anillo (rad),
  * por fase. Debe ser suficientemente pequeña para que la parte llena del anillo
  * sea un "muro" que el héroe NO pueda cruzar (a r_min: 2·r·sin(Δ/2) < diámetro
- * del héroe): 0.42 → 0.67 u entre centros < 0.76 ✓. Fase 2/3 densifica a 0.30.
- * El reparto real usa `ceil`, así que la separación efectiva es ≤ ésta.
+ * del héroe). Fase 1 subida de 0.42 a 0.46 (+9.5%, dentro de lo pedido tras
+ * playtest 2026-07-15 "sigue siendo demasiado difícil quizá") — techo real
+ * ~0.479 (2·1.6·sin(Δ/2) < 0.76 → Δ < 0.479): 0.46 se queda con margen (0.46 →
+ * 0.73 u entre centros < 0.76 ✓) sin arriesgar que el héroe se cuele por el
+ * muro. Fase 2/3 se quedan en 0.30 (más densas a propósito, mismo criterio
+ * que el intervalo de la espiral). El reparto real usa `ceil`, así que la
+ * separación efectiva es ≤ ésta.
  */
-export const STORM_RING_BULLET_SPACING: readonly [number, number, number] = [0.42, 0.3, 0.3];
+export const STORM_RING_BULLET_SPACING: readonly [number, number, number] = [0.46, 0.3, 0.3];
 /** Nº de anillos por patrón antes de darse por terminado, por fase. */
 export const STORM_RING_COUNT: readonly [number, number, number] = [5, 6, 6];
 
@@ -164,8 +185,10 @@ export const STORM_RING_COUNT: readonly [number, number, number] = [5, 6, 6];
 /**
  * Nº de pasillos (huecos completos) que abre la ráfaga radial. Van igualmente
  * espaciados (2π/K entre centros); cada uno ≥ pasillo mínimo. Con K=3 y el
- * ángulo de pasillo a r_min (~1.10 rad) los huecos suman ~3.3 rad y queda ~3.0
- * rad de arco para el muro de balas repartido en 3 arcos densos.
+ * hueco de diseño real a r_min (`stormCorridorMinAngle`·`STORM_CORRIDOR_
+ * SAFETY` ≈ 1.29·1.15 ≈ 1.49 rad tras subir el margen en el playtest
+ * 2026-07-15) los huecos suman ~4.47 rad y queda ~1.82 rad de arco para el
+ * muro de balas repartido en 3 arcos densos.
  */
 export const STORM_BURST_CORRIDORS = 3;
 /**
@@ -196,7 +219,9 @@ export const STORM_MAX_LIVE_BULLETS_BUDGET = 80;
  * WIDTH` de aire libre entre sus BORDES. Geometría: la cuerda entre centros a
  * radio r es 2·r·sin(θ/2); restándole un radio de bala a cada lado queda el
  * aire libre. Despejando: θ = 2·asin((ancho/2 + radioBala)/r).
- * A r_min = 1.6: 2·asin((0.68+0.16)/1.6) = 2·asin(0.525) ≈ 1.105 rad (~63°).
+ * A r_min = 1.6: 2·asin((0.805+0.16)/1.6) = 2·asin(0.603) ≈ 1.295 rad (~74°)
+ * (subido desde ~1.105 rad/~63° tras subir `STORM_CORRIDOR_MARGIN` de 0.6 a
+ * 0.85 en el playtest 2026-07-15: "sigue siendo demasiado difícil quizá").
  */
 export function stormCorridorMinAngle(radius: number): number {
   return 2 * Math.asin((STORM_CORRIDOR_MIN_WIDTH / 2 + STORM_BULLET_RADIUS) / radius);
@@ -217,8 +242,11 @@ export function stormRingGapShiftMax(phase: 1 | 2 | 3): number {
  * Cota superior de la vida (s) de una bala: muere al tocar muro (arena
  * despejada) y como muy tarde al agotar `PROJECTILE_LIFETIME` (2.8 s). La
  * distancia máxima que recorre es del radio de emisión a la esquina interior:
- * (8.6 − 1.6)/4.5 ≈ 1.56 s < 2.8 s, así que manda el muro. Se usa 1.56 s como
- * cota para razonar el presupuesto de pool (pico ≈ cadencia·vida).
+ * (8.6 − 1.6)/3.9 ≈ 1.79 s < 2.8 s, así que manda el muro (subido desde
+ * ~1.56 s al bajar `STORM_BULLET_SPEED` de 4.5 a 3.9 en el playtest
+ * 2026-07-15: balas más lentas viven más, el presupuesto de pool de abajo
+ * verifica que el pico sigue bajo el techo con esta vida más larga). Se usa
+ * como cota para razonar el presupuesto de pool (pico ≈ cadencia·vida).
  */
 export function stormBulletLifetimeMax(): number {
   const wallTravel = (STORM_ARENA_CORNER_RADIUS - STORM_MIN_EMISSION_RADIUS) / STORM_BULLET_SPEED;

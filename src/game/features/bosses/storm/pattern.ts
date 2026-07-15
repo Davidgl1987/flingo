@@ -356,7 +356,21 @@ export function stormStepPattern(world: World, boss: Enemy, dt: number, events: 
         boss.patrolForward = true;
         boss.bossCounter = STORM_PATTERN_RINGS;
         boss.bossTelegraphKind = STORM_TELEGRAPH_KIND[STORM_PATTERN_RINGS];
-        resetRings(state, boss.position.x, boss.position.y, boss.bossPhase, world.rng);
+        // Tuning post-playtest 2026-07-15 (David: "haz que la ventana...
+        // esté lo más cerca posible del jugador"): el anillo ENCADENADO (a
+        // diferencia del primer patrón del ciclo, que sigue siendo
+        // aleatorio, ver `resetRings`) apunta su hueco al ángulo REAL del
+        // héroe respecto al jefe en este mismo tick — tras 2.4s de espiral el
+        // jugador ya está en movimiento evasivo; abrirle el primer anillo
+        // justo donde está, en vez de en un punto aleatorio del otro lado del
+        // aro, es la diferencia entre "encadenado injusto" y "castigo con una
+        // salida a mano". La ANCHURA del hueco no cambia (misma
+        // `stormCorridorMinAngle`·`STORM_CORRIDOR_SAFETY` de siempre).
+        const heroAngle = Math.atan2(
+          world.hero.position.y - boss.position.y,
+          world.hero.position.x - boss.position.x,
+        );
+        resetRings(state, boss.position.x, boss.position.y, boss.bossPhase, world.rng, heroAngle);
         break; // sigue en EXECUTE, sin telegraph ni recarga intermedia
       }
 

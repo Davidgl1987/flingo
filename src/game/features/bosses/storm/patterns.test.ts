@@ -201,6 +201,45 @@ describe('anillos: pasillo por construcción + alcanzabilidad', () => {
     }
   });
 
+  it('con hueco APUNTADO (aimedGapAngle, tuning post-playtest 2026-07-15) la garantía de pasillo se conserva para cualquier ángulo forzado', () => {
+    // Barre ángulos forzados repartidos por toda la circunferencia (no solo
+    // uno) y las 3 fases: la anchura del hueco (`emitRing`) es independiente
+    // de dónde esté centrado, así que debe seguir cumpliendo el pasillo
+    // mínimo exactamente igual que con el hueco aleatorio de siempre.
+    const AIMED_ANGLES = [0, 0.7, 1.3, Math.PI, -2.1, -0.5, 2.9];
+    for (const phase of PHASES) {
+      for (const aimedAngle of AIMED_ANGLES) {
+        for (let seed = 1; seed <= 20; seed++) {
+          const s = createStormState();
+          const c = makeCollector();
+          resetRings(s, CENTER_X, CENTER_Y, phase, createRng(seed), aimedAngle);
+          // El primer hueco queda fijado EXACTAMENTE en el ángulo pedido.
+          expect(s.ringGapAngle).toBe(aimedAngle);
+          let active = true;
+          let guard = 0;
+          while (active && guard++ < 100000) {
+            active = stepRings(s, DT, phase, c.emit, createRng(seed ^ 0x9e3779b1));
+            c.flush();
+          }
+          expect(c.waves.length).toBe(STORM_RING_COUNT[phase - 1]);
+          for (const wave of c.waves) {
+            const { gap } = maxGapAndCenter(wave.map((b) => b.angle));
+            expect(gap).toBeGreaterThanOrEqual(CORRIDOR_MIN_ANGLE - EPS); // (a) misma garantía, hueco forzado
+          }
+          assertSpeedAndRadius(c.waves);
+          // El primer anillo emitido debe abrir su hueco centrado EXACTAMENTE
+          // en el ángulo pedido (no en uno aleatorio, y no solo "cerca"):
+          // `emitRing` reparte las balas simétricamente a partir de
+          // `ringGapAngle ± gap/2`, así que el centro medido del hueco debe
+          // coincidir con el ángulo pedido salvo error de punto flotante.
+          const { center: firstGapCenter } = maxGapAndCenter(c.waves[0].map((b) => b.angle));
+          const delta = Math.abs(angularDelta(firstGapCenter, aimedAngle));
+          expect(delta).toBeLessThanOrEqual(1e-6); // confirma que "apuntar" de verdad apunta
+        }
+      }
+    }
+  });
+
   it('el hueco de anillos consecutivos se desplaza ≤ lo alcanzable a velocidad de héroe', () => {
     for (const phase of PHASES) {
       const shiftMax = stormRingGapShiftMax(phase);

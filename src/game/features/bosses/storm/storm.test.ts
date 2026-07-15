@@ -19,6 +19,7 @@ import { createWorld } from '@/game/world/create';
 import { initBossEnemies, stepBosses } from '@/game/features/bosses/lifecycle';
 import { getBossDef } from '@/game/features/bosses/registry';
 import { collectTypes } from '@/game/features/bosses/test-helpers';
+import { stormState } from './pattern';
 import { STORM_RADIUS } from './constants';
 import {
   STORM_DAMAGE_OUTSIDE_WINDOW,
@@ -231,6 +232,54 @@ describe('La Tormenta: fase 3 encadena espiral→anillos sin recarga intermedia 
     expect(leftExecuteBeforeChain).toBe(false);
     expect(chainedToRings).toBe(true);
     expect(reachedReloadAfterChain).toBe(true);
+  });
+});
+
+describe('La Tormenta: el hueco del anillo ENCADENADO (fase 3) apunta al héroe (tuning post-playtest 2026-07-15)', () => {
+  it('al encadenar espiral→anillos, ringGapAngle coincide con el ángulo real del héroe respecto al jefe en ese tick', () => {
+    const world = makeStormWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    boss.hp = Math.floor(boss.maxHp * 0.2); // rango de fase 3 (<=33%)
+    boss.bossPhase = 3;
+    boss.bossCounter = STORM_PATTERN_SPIRAL;
+    boss.bossTelegraphKind = STORM_TELEGRAPH_KIND[STORM_PATTERN_SPIRAL];
+    boss.bossStage = STORM_STAGE_TELEGRAPH;
+    boss.bossTimer = 0;
+    boss.bossTelegraphUntil = world.time;
+    boss.patrolForward = false;
+
+    advance(world, events, 1); // arranca la espiral
+    expect(boss.bossStage).toBe(STORM_STAGE_EXECUTE);
+
+    // Coloca al héroe en una posición no trivial (fuera de cualquier eje) para
+    // que la coincidencia no pueda pasar "por casualidad" con un ángulo
+    // degenerado (0, π/2, ...).
+    world.hero.position.x = -2.4;
+    world.hero.position.y = 1.1;
+
+    let chained = false;
+    for (let i = 0; i < 600 && !chained; i++) {
+      stepBosses(world, FIXED_DT, events);
+      world.time += FIXED_DT;
+      if (boss.bossCounter === STORM_PATTERN_RINGS) {
+        chained = true;
+        // Mismo ángulo que calcula `stormStepPattern` al encadenar (ver
+        // `pattern.ts`): atan2 de la posición del héroe MENOS la del jefe,
+        // ambas leídas en este mismo tick (el jefe ya se movió por la deriva
+        // ambiental de este tick antes de decidir el encadenado).
+        const expectedAngle = Math.atan2(
+          world.hero.position.y - boss.position.y,
+          world.hero.position.x - boss.position.x,
+        );
+        const state = stormState(world);
+        const delta = Math.abs(
+          Math.atan2(Math.sin(state.ringGapAngle - expectedAngle), Math.cos(state.ringGapAngle - expectedAngle)),
+        );
+        expect(delta).toBeLessThan(1e-6);
+      }
+    }
+    expect(chained).toBe(true);
   });
 });
 

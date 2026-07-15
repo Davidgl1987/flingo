@@ -216,14 +216,32 @@ export function stepSpiral(s: StormState, dt: number, phase: 1 | 2 | 3, emit: St
 /**
  * Arranca (o reinicia) los anillos. Fija el desplazamiento máximo del hueco por
  * anillo según la fase (alcanzable a velocidad de héroe por construcción) y
- * aleatoriza el hueco del primer anillo.
+ * decide el hueco del primer anillo: aleatorio con `rng`, salvo que se pase
+ * `aimedGapAngle` (rad) — en ese caso el hueco arranca centrado EXACTAMENTE
+ * ahí en vez de sortearse. Tuning post-playtest 2026-07-15 (David: "en la
+ * fase 3, cuando concatenas ataques diferentes, haz que la ventana... esté lo
+ * más cerca posible del jugador"): el integrador (`pattern.ts`, punto donde
+ * la espiral encadena con anillos sin recarga intermedia en fase 3) pasa el
+ * ángulo del héroe respecto al jefe en ese instante. El PRIMER anillo del
+ * ciclo (arrancado desde `stormEnterReload`/`stormEnterTelegraph`, sin
+ * encadenado) sigue sin pasar este argumento, así que sigue aleatorio, sin
+ * cambios. Nada más cambia: la ANCHURA del hueco (`emitRing`) y toda la
+ * matemática de garantías de pasillo son independientes del ángulo elegido —
+ * solo se desplaza DÓNDE está centrado el hueco, nunca cuánto mide.
  */
-export function resetRings(s: StormState, centerX: number, centerY: number, phase: 1 | 2 | 3, rng: Rng): void {
+export function resetRings(
+  s: StormState,
+  centerX: number,
+  centerY: number,
+  phase: 1 | 2 | 3,
+  rng: Rng,
+  aimedGapAngle?: number,
+): void {
   s.centerX = centerX;
   s.centerY = centerY;
   s.ringEmitTimer = 0; // primer anillo en el primer tick
   s.ringsEmitted = 0;
-  s.ringGapAngle = rng() * Math.PI * 2;
+  s.ringGapAngle = aimedGapAngle ?? rng() * Math.PI * 2;
   s.ringGapShiftMax = stormRingGapShiftMax(phase);
 }
 
