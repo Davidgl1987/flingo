@@ -8,10 +8,12 @@
 import { describe, expect, it } from 'vitest';
 import { generateDungeon } from './dungeon';
 import { createDungeonWorld } from './dungeon-world';
+import { seriesRooms } from './rooms';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
 import { BOSS_VICTORY_PAUSE_DURATION, stepWorld } from '@/game/world/step';
-import { DOOR_CONTACT_MARGIN, DOOR_TOUCH_MARGIN } from '@/game/world/constants';
-import type { EnemySpawn, RoomData, RoomTag } from '@/game/world/types';
+import { DOOR_CONTACT_MARGIN, DOOR_TOUCH_MARGIN, WALL_THICKNESS } from '@/game/world/constants';
+import type { AABB, Vec2 } from '@/engine/geometry';
+import type { EnemySpawn, Obstacle, RoomData, RoomTag } from '@/game/world/types';
 
 function makeRoom(
   id: string,
@@ -374,5 +376,100 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
 
     expect(combatRuntime.cleared).toBe(true);
     expect(world.phase).toBe('playing');
+  });
+});
+
+// ── Cobertura de esquinas de sala (bug playtest móvil 2026-07-15) ──────────
+//
+// Reporte: "hueco entre salas" — un cuadrilátero negro (fondo del vacío) en
+// la costura entre dos salas, pegado a un muro. Causa raíz: en un lado de
+// sala con hueco de puerta, `buildRoomWallSegments` (dungeon.ts) recortaba
+// los segmentos de muro exactamente en ±(axisLen/2), SIN la extensión de
+// `WALL_THICKNESS` hacia la esquina que sí aplica el lado sin huecos
+// (`makeWallSegment`). Cuando una sala tiene DOS lados adyacentes con hueco
+// de puerta (el caso normal de toda sala del bucle de 4 salas, ver
+// `LOOP_FREE_SIDES` en dungeon.ts: cada nodo usa exactamente 2 lados
+// contiguos), la esquina compartida por esos dos lados queda sin cubrir por
+// NINGÚN segmento — ni por el propio muro (que ya no llega) ni por el muro
+// perpendicular (que tampoco llega, por el mismo motivo) — un agujero de
+// WALL_THICKNESS² real en la malla de colisión (`world.obstacles`), no solo
+// visual: como en mazmorra multi-sala `stepHeroPhysics` NO usa
+// `collideInnerBounds` (solo los obstáculos AABB), ese hueco es atravesable.
+
+function isPointCovered(x: number, y: number, obstacles: readonly Obstacle[]): boolean {
+  return obstacles.some(
+    (o) => x >= o.aabb.minX && x <= o.aabb.maxX && y >= o.aabb.minY && y <= o.aabb.maxY,
+  );
+}
+
+/** Rejilla 3×3 de puntos estrictamente dentro de un AABB (con un pequeño margen interior). */
+function sampleGrid(box: AABB): Vec2[] {
+  const eps = 0.03;
+  const xs = [box.minX + eps, (box.minX + box.maxX) / 2, box.maxX - eps];
+  const ys = [box.minY + eps, (box.minY + box.maxY) / 2, box.maxY - eps];
+  const pts: Vec2[] = [];
+  for (const x of xs) for (const y of ys) pts.push({ x, y });
+  return pts;
+}
+
+/**
+ * Las 4 esquinas EXTERIORES de una sala (la banda de grosor WALL_THICKNESS
+ * justo fuera de su interior jugable, en cada esquina) como AABBs.
+ */
+function roomCornerBands(bounds: AABB): Record<'NW' | 'NE' | 'SW' | 'SE', AABB> {
+  const t = WALL_THICKNESS;
+  return {
+    NW: { minX: bounds.minX - t, maxX: bounds.minX, minY: bounds.minY - t, maxY: bounds.minY },
+    NE: { minX: bounds.maxX, maxX: bounds.maxX + t, minY: bounds.minY - t, maxY: bounds.minY },
+    SW: { minX: bounds.minX - t, maxX: bounds.minX, minY: bounds.maxY, maxY: bounds.maxY + t },
+    SE: { minX: bounds.maxX, maxX: bounds.maxX + t, minY: bounds.maxY, maxY: bounds.maxY + t },
+  };
+}
+
+/**
+ * Invariante: toda esquina exterior de toda sala colocada debe estar
+ * totalmente cubierta por algún obstáculo sólido (muro, portón o roca) — si
+ * no, esa esquina es una "muesca" que muestra el vacío de fondo y, en
+ * mazmorra multi-sala, un hueco de colisión real (ver cabecera del bloque).
+ * Devuelve la primera muesca encontrada (o null si no hay ninguna) con
+ * datos suficientes para depurar sin tener que rejugar la semilla.
+ */
+function findUncoveredRoomCorner(
+  seed: number,
+): { seed: number; roomId: string; corner: string; point: Vec2 } | null {
+  const dungeon = generateDungeon(seed, seriesRooms);
+  const world = createDungeonWorld(dungeon, seed);
+
+  for (const placed of dungeon.rooms) {
+    const bands = roomCornerBands(placed.bounds);
+    for (const [corner, box] of Object.entries(bands) as [keyof typeof bands, AABB][]) {
+      for (const point of sampleGrid(box)) {
+        if (!isPointCovered(point.x, point.y, world.obstacles)) {
+          return { seed, roomId: placed.room.id, corner, point };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+describe('cobertura de esquinas de sala (regresión playtest 2026-07-15)', () => {
+  it('ninguna esquina de ninguna sala queda sin cubrir, en ≥200 semillas con el pool real de serie', () => {
+    const SEED_COUNT = 250;
+    const failures: ReturnType<typeof findUncoveredRoomCorner>[] = [];
+    for (let seed = 1; seed <= SEED_COUNT; seed++) {
+      const failure = findUncoveredRoomCorner(seed);
+      if (failure) failures.push(failure);
+    }
+
+    if (failures.length > 0) {
+      const sample = failures
+        .slice(0, 5)
+        .map((f) => `seed=${f!.seed} sala=${f!.roomId} esquina=${f!.corner} punto=(${f!.point.x.toFixed(2)},${f!.point.y.toFixed(2)})`)
+        .join('\n');
+      throw new Error(
+        `${failures.length}/${SEED_COUNT} semillas con al menos una esquina de sala sin cubrir (muesca). Primeras:\n${sample}`,
+      );
+    }
   });
 });

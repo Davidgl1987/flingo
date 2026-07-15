@@ -734,8 +734,13 @@ export function buildRoomWallSegments(
 
     // Con huecos: recorre el eje del lado partiendo en segmentos sólidos
     // entre el borde/huecos anteriores, saltando el ancho de puerta en cada hueco.
+    // El recorrido arranca/termina `t` MÁS ALLÁ de las esquinas, igual que el
+    // lado sin huecos (`makeWallSegment` cubre halfW*2 + 2t): sin esa
+    // extensión, si dos lados adyacentes tienen puerta, la esquina t×t que
+    // comparten no la cubre ningún segmento — muesca visible al vacío y
+    // agujero de colisión real (bug playtest móvil 2026-07-15).
     const axisHalf = sideDef.axisLen / 2;
-    let cursor = -axisHalf;
+    let cursor = -axisHalf - t;
     let segIndex = 0;
     for (const gapOffset of gaps) {
       const gapStart = gapOffset - halfDoor;
@@ -747,9 +752,9 @@ export function buildRoomWallSegments(
       }
       cursor = Math.max(cursor, gapEnd);
     }
-    if (cursor < axisHalf - 1e-9) {
+    if (cursor < axisHalf + t - 1e-9) {
       segments.push(
-        makeWallSegmentRange(room.id, sideDef.side, segIndex++, sideDef, cursor, axisHalf, t, origin),
+        makeWallSegmentRange(room.id, sideDef.side, segIndex++, sideDef, cursor, axisHalf + t, t, origin),
       );
     }
   }
