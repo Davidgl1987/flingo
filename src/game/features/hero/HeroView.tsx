@@ -20,7 +20,7 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
-import { Vector3, type Mesh } from 'three';
+import { Vector3, type Group, type Mesh } from 'three';
 import { HERO_RADIUS } from './constants';
 import { PIT_FALL_DURATION } from '@/game/features/hazards/constants';
 import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '@/game/features/effects/trail';
@@ -30,11 +30,16 @@ import type { WeaponMode } from '@/game/world/types';
 import {
   aimDotMaterial,
   blobShadowMaterial,
+  candleEyeMaterial,
+  candleFlameMaterial,
+  DARK_SILHOUETTES,
   heroMaterial,
   heroShieldMaterial,
   heroSpikeGeometry,
   heroSpikeMaterial,
+  smallDotGeometry,
   unitCircle,
+  unitCone,
   unitSphere,
   WEAPON_COLOR,
 } from '@/game/render/assets';
@@ -65,6 +70,19 @@ const SQUASH_FLATTEN = 0.62;
 
 /** Escala uniforme de la Burbuja de Cuarzo (F5) respecto al radio del héroe: envuelve la bola, no la toca. */
 const SHIELD_BUBBLE_SCALE = 1.4;
+
+/**
+ * Héroe = vela (rama `estilo-oscuro`, solo dark>=1): la llama vive en un
+ * grupo aparte (`candleGroupRef`), NO como hijo del mesh del cuerpo
+ * (`bodyRef`) — un hijo de `bodyRef` heredaría gratis su squash/stretch de
+ * velocidad, y una llama de vela estirándose como un cometa al correr se
+ * leería raro. El grupo se posiciona cada frame igual que el cuerpo (mismo
+ * x/y/z), pero con su propia escala/oscilación de "viento" independiente.
+ */
+const FLAME_WIND_FREQ_A = 3.1;
+const FLAME_WIND_FREQ_B = 5.7;
+const FLAME_HEIGHT_FACTOR = 1.55;
+const FLAME_BASE_SCALE = 0.5;
 
 /**
  * Gesto de victoria (playtest 2026-07-15, David: "quizá algún gesto de
@@ -109,6 +127,9 @@ export function HeroView({ session }: { session: GameSession }) {
   const shadowRef = useRef<Mesh>(null);
   const shieldRef = useRef<Mesh>(null);
   const spikeRefs = useRef<(Mesh | null)[]>([]);
+  // Héroe = vela (dark>=1, ver comentario de FLAME_WIND_FREQ_A más arriba).
+  const candleGroupRef = useRef<Group>(null);
+  const flameRef = useRef<Mesh>(null);
   const prevSpeed = useRef(0);
   const squashUntil = useRef(0);
   const trailAccumulator = useRef(0);
@@ -163,10 +184,16 @@ export function HeroView({ session }: { session: GameSession }) {
     // Color del héroe según arma activa (punto 1 de playtest ronda 3): lerp
     // continuo hacia el color objetivo (nunca un corte brusco), independiente
     // del framerate. El indicador de puntería (aimDotMaterial) comparte el
-    // mismo objetivo para que apunten siempre al mismo lenguaje de color.
+    // mismo objetivo para que apunten siempre al mismo lenguaje de color. En
+    // dark>=1 (héroe = vela) el cuerpo deja de lerpear (queda cera fija,
+    // assets.ts) y el lerp se aplica a la llama en su lugar.
     const targetColor = WEAPON_COLOR[hero.weaponMode];
     const colorK = 1 - Math.exp(-WEAPON_COLOR_LERP_STIFFNESS * delta);
-    heroMaterial.color.lerp(targetColor, colorK);
+    if (DARK_SILHOUETTES) {
+      candleFlameMaterial.color.lerp(targetColor, colorK);
+    } else {
+      heroMaterial.color.lerp(targetColor, colorK);
+    }
     aimDotMaterial.color.lerp(targetColor, colorK);
 
     // Cambio de arma: burst de partículas del color NUEVO alrededor del
@@ -201,6 +228,7 @@ export function HeroView({ session }: { session: GameSession }) {
         body.scale.setScalar(scale);
       }
       if (shadow) shadow.visible = false;
+      if (DARK_SILHOUETTES && candleGroupRef.current) candleGroupRef.current.visible = false;
       prevSpeed.current = 0;
       return;
     }
@@ -260,6 +288,29 @@ export function HeroView({ session }: { session: GameSession }) {
       shadow.visible = true;
       shadow.position.set(x, 0.02, z);
     }
+
+    // Héroe = vela (dark>=1): la llama/ojos siguen al cuerpo en x/z e y base,
+    // pero NUNCA su squash/stretch/rotación (ver comentario de
+    // FLAME_WIND_FREQ_A) — grupo aparte, actualizado a mano.
+    if (DARK_SILHOUETTES) {
+      const candleGroup = candleGroupRef.current;
+      if (candleGroup) {
+        candleGroup.visible = blinkOn;
+        candleGroup.position.set(x, visualRadius + victoryHop, z);
+      }
+      const flame = flameRef.current;
+      if (flame) {
+        // Viento sutil: suma de dos senos inconmensurados, igual criterio
+        // barato que CandleLightView (sin asignaciones).
+        const windA = Math.sin(world.time * FLAME_WIND_FREQ_A);
+        const windB = Math.sin(world.time * FLAME_WIND_FREQ_B);
+        const wind = windA * 0.6 + windB * 0.4;
+        flame.position.set(wind * visualRadius * 0.12, visualRadius * FLAME_HEIGHT_FACTOR, 0);
+        flame.rotation.z = wind * 0.3;
+        const flameScale = visualRadius * FLAME_BASE_SCALE;
+        flame.scale.set(flameScale * (1 - Math.abs(wind) * 0.15), flameScale * (1.8 + wind * 0.25), flameScale);
+      }
+    }
   });
 
   return (
@@ -287,6 +338,15 @@ export function HeroView({ session }: { session: GameSession }) {
         rotation-x={-Math.PI / 2}
         scale={HERO_RADIUS * 1.25}
       />
+      {DARK_SILHOUETTES && (
+        <group ref={candleGroupRef}>
+          {/* Llama (MUTABLE, ver useFrame): cono estrecho, autoiluminado. */}
+          <mesh ref={flameRef} geometry={unitCone} material={candleFlameMaterial} />
+          {/* Carita de vela: dos ojos negros ovalados simples (concept art). */}
+          <mesh geometry={smallDotGeometry} material={candleEyeMaterial} position={[-HERO_RADIUS * 0.35, HERO_RADIUS * 0.05, HERO_RADIUS * 0.82]} scale={[HERO_RADIUS * 0.13, HERO_RADIUS * 0.2, HERO_RADIUS * 0.08]} />
+          <mesh geometry={smallDotGeometry} material={candleEyeMaterial} position={[HERO_RADIUS * 0.35, HERO_RADIUS * 0.05, HERO_RADIUS * 0.82]} scale={[HERO_RADIUS * 0.13, HERO_RADIUS * 0.2, HERO_RADIUS * 0.08]} />
+        </group>
+      )}
     </>
   );
 }

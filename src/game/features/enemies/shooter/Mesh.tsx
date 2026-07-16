@@ -1,6 +1,12 @@
 /**
  * Shooter: "ojo/cañón" orientado siempre al héroe, que se ilumina (cambia de
  * material apagado a material de carga) mientras `shooterPhase==='charge'`.
+ *
+ * Aguaboca (rama `estilo-oscuro`, solo dark>=1): el "ojo" pasa a ser una
+ * boca-tubo (cilindro corto horizontal, `unitCylinder` reutilizado con
+ * rotación local) en vez del punto esférico de `dark=0` — mismo criterio de
+ * intercambio de material al cargar/descargar, solo cambian geometría y
+ * paleta (piedra oscura ↔ azul brillante en vez de gris ↔ rojo).
  */
 
 import { useFrame } from '@react-three/fiber';
@@ -10,12 +16,20 @@ import type { Group, Mesh } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
 import {
+  DARK_SILHOUETTES,
   shooterEyeChargeMaterial,
   shooterEyeMaterial,
   shooterTelegraphMaterial,
+  shooterTubeGlowMaterial,
+  shooterTubeRestMaterial,
   smallDotGeometry,
   unitCircle,
+  unitCylinder,
 } from '@/game/render/assets';
+
+/** Material/geometría "en reposo" y "cargando" del ojo/cañón, según modo. */
+const EYE_REST_MATERIAL = DARK_SILHOUETTES ? shooterTubeRestMaterial : shooterEyeMaterial;
+const EYE_CHARGE_MATERIAL = DARK_SILHOUETTES ? shooterTubeGlowMaterial : shooterEyeChargeMaterial;
 
 export function ShooterMesh({
   session,
@@ -54,14 +68,24 @@ export function ShooterMesh({
     if (charging !== wasCharging.current) {
       wasCharging.current = charging;
       const eye = shooterEyeMeshRef.current;
-      if (eye) eye.material = charging ? shooterEyeChargeMaterial : shooterEyeMaterial;
+      if (eye) eye.material = charging ? EYE_CHARGE_MATERIAL : EYE_REST_MATERIAL;
     }
   });
 
   return (
     <>
       <group ref={shooterEyeGroupRef} position={[0, 0.05, 0.36]}>
-        <mesh ref={shooterEyeMeshRef} geometry={smallDotGeometry} material={shooterEyeMaterial} scale={0.13} />
+        {DARK_SILHOUETTES ? (
+          <mesh
+            ref={shooterEyeMeshRef}
+            geometry={unitCylinder}
+            material={EYE_REST_MATERIAL}
+            rotation-x={Math.PI / 2}
+            scale={[0.22, 0.22, 0.42]}
+          />
+        ) : (
+          <mesh ref={shooterEyeMeshRef} geometry={smallDotGeometry} material={EYE_REST_MATERIAL} scale={0.13} />
+        )}
       </group>
       <mesh
         ref={telegraphRef}

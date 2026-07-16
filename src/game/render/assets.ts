@@ -559,6 +559,83 @@ if (DARK_MODE >= 1) {
   }
 }
 
+// ── Siluetas oscuras de personajes (rama `estilo-oscuro`, solo dark>=1) ────
+//
+// Sustituye los cuerpos-placeholder (esferas de colores planos) por siluetas
+// casi negras de piedra/tela, inspiradas en concept art estilo Hollow Knight/
+// vela: cuerpos oscuros + ojos/acentos emisivos (MeshBasicMaterial, ignoran
+// la luz de escena — visibles incluso a oscuras, "es EL rasgo del concept").
+// Placeholders: primitivas de Three combinadas, no modelos; importa la
+// silueta + los ojos, no el detalle. SOLO dark>=1: con dark=0 este bloque no
+// se ejecuta y los materiales de arriba quedan con su color original
+// (paridad EXACTA con `main`). No toca radios de colisión ni la sim: es
+// render puro (JSX/materiales), igual que el resto de "personalidad de
+// enemigos" de más arriba.
+export const DARK_SILHOUETTES = DARK_MODE >= 1;
+
+/** Intensidad de emissive de acentos de jefe (cuernos/corona) sobre su Lambert base: se intuyen, no brillan como neón (mismo orden que GLOW_EMISSIVE_INTENSITY de arriba). */
+const ACCENT_EMISSIVE_INTENSITY = 0.3;
+
+/** Cera pálida del cuerpo del héroe-vela: fija en dark>=1 (deja de lerpear con el arma; la llama de arriba es la que cambia de color). */
+const HERO_WAX_COLOR = '#e8ddc8';
+
+/**
+ * Llama de la vela del héroe: MUTABLE, mismo criterio que `heroMaterial` en
+ * dark=0 — HeroView.tsx interpola su color hacia `WEAPON_COLOR[weaponMode]`
+ * cada frame con la misma rigidez (`WEAPON_COLOR_LERP_STIFFNESS`). Autoiluminada
+ * (Basic): una llama no depende de la luz de escena.
+ */
+export const candleFlameMaterial = new THREE.MeshBasicMaterial({ color: WEAPON_COLOR.body.clone() });
+/** Ojos de la vela (carita simple del concept): óvalos negros, reutiliza smallDotGeometry escalada. */
+export const candleEyeMaterial = new THREE.MeshBasicMaterial({ color: '#14121a' });
+
+/** Vigía de hollín (dummy): campana/farolillo — ojos cálidos ovalados. */
+export const dummyEyeGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffc169' });
+/** Falda cónica oscura de la campana del Vigía. */
+export const dummySkirtMaterial = new THREE.MeshLambertMaterial({ color: '#1c1a20' });
+/** Acechador del Umbral (chaser): ojos rasgados violeta. */
+export const chaserEyeGlowMaterial = new THREE.MeshBasicMaterial({ color: '#b18cff' });
+/** Penitente de Púas (spike): un único ojo cálido grande frontal. */
+export const spikeEyeGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffb36b' });
+/** Aguaboca (shooter): interior del tubo/cañón en reposo (piedra oscura apagada) y al cargar (azul brillante). */
+export const shooterTubeRestMaterial = new THREE.MeshBasicMaterial({ color: '#2a2730' });
+export const shooterTubeGlowMaterial = new THREE.MeshBasicMaterial({ color: '#7cc7ff' });
+
+if (DARK_SILHOUETTES) {
+  // Héroe = vela: cuerpo de cera pálida fijo (HeroView.tsx deja de lerpear
+  // heroMaterial.color en dark>=1; el color de arma vive solo en la llama).
+  heroMaterial.color.set(HERO_WAX_COLOR);
+
+  // Vigía de hollín (dummy): campana oscura.
+  dummyMaterial.color.set('#242129');
+  // Acechador del Umbral (chaser): figura alta y fina, casi negra.
+  chaserMaterial.color.set('#0d0c12');
+  // Penitente de Púas (spike): bola y conos de piedra oscura.
+  spikeMaterial.color.set('#211f26');
+  spikeConeMaterial.color.set('#17151b');
+  // Lacrimera (trail): gota pálida translúcida con brillo interior violeta.
+  trailMaterial.color.set('#cfc4e8');
+  trailMaterial.transparent = true;
+  trailMaterial.opacity = 0.85;
+  trailMaterial.emissive.set('#b18cff');
+  trailMaterial.emissiveIntensity = 0.25;
+  // Aguaboca (shooter): pedrusco oscuro.
+  shooterMaterial.color.set('#232028');
+
+  // Jefes (GDD §15): NO se remodela su composición, solo se oscurece el
+  // cuerpo y se da un pelín de emissive a acentos ya existentes para que se
+  // lean en la oscuridad (prismaCoreMaterial sigue el arma, ya es legible).
+  bossBodyMaterial.color.set('#26232c');
+  guardianBodyMaterial.color.set('#242229');
+  guardianHornMaterial.color.set('#18161c');
+  guardianHornMaterial.emissive.set('#d9a531');
+  guardianHornMaterial.emissiveIntensity = ACCENT_EMISSIVE_INTENSITY;
+  queenBodyMaterial.color.set('#221f2a');
+  queenCrownMaterial.emissive.set('#9fd65c');
+  queenCrownMaterial.emissiveIntensity = ACCENT_EMISSIVE_INTENSITY;
+  stormBodyMaterial.color.set('#20242e');
+}
+
 /** true si el grupo "fosos" de `?glow=` debe pintar el aro tenue del borde (leído por HazardView.tsx). */
 export const PIT_GLOW_ENABLED = DARK_MODE >= 1 && GLOW_GROUPS.has('fosos');
 

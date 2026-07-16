@@ -93,6 +93,7 @@ import {
   bossTelegraphMaterial,
   bossVulnerableMaterial,
   chaserMaterial,
+  DARK_SILHOUETTES,
   dummyMaterial,
   enemyHitFlashMaterial,
   guardianBodyMaterial,
@@ -192,6 +193,28 @@ function isQueenLarvaId(enemyId: string): boolean {
 }
 
 const ENEMY_RADIUS_RENDER = 0.4;
+
+/**
+ * Escala ESTÁTICA del cuerpo compartido por arquetipo (dark>=1, silueta del
+ * concept art): "Vigía de hollín" ligeramente achatado, "Acechador del
+ * Umbral" alto y fino. Fijada UNA vez al montar vía JSX (no en useFrame): el
+ * único código que muta `bodyRef.scale` después del montaje es el bloque de
+ * jefe/larva de más abajo (`kind==='boss' || isLarva`), que nunca se
+ * cumple para dummy/chaser, así que este valor persiste sin pisarse. Radio
+ * de colisión intacto (`enemy.radius`/`ENEMY_RADIUS_RENDER` no cambian, esto
+ * es solo la escala visual del mesh). `dark=0`: siempre el escalar plano de
+ * siempre (paridad exacta con `main`).
+ */
+function bodyScaleForKind(kind: EnemyKind): number | [number, number, number] {
+  if (!DARK_SILHOUETTES) return ENEMY_RADIUS_RENDER;
+  if (kind === 'dummy') {
+    return [ENEMY_RADIUS_RENDER * 1.08, ENEMY_RADIUS_RENDER * 0.82, ENEMY_RADIUS_RENDER * 1.08];
+  }
+  if (kind === 'chaser') {
+    return [ENEMY_RADIUS_RENDER * 0.78, ENEMY_RADIUS_RENDER * 1.45, ENEMY_RADIUS_RENDER * 0.78];
+  }
+  return ENEMY_RADIUS_RENDER;
+}
 /** Duración del flash de cuerpo entero al cambiar de fase (GDD §15.1 punto 3). Puramente cosmético. */
 const BOSS_PHASE_FLASH_DURATION = 0.3;
 /**
@@ -721,7 +744,7 @@ function EnemyMesh({
         ref={bodyRef}
         geometry={unitSphere}
         material={restingBodyMaterial(kind, bossId)}
-        scale={ENEMY_RADIUS_RENDER}
+        scale={bodyScaleForKind(kind)}
       />
       <mesh
         ref={shadowRef}

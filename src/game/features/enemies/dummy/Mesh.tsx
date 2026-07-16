@@ -2,6 +2,11 @@
  * Dummy: ojos simples que miran ligeramente hacia el héroe al perseguir
  * (más vivo), y quedan al frente en patrulla. El balanceo torpe de cabeceo
  * y el cuerpo/sombra compartidos viven en `../EnemyViews.tsx`.
+ *
+ * Vigía de hollín (rama `estilo-oscuro`, solo dark>=1): campana/farolillo —
+ * la falda cónica oscura se añade bajo el cuerpo (esfera ya achatada por
+ * `bodyScaleForKind` en EnemyViews.tsx) y los ojos blancos+pupila se
+ * sustituyen por óvalos cálidos autoiluminados (concept art).
  */
 
 import { useFrame } from '@react-three/fiber';
@@ -10,7 +15,15 @@ import type { RefObject } from 'react';
 import type { Group } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
-import { eyePupilMaterial, eyeWhiteMaterial, smallDotGeometry } from '@/game/render/assets';
+import {
+  DARK_SILHOUETTES,
+  dummyEyeGlowMaterial,
+  dummySkirtMaterial,
+  eyePupilMaterial,
+  eyeWhiteMaterial,
+  smallDotGeometry,
+  unitCone,
+} from '@/game/render/assets';
 
 export function DummyMesh({
   session,
@@ -43,11 +56,26 @@ export function DummyMesh({
   });
 
   return (
-    <group ref={dummyEyesRef} position={[0, 0.08, 0.34]}>
-      <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[-0.12, 0, 0]} scale={0.08} />
-      <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[0.12, 0, 0]} scale={0.08} />
-      <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[-0.12, 0, 0.06]} scale={0.04} />
-      <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[0.12, 0, 0.06]} scale={0.04} />
-    </group>
+    <>
+      <group ref={dummyEyesRef} position={[0, 0.08, 0.34]}>
+        {DARK_SILHOUETTES ? (
+          <>
+            <mesh geometry={smallDotGeometry} material={dummyEyeGlowMaterial} position={[-0.12, 0, 0]} scale={[0.07, 0.1, 0.04]} />
+            <mesh geometry={smallDotGeometry} material={dummyEyeGlowMaterial} position={[0.12, 0, 0]} scale={[0.07, 0.1, 0.04]} />
+          </>
+        ) : (
+          <>
+            <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[-0.12, 0, 0]} scale={0.08} />
+            <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[0.12, 0, 0]} scale={0.08} />
+            <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[-0.12, 0, 0.06]} scale={0.04} />
+            <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[0.12, 0, 0.06]} scale={0.04} />
+          </>
+        )}
+      </group>
+      {/* Falda cónica de la campana (estática: no rota con la mirada). */}
+      {DARK_SILHOUETTES && (
+        <mesh geometry={unitCone} material={dummySkirtMaterial} position={[0, -0.16, 0]} scale={[0.34, 0.24, 0.34]} />
+      )}
+    </>
   );
 }

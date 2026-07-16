@@ -11,6 +11,8 @@ import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
 import {
   chaserBrowMaterial,
+  chaserEyeGlowMaterial,
+  DARK_SILHOUETTES,
   eyePupilMaterial,
   eyeWhiteMaterial,
   smallDotGeometry,
@@ -86,10 +88,32 @@ export function ChaserMesh({
     // useFrame (proyección sobre la superficie esférica); el valor JSX
     // es solo el estado inicial antes del primer frame.
     <group ref={chaserFaceRef} position={[0, CHASER_FACE_HEIGHT, CHASER_FACE_RADIUS]}>
-      <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[-0.13, -0.02, 0]} scale={0.09} />
-      <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[0.13, -0.02, 0]} scale={0.09} />
-      <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[-0.13, -0.02, 0.06]} scale={0.045} />
-      <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[0.13, -0.02, 0.06]} scale={0.045} />
+      {DARK_SILHOUETTES ? (
+        <>
+          {/* Acechador del Umbral: ojos rasgados violeta emisivos (concept art). */}
+          <mesh
+            geometry={smallDotGeometry}
+            material={chaserEyeGlowMaterial}
+            position={[-0.13, -0.02, 0]}
+            rotation-z={0.35}
+            scale={[0.045, 0.12, 0.03]}
+          />
+          <mesh
+            geometry={smallDotGeometry}
+            material={chaserEyeGlowMaterial}
+            position={[0.13, -0.02, 0]}
+            rotation-z={-0.35}
+            scale={[0.045, 0.12, 0.03]}
+          />
+        </>
+      ) : (
+        <>
+          <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[-0.13, -0.02, 0]} scale={0.09} />
+          <mesh geometry={smallDotGeometry} material={eyeWhiteMaterial} position={[0.13, -0.02, 0]} scale={0.09} />
+          <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[-0.13, -0.02, 0.06]} scale={0.045} />
+          <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[0.13, -0.02, 0.06]} scale={0.045} />
+        </>
+      )}
       {/* Cejas agresivas: cuñas inclinadas hacia el centro (ceño fruncido). */}
       <mesh
         geometry={smallWedgeGeometry}
