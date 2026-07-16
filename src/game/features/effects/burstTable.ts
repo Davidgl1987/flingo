@@ -29,6 +29,10 @@ const NONE: BurstSpec = { color: '#ffffff', size: 0, count: 0, life: 0, speed: 0
 
 /** Burst por defecto para cada tipo de evento; los que no generan feedback visual propio quedan en NONE (count 0). */
 export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
+  // Color aquí es solo FALLBACK (tests/llamadas sin override): en juego
+  // reactToEvent.ts lo sustituye siempre por WEAPON_COLOR[hero.weaponMode]
+  // vía el 6º parámetro que le pasa useGameLoop.ts — 'launch' cubre las 3
+  // armas (cuerpo/flecha/hechizo), no puede tener un color fijo correcto.
   launch: { color: '#54c7ff', size: 0.09, count: 10, life: 0.3, speed: 2.2, trauma: 0.06 },
   'wall-bounce': { color: '#c7ccdf', size: 0.06, count: 5, life: 0.22, speed: 1.6, trauma: 0.08 },
   'enemy-hit': { color: '#ffffff', size: 0.08, count: 8, life: 0.25, speed: 2.6, trauma: 0.06 },

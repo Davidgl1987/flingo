@@ -555,7 +555,12 @@ export const potionCapGeometry = new THREE.CylinderGeometry(0.4, 0.36, 1, 12);
 // nula), así que se les da un `emissive` tenue según `?glow=`/el store (lista
 // de grupos, o TODOS por defecto). Los materiales Basic (pit/charco/barro/
 // acelerador) YA ignoran la iluminación de escena — son autoemisivos de
-// facto — y no necesitan tocarse.
+// facto — así que en vez de `emissive` se les baja directamente el COLOR
+// (`applyToneDark`); barro/acelerador (grupo `hazards`) tienen además dos
+// tonos según `?glow=hazards` esté activo o no (ver comentario junto a
+// `HAZARD_TONE_ON`/`HAZARD_TONE_OFF` más abajo) — antes ignoraban el grupo
+// por completo (playtest: "las plataformas de velocidad siguen emitiendo
+// luz... no tienen categoría ni check en glow").
 //
 // Todo lo de aquí abajo pasa por `applyDarkMaterials(dark, glow)`: función
 // IDEMPOTENTE (se puede llamar cualquier número de veces con cualquier
@@ -571,23 +576,53 @@ function snapshotColor(material: { color: THREE.Color }): THREE.Color {
   return material.color.clone();
 }
 
-// -- Tono oscuro de materiales Basic (independiente de `?glow=`, solo de dark>=1) --
+// -- Tono oscuro de materiales Basic, solo de dark>=1 --
 const TONE_DARK_ORIGINAL = {
   puddle: snapshotColor(puddleMaterial),
   boost: snapshotColor(boostMaterial),
+  mud: snapshotColor(mudMaterial),
 };
+/**
+ * Charco de la Lacrimera (punto 4 de playtest: "el trail debe dejar el
+ * rastro del mismo color que su modelo"): en dark>=1 el cuerpo de la
+ * Lacrimera pasa a violeta pálido (`applySilhouettes`, `trailMaterial`
+ * '#cfc4e8'/emissive '#b18cff'), así que su charco deja el verde musgo
+ * clásico y pasa a violeta oscuro a juego — sin depender de `?glow=`
+ * (mismo criterio que siempre tuvo: solo depende de `dark`, no es un
+ * "peligro" con categoría propia).
+ */
 const TONE_DARK_COLOR = {
-  puddle: new THREE.Color('#1e5e3a'),
+  puddle: new THREE.Color('#3d3355'),
+};
+/**
+ * Plataformas de velocidad / barro (punto 3 de playtest: "las plataformas
+ * de velocidad siguen emitiendo luz, creo que porque no tienen categoría ni
+ * check en glow"): `boostMaterial`/`mudMaterial` son MeshBasic autoemisivos
+ * de facto (ignoran la luz de escena) — antes se atenuaban SIEMPRE en
+ * dark>=1 sin mirar ningún grupo de `?glow=`, así que "apagar hazards"
+ * desde el menú de pausa no los afectaba. Ahora, igual que el resto de
+ * peligros (`HAZARDS_GLOW_TARGETS`), dependen del grupo `hazards`: con
+ * hazards ON, el tono atenuado pero VISIBLE de siempre; con hazards OFF (o
+ * dark>=1 sin ese grupo activo), un tono MUY apagado, casi color de suelo.
+ */
+const HAZARD_TONE_ON = {
   boost: new THREE.Color('#1f7fa8'),
+  mud: new THREE.Color('#3a2818'),
+};
+const HAZARD_TONE_OFF = {
+  boost: new THREE.Color('#101b26'),
+  mud: new THREE.Color('#1a140f'),
 };
 
-function applyToneDark(active: boolean): void {
+function applyToneDark(active: boolean, hazardsOn: boolean): void {
   if (active) {
     puddleMaterial.color.copy(TONE_DARK_COLOR.puddle);
-    boostMaterial.color.copy(TONE_DARK_COLOR.boost);
+    boostMaterial.color.copy(hazardsOn ? HAZARD_TONE_ON.boost : HAZARD_TONE_OFF.boost);
+    mudMaterial.color.copy(hazardsOn ? HAZARD_TONE_ON.mud : HAZARD_TONE_OFF.mud);
   } else {
     puddleMaterial.color.copy(TONE_DARK_ORIGINAL.puddle);
     boostMaterial.color.copy(TONE_DARK_ORIGINAL.boost);
+    mudMaterial.color.copy(TONE_DARK_ORIGINAL.mud);
   }
 }
 
@@ -828,7 +863,7 @@ export function applyDarkMaterials(
   glow: { fosos: boolean; hazards: boolean; items: boolean; puertas: boolean },
 ): void {
   const active = dark >= 1;
-  applyToneDark(active);
+  applyToneDark(active, glow.hazards);
   applyEmissiveGroup(HAZARDS_GLOW_TARGETS, active && glow.hazards);
   applyEmissiveGroup(ITEMS_GLOW_TARGETS, active && glow.items);
   applyEmissiveGroup(PUERTAS_GLOW_TARGETS, active && glow.puertas);

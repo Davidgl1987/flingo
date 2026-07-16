@@ -431,6 +431,23 @@ function EnemyMesh({
   const lanternRef = useRef<THREE.SpotLight>(null);
   const lanternTargetRef = useRef<THREE.Object3D>(null);
   const lanternAngle = useRef(0);
+  // Luces del enemigo (fix de rendimiento, ver comentario extenso junto a
+  // `lightsGroupRef` en el JSX de abajo): refs propias para poder apagarlas
+  // con intensity=0 en vez de depender de `group.visible`.
+  const fillLightRef = useRef<THREE.PointLight>(null);
+  const bossLightRef = useRef<THREE.PointLight>(null);
+  /**
+   * Group HERMANO de `groupRef` (nunca `groupRef.visible=false` lo apaga):
+   * contiene solo las luces, mirroreando la POSICIÓN de `group` cada frame
+   * (nunca su rotación — ver más abajo por qué). Cambiar el Nº de luces
+   * VISIBLES en la escena recompila todos los shaders (three.js); antes las
+   * luces vivían dentro de `groupRef` y se apagaban solas al morir el
+   * enemigo (`group.visible=false`), lo que recompilaba en CADA muerte
+   * durante una sala con varios enemigos. Con este group aparte, el Nº de
+   * luces montadas para este enemigo es constante durante toda su vida en la
+   * sala (el propio componente se desmonta/monta solo al cambiar de sala).
+   */
+  const lightsGroupRef = useRef<Group>(null);
 
   useFrame((_, delta) => {
     const world = session.world;
@@ -438,11 +455,15 @@ function EnemyMesh({
     const group = groupRef.current;
     if (!enemy || !group) return;
 
-    if (enemy.hp <= 0) {
-      group.visible = false;
-      return;
-    }
-    group.visible = true;
+    const alive = enemy.hp > 0;
+    group.visible = alive;
+    // Recuento de luces estable (ver comentario de `lightsGroupRef`): se
+    // apagan con intensity=0, el group que las contiene sigue montado y
+    // visible pase lo que pase.
+    if (lanternRef.current) lanternRef.current.intensity = alive ? ENEMY_LANTERN_INTENSITY : 0;
+    if (fillLightRef.current) fillLightRef.current.intensity = alive ? ENEMY_FILL_LIGHT_INTENSITY : 0;
+    if (bossLightRef.current) bossLightRef.current.intensity = alive ? ENEMY_LIGHT_INTENSITY_BOSS : 0;
+    if (!alive) return;
 
     // Balanceo torpe del Dummy al patrullar (no perseguir): cabeceo vertical
     // suave, puramente cosmético, no afecta a la física.
@@ -459,6 +480,9 @@ function EnemyMesh({
     // tamaño fijo del arquetipo.
     const bodyRadius = kind === 'boss' || isLarva ? enemy.radius : ENEMY_RADIUS_RENDER;
     group.position.set(enemy.position.x, bodyRadius + bob, enemy.position.y);
+    // El group de luces solo TRASLADA (nunca rota, ver comentario de
+    // `lightsGroupRef`): mirrorea la posición de `group` cada frame.
+    if (lightsGroupRef.current) lightsGroupRef.current.position.copy(group.position);
 
     // La sombra es HIJA del grupo (que ya lleva la posición del enemigo):
     // sus coordenadas son LOCALES. Escribirle coordenadas de mundo aquí la
@@ -548,16 +572,24 @@ function EnemyMesh({
     // `shooterEyeGroupRef` en sus respectivos Mesh.tsx), conservando el
     // último ángulo válido cuando la distancia al héroe degenera a ~0.
     if (kind !== 'boss') {
+      // Ángulo de MUNDO directo: antes se restaba `group.rotation.y` para
+      // cancelar la rotación del padre (la linterna vivía dentro de
+      // `group`, que rota con la orientación del enemigo). Ahora vive en
+      // `lightsGroupRef`, que solo TRASLADA (nunca rota) — su espacio local
+      // YA es el mundo, así que no hace falta cancelar nada. Mismo ángulo de
+      // mundo final que antes en los 3 casos (spike/chaser-shooter usaban la
+      // resta para compensar exactamente esa rotación; dummy/trail apuntaban
+      // "hacia delante" del cuerpo, que en mundo es `orientationYaw`).
       if (kind === 'spike') {
-        lanternAngle.current = Math.atan2(enemy.facing.x, enemy.facing.y) - group.rotation.y;
+        lanternAngle.current = Math.atan2(enemy.facing.x, enemy.facing.y);
       } else if (kind === 'chaser' || kind === 'shooter') {
         const dxHero = world.hero.position.x - enemy.position.x;
         const dyHero = world.hero.position.y - enemy.position.y;
         if (Math.hypot(dxHero, dyHero) > 1e-4) {
-          lanternAngle.current = Math.atan2(dxHero, dyHero) - group.rotation.y;
+          lanternAngle.current = Math.atan2(dxHero, dyHero);
         }
       } else {
-        lanternAngle.current = 0;
+        lanternAngle.current = orientationYaw.current ?? 0;
       }
       if (lanternTargetRef.current) {
         lanternTargetRef.current.position.set(
@@ -840,6 +872,7 @@ function EnemyMesh({
   });
 
   return (
+    <>
     <group ref={groupRef}>
       <mesh
         ref={bodyRef}
@@ -854,48 +887,6 @@ function EnemyMesh({
         rotation-x={-Math.PI / 2}
         scale={ENEMY_RADIUS_RENDER * 1.3}
       />
-
-      {/* Luces móviles (punto 1/2a de playtest, SOLO dark>=1): hijas del
-          `group` que ya sigue la posición del enemigo cada frame — se apagan
-          solas con `group.visible=false` al morir (three.js no atraviesa
-          objetos invisibles al recolectar luces), sin lógica extra aquí. SIN
-          sombra (coste, y no la pide David: solo la vela debe bloquear luz).
-          No-boss: linterna de ojos (spotLight débil, dirección calculada en
-          useFrame) + relleno point MUY tenue para que el cuerpo no quede
-          negro del todo. Boss: conserva su pointLight de siempre, ahora más
-          luminosa (punto 2a) — las velas de sala (BossCandlesView) hacen el
-          resto. */}
-      {silhouettes && kind !== 'boss' && (
-        <>
-          <spotLight
-            ref={lanternRef}
-            color={ENEMY_LIGHT_COLOR[kind]}
-            intensity={ENEMY_LANTERN_INTENSITY}
-            distance={ENEMY_LANTERN_DISTANCE}
-            angle={ENEMY_LANTERN_ANGLE}
-            penumbra={ENEMY_LANTERN_PENUMBRA}
-            decay={ENEMY_LANTERN_DECAY}
-            position={[0, ENEMY_LANTERN_HEIGHT, 0]}
-          />
-          <object3D ref={lanternTargetRef} position={[0, ENEMY_LANTERN_HEIGHT, ENEMY_LANTERN_TARGET_DISTANCE]} />
-          <pointLight
-            color={ENEMY_LIGHT_COLOR[kind]}
-            intensity={ENEMY_FILL_LIGHT_INTENSITY}
-            distance={ENEMY_FILL_LIGHT_DISTANCE}
-            decay={ENEMY_LIGHT_DECAY}
-            position={[0, ENEMY_LIGHT_HEIGHT, 0]}
-          />
-        </>
-      )}
-      {silhouettes && kind === 'boss' && (
-        <pointLight
-          color={ENEMY_LIGHT_COLOR.boss}
-          intensity={ENEMY_LIGHT_INTENSITY_BOSS}
-          distance={ENEMY_LIGHT_DISTANCE_BOSS}
-          decay={ENEMY_LIGHT_DECAY}
-          position={[0, ENEMY_LIGHT_HEIGHT_BOSS, 0]}
-        />
-      )}
 
       {kind === 'dummy' && <DummyMesh session={session} enemyId={enemyId} groupRef={groupRef} />}
       {kind === 'chaser' && <ChaserMesh session={session} enemyId={enemyId} groupRef={groupRef} />}
@@ -1038,6 +1029,55 @@ function EnemyMesh({
         </>
       )}
     </group>
+
+    {/* Luces móviles (punto 1/2a de playtest, SOLO dark>=1): group HERMANO
+        de `groupRef`, NUNCA oculto (recuento de luces = recompilación de
+        shaders en three.js, ver comentario extenso junto a `lightsGroupRef`
+        arriba) — se apagan con intensity=0 al morir el enemigo, en vez de
+        `visible=false`. Mirrorea la POSICIÓN de `group` cada frame (nunca su
+        rotación: los ángulos de abajo ya se calculan en espacio de mundo).
+        SIN sombra (coste, y no la pide David: solo la vela debe bloquear
+        luz). No-boss: linterna de ojos (spotLight débil, dirección
+        calculada en useFrame) + relleno point MUY tenue para que el cuerpo
+        no quede negro del todo. Boss: conserva su pointLight de siempre, más
+        luminosa (punto 2a) — las velas de sala (BossCandlesView) hacen el
+        resto. */}
+    <group ref={lightsGroupRef}>
+      {silhouettes && kind !== 'boss' && (
+        <>
+          <spotLight
+            ref={lanternRef}
+            color={ENEMY_LIGHT_COLOR[kind]}
+            intensity={ENEMY_LANTERN_INTENSITY}
+            distance={ENEMY_LANTERN_DISTANCE}
+            angle={ENEMY_LANTERN_ANGLE}
+            penumbra={ENEMY_LANTERN_PENUMBRA}
+            decay={ENEMY_LANTERN_DECAY}
+            position={[0, ENEMY_LANTERN_HEIGHT, 0]}
+          />
+          <object3D ref={lanternTargetRef} position={[0, ENEMY_LANTERN_HEIGHT, ENEMY_LANTERN_TARGET_DISTANCE]} />
+          <pointLight
+            ref={fillLightRef}
+            color={ENEMY_LIGHT_COLOR[kind]}
+            intensity={ENEMY_FILL_LIGHT_INTENSITY}
+            distance={ENEMY_FILL_LIGHT_DISTANCE}
+            decay={ENEMY_LIGHT_DECAY}
+            position={[0, ENEMY_LIGHT_HEIGHT, 0]}
+          />
+        </>
+      )}
+      {silhouettes && kind === 'boss' && (
+        <pointLight
+          ref={bossLightRef}
+          color={ENEMY_LIGHT_COLOR.boss}
+          intensity={ENEMY_LIGHT_INTENSITY_BOSS}
+          distance={ENEMY_LIGHT_DISTANCE_BOSS}
+          decay={ENEMY_LIGHT_DECAY}
+          position={[0, ENEMY_LIGHT_HEIGHT_BOSS, 0]}
+        />
+      )}
+    </group>
+    </>
   );
 }
 

@@ -45,20 +45,41 @@ import { arrowWidthScaleForLevel } from './upgrade-visuals';
 
 /**
  * Luz de proyectil (rama `estilo-oscuro`, punto 3 de playtest: "los ataques
- * de flecha y hechizo deben emitir luz también", solo dark>=1): el view ya
- * reserva un <group> POR SLOT del pool (nunca instancing), así que cada slot
- * lleva su propia pointLight — nada de un pool aparte, se apaga sola con
- * `group.visible=false` cuando el slot está inactivo (three.js no atraviesa
- * objetos invisibles al recolectar luces, mismo criterio que EnemyViews).
+ * de flecha y hechizo deben emitir luz también", solo dark>=1) — REDISEÑO
+ * (playtest: "cuando el boss lanza muchos proyectiles el rendimiento baja
+ * un montón, sobre todo con el bullet hell"): antes cada SLOT del pool
+ * (hasta `PROJECTILE_POOL_SIZE`=96) montaba su propia pointLight, apagada
+ * con `group.visible=false` cuando el slot estaba inactivo. three.js
+ * recompila TODOS los programas de shader cada vez que cambia el Nº de
+ * luces VISIBLES en la escena — con un bullet hell (decenas de proyectiles
+ * apareciendo/muriendo por segundo) eso era una recompilación constante.
+ * Fix: POOL FIJO de `PROJECTILE_LIGHT_POOL_SIZE` pointLights, montadas UNA
+ * vez (mismo Nº de luces en escena SIEMPRE, cero recompilaciones) en
+ * `ProjectileLightPool`, reasignadas cada frame por prioridad — (a)
+ * proyectiles del héroe, (b) proyectiles enemigos más CERCANOS al héroe — a
+ * los proyectiles activos; las sobrantes quedan con intensity=0 (nunca
+ * `visible=false` ni desmontadas, para no volver a variar el recuento).
  * Color del arma activa (`WEAPON_COLOR`, arrow/spell); el proyectil del
  * shooter enemigo (`kind==='enemy'`) recibe una versión bastante más débil,
- * en su propio color, trivial de sumar con el mismo ref. SIN sombra (coste).
+ * en su propio color. SIN sombra (coste).
  */
+const PROJECTILE_LIGHT_POOL_SIZE = 6;
 const PROJECTILE_LIGHT_INTENSITY = 6;
 const PROJECTILE_LIGHT_DISTANCE = 3;
 const PROJECTILE_LIGHT_DECAY = 2;
 const PROJECTILE_LIGHT_INTENSITY_ENEMY = 3;
 const PROJECTILE_LIGHT_DISTANCE_ENEMY = 2.2;
+/** Altura Y del centro del proyectil (mismo valor que `group.position.set` en `ProjectileSlot`). */
+const PROJECTILE_LIGHT_HEIGHT = 0.3;
+
+/**
+ * Tamaño VISUAL de los proyectiles (playtest: "los proyectiles mejor un
+ * poco más pequeños"), ~20% menos — SOLO afecta a la escala del mesh de
+ * render (`arrowGroup`/`spellGroup`/`enemyBody`, más abajo); `p.radius`
+ * (radio de colisión de la sim, `combat.ts`) no se toca. Aplica a los 3
+ * `kind` en todos los modos (dark 0/1/2).
+ */
+const PROJECTILE_VISUAL_SCALE = 0.8;
 
 type ProjectileKind = Projectile['kind'];
 
@@ -195,12 +216,10 @@ function SpellShape({ session, slotIndex }: { session: GameSession; slotIndex: n
 }
 
 function ProjectileSlot({ session, index }: { session: GameSession; index: number }) {
-  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const groupRef = useRef<Group>(null);
   const arrowGroupRef = useRef<Group>(null);
   const spellGroupRef = useRef<Group>(null);
   const enemyBodyRef = useRef<Mesh>(null);
-  const lightRef = useRef<PointLight>(null);
   const lastKind = useRef<ProjectileKind | null>(null);
 
   useFrame(() => {
@@ -228,36 +247,22 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
       arrowGroup.visible = p.kind === 'arrow';
       if (p.kind === 'arrow') {
         // Colmillo de Hierro (F5): ensancha SOLO la sección transversal
-        // (X/Y del grupo), el largo (Z, dirección de vuelo) se queda en p.radius.
-        const widthScale = p.radius * arrowWidthScaleForLevel(getUpgradeLevel(session.world.hero, 'flecha-dano'));
-        arrowGroup.scale.set(widthScale, widthScale, p.radius);
+        // (X/Y del grupo), el largo (Z, dirección de vuelo) se queda en
+        // p.radius (× PROJECTILE_VISUAL_SCALE, solo render — ver cabecera).
+        const widthScale =
+          p.radius * PROJECTILE_VISUAL_SCALE * arrowWidthScaleForLevel(getUpgradeLevel(session.world.hero, 'flecha-dano'));
+        arrowGroup.scale.set(widthScale, widthScale, p.radius * PROJECTILE_VISUAL_SCALE);
       }
     }
     const spellGroup = spellGroupRef.current;
     if (spellGroup) {
       spellGroup.visible = p.kind === 'spell';
-      if (p.kind === 'spell') spellGroup.scale.setScalar(p.radius);
+      if (p.kind === 'spell') spellGroup.scale.setScalar(p.radius * PROJECTILE_VISUAL_SCALE);
     }
     const enemyBody = enemyBodyRef.current;
     if (enemyBody) {
       enemyBody.visible = p.kind === 'enemy';
-      if (p.kind === 'enemy') enemyBody.scale.setScalar(p.radius);
-    }
-
-    // Luz del proyectil (punto 3 de playtest, solo dark>=1: `lightRef` solo
-    // existe si `silhouettes` montó la pointLight de abajo). Flecha/hechizo:
-    // color del arma activa; shooter enemigo: mismo criterio, más débil.
-    const light = lightRef.current;
-    if (light) {
-      if (p.kind === 'arrow' || p.kind === 'spell') {
-        light.color.copy(WEAPON_COLOR[p.kind]);
-        light.intensity = PROJECTILE_LIGHT_INTENSITY;
-        light.distance = PROJECTILE_LIGHT_DISTANCE;
-      } else {
-        light.color.copy(enemyProjectileMaterial.color);
-        light.intensity = PROJECTILE_LIGHT_INTENSITY_ENEMY;
-        light.distance = PROJECTILE_LIGHT_DISTANCE_ENEMY;
-      }
+      if (p.kind === 'enemy') enemyBody.scale.setScalar(p.radius * PROJECTILE_VISUAL_SCALE);
     }
   });
 
@@ -270,8 +275,116 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
         <SpellShape session={session} slotIndex={index} />
       </group>
       <mesh ref={enemyBodyRef} geometry={unitSphere} material={enemyProjectileMaterial} />
-      {silhouettes && <pointLight ref={lightRef} decay={PROJECTILE_LIGHT_DECAY} />}
     </group>
+  );
+}
+
+/**
+ * Pool FIJO de luces de proyectil (ver cabecera del fichero): SIEMPRE monta
+ * exactamente `PROJECTILE_LIGHT_POOL_SIZE` pointLights cuando `dark>=1`
+ * (nunca más, nunca menos — el propio componente entero no monta nada si
+ * `silhouettes` es false, un único toggle global al cambiar de modo, no un
+ * problema de recuento variable como el que arregla este pool). Cada frame
+ * reasigna las luces a los proyectiles activos por prioridad, sin asignar
+ * memoria nueva (arrays de scratch creados una vez vía useRef).
+ */
+function ProjectileLightPool({ session }: { session: GameSession }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
+  const lightRefs = useRef<(PointLight | null)[]>([]);
+  // Scratch reutilizado cada frame (cero `new`/allocs en useFrame):
+  // `assignedSlot[k]` = índice en world.projectiles asignado a la luz k (-1
+  // si ninguno); `assignedDist2[k]` = distancia² al héroe del candidato
+  // ocupando el slot k durante la fase 2 (selección top-K de enemigos más
+  // cercanos, ver abajo).
+  const assignedSlot = useRef<number[]>(new Array(PROJECTILE_LIGHT_POOL_SIZE).fill(-1));
+  const assignedDist2 = useRef<number[]>(new Array(PROJECTILE_LIGHT_POOL_SIZE).fill(Infinity));
+
+  useFrame(() => {
+    const world = session.world;
+    const projectiles = world.projectiles;
+    const slots = assignedSlot.current;
+    const dist2 = assignedDist2.current;
+    for (let k = 0; k < PROJECTILE_LIGHT_POOL_SIZE; k++) slots[k] = -1;
+
+    // Fase 1 — prioridad máxima: proyectiles del héroe (flecha/hechizo), en
+    // orden de pool (orden de disparo).
+    let filled = 0;
+    for (let i = 0; i < projectiles.length && filled < PROJECTILE_LIGHT_POOL_SIZE; i++) {
+      const p = projectiles[i];
+      if (p.active && p.owner === 'hero') {
+        slots[filled] = i;
+        filled++;
+      }
+    }
+
+    // Fase 2 — huecos restantes: proyectiles ENEMIGOS más cercanos al héroe
+    // (selección top-K acotada sobre los slots libres [filled..POOL), sin
+    // ordenar ni asignar arrays nuevos — sustituye el peor candidato ya
+    // ocupado si el nuevo está más cerca).
+    if (filled < PROJECTILE_LIGHT_POOL_SIZE) {
+      for (let k = filled; k < PROJECTILE_LIGHT_POOL_SIZE; k++) dist2[k] = Infinity;
+      const heroX = world.hero.position.x;
+      const heroY = world.hero.position.y;
+      for (let i = 0; i < projectiles.length; i++) {
+        const p = projectiles[i];
+        if (!p.active || p.owner !== 'enemy') continue;
+        const dx = p.position.x - heroX;
+        const dy = p.position.y - heroY;
+        const d2 = dx * dx + dy * dy;
+        let worstSlot = -1;
+        let worstDist2 = -1;
+        for (let k = filled; k < PROJECTILE_LIGHT_POOL_SIZE; k++) {
+          if (dist2[k] > worstDist2) {
+            worstDist2 = dist2[k];
+            worstSlot = k;
+          }
+        }
+        if (worstSlot !== -1 && d2 < worstDist2) {
+          slots[worstSlot] = i;
+          dist2[worstSlot] = d2;
+        }
+      }
+    }
+
+    // Aplica la asignación a las luces montadas: posición + color/intensidad
+    // del proyectil asignado, o intensity=0 (NUNCA visible=false/desmontar:
+    // cambiaría el recuento) si el slot quedó sin candidato.
+    for (let k = 0; k < PROJECTILE_LIGHT_POOL_SIZE; k++) {
+      const light = lightRefs.current[k];
+      if (!light) continue;
+      const idx = slots[k];
+      if (idx === -1) {
+        light.intensity = 0;
+        continue;
+      }
+      const p = projectiles[idx];
+      light.position.set(p.position.x, PROJECTILE_LIGHT_HEIGHT, p.position.y);
+      if (p.kind === 'arrow' || p.kind === 'spell') {
+        light.color.copy(WEAPON_COLOR[p.kind]);
+        light.intensity = PROJECTILE_LIGHT_INTENSITY;
+        light.distance = PROJECTILE_LIGHT_DISTANCE;
+      } else {
+        light.color.copy(enemyProjectileMaterial.color);
+        light.intensity = PROJECTILE_LIGHT_INTENSITY_ENEMY;
+        light.distance = PROJECTILE_LIGHT_DISTANCE_ENEMY;
+      }
+    }
+  });
+
+  if (!silhouettes) return null;
+  return (
+    <>
+      {Array.from({ length: PROJECTILE_LIGHT_POOL_SIZE }, (_, k) => (
+        <pointLight
+          key={k}
+          ref={(el) => {
+            lightRefs.current[k] = el;
+          }}
+          decay={PROJECTILE_LIGHT_DECAY}
+          intensity={0}
+        />
+      ))}
+    </>
   );
 }
 
@@ -283,6 +396,7 @@ export function ProjectileViews({ session }: { session: GameSession }) {
       {indices.map((i) => (
         <ProjectileSlot key={i} session={session} index={i} />
       ))}
+      <ProjectileLightPool session={session} />
     </>
   );
 }
