@@ -17,8 +17,8 @@ import './upgrade-icon.css';
 
 /** Acento de color por categoría — cuerpo/flecha/hechizo calcados de WEAPON_COLOR (render/assets.ts). */
 const CATEGORY_COLOR: Record<UpgradeCategory, string> = {
-  cuerpo: '#54c7ff',
-  flecha: '#fef08a',
+  cuerpo: '#fef08a',
+  flecha: '#54c7ff',
   hechizo: '#d8b4fe',
   consumible: '#7bd88f',
 };

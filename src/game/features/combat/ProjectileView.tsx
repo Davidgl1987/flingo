@@ -35,12 +35,30 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
-import type { Group, Mesh } from 'three';
+import type { Group, Mesh, PointLight } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Projectile } from '@/game/world/types';
 import { getUpgradeLevel } from '@/game/session/upgrades';
-import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileMaterial, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCone, unitSphere } from '@/game/render/assets';
+import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileMaterial, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCone, unitSphere, WEAPON_COLOR } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 import { arrowWidthScaleForLevel } from './upgrade-visuals';
+
+/**
+ * Luz de proyectil (rama `estilo-oscuro`, punto 3 de playtest: "los ataques
+ * de flecha y hechizo deben emitir luz también", solo dark>=1): el view ya
+ * reserva un <group> POR SLOT del pool (nunca instancing), así que cada slot
+ * lleva su propia pointLight — nada de un pool aparte, se apaga sola con
+ * `group.visible=false` cuando el slot está inactivo (three.js no atraviesa
+ * objetos invisibles al recolectar luces, mismo criterio que EnemyViews).
+ * Color del arma activa (`WEAPON_COLOR`, arrow/spell); el proyectil del
+ * shooter enemigo (`kind==='enemy'`) recibe una versión bastante más débil,
+ * en su propio color, trivial de sumar con el mismo ref. SIN sombra (coste).
+ */
+const PROJECTILE_LIGHT_INTENSITY = 6;
+const PROJECTILE_LIGHT_DISTANCE = 3;
+const PROJECTILE_LIGHT_DECAY = 2;
+const PROJECTILE_LIGHT_INTENSITY_ENEMY = 3;
+const PROJECTILE_LIGHT_DISTANCE_ENEMY = 2.2;
 
 type ProjectileKind = Projectile['kind'];
 
@@ -177,10 +195,12 @@ function SpellShape({ session, slotIndex }: { session: GameSession; slotIndex: n
 }
 
 function ProjectileSlot({ session, index }: { session: GameSession; index: number }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const groupRef = useRef<Group>(null);
   const arrowGroupRef = useRef<Group>(null);
   const spellGroupRef = useRef<Group>(null);
   const enemyBodyRef = useRef<Mesh>(null);
+  const lightRef = useRef<PointLight>(null);
   const lastKind = useRef<ProjectileKind | null>(null);
 
   useFrame(() => {
@@ -223,6 +243,22 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
       enemyBody.visible = p.kind === 'enemy';
       if (p.kind === 'enemy') enemyBody.scale.setScalar(p.radius);
     }
+
+    // Luz del proyectil (punto 3 de playtest, solo dark>=1: `lightRef` solo
+    // existe si `silhouettes` montó la pointLight de abajo). Flecha/hechizo:
+    // color del arma activa; shooter enemigo: mismo criterio, más débil.
+    const light = lightRef.current;
+    if (light) {
+      if (p.kind === 'arrow' || p.kind === 'spell') {
+        light.color.copy(WEAPON_COLOR[p.kind]);
+        light.intensity = PROJECTILE_LIGHT_INTENSITY;
+        light.distance = PROJECTILE_LIGHT_DISTANCE;
+      } else {
+        light.color.copy(enemyProjectileMaterial.color);
+        light.intensity = PROJECTILE_LIGHT_INTENSITY_ENEMY;
+        light.distance = PROJECTILE_LIGHT_DISTANCE_ENEMY;
+      }
+    }
   });
 
   return (
@@ -234,6 +270,7 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
         <SpellShape session={session} slotIndex={index} />
       </group>
       <mesh ref={enemyBodyRef} geometry={unitSphere} material={enemyProjectileMaterial} />
+      {silhouettes && <pointLight ref={lightRef} decay={PROJECTILE_LIGHT_DECAY} />}
     </group>
   );
 }

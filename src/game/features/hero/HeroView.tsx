@@ -32,6 +32,7 @@ import {
   blobShadowMaterial,
   candleEyeMaterial,
   candleFlameMaterial,
+  heroCandleGeometry,
   heroMaterial,
   heroShieldMaterial,
   heroSpikeGeometry,
@@ -122,6 +123,23 @@ function buildSpikeDirections(): Array<{ x: number; y: number; z: number }> {
 
 const SPIKE_DIRECTIONS = buildSpikeDirections();
 
+/**
+ * Héroe-vela (dark>=1, punto 5 de playtest): los 12 pinchos del Erizo de
+ * Acero se posicionan con `SPIKE_DIRECTIONS` (puntos sobre la ESFERA
+ * unitaria, radio 1) porque en `dark=0` `bodyRef` es literalmente esa esfera
+ * — al cambiar su geometría a `heroCandleGeometry` (cilindro chato, radio
+ * 0.42 / alto 1.1, ver assets.ts) esos mismos puntos quedarían muy lejos de
+ * la nueva superficie (sobre todo el ecuador, a radio 1 contra un cilindro de
+ * radio 0.42) y "flotarían" fuera del cuerpo. Reproyección barata: escala
+ * cada dirección unitaria por el radio/semialto reales del cilindro en vez de
+ * recalcular geometría de contacto exacta — aproximado pero "razonable"
+ * (mismo criterio que pide el playtest), sin tocar la orientación (el
+ * quaternion de abajo sigue usando la dirección ORIGINAL sin escalar, así los
+ * pinchos siguen apuntando hacia fuera).
+ */
+const CANDLE_SPIKE_SURFACE_XZ = 0.42;
+const CANDLE_SPIKE_SURFACE_Y = 0.55;
+
 export function HeroView({ session }: { session: GameSession }) {
   const silhouettes = useDarkStore((s) => s.dark >= 1);
   const bodyRef = useRef<Mesh>(null);
@@ -138,20 +156,26 @@ export function HeroView({ session }: { session: GameSession }) {
   // partículas una sola vez (no cada frame mientras se mantiene el modo).
   const prevWeaponMode = useRef<WeaponMode | null>(null);
 
-  // Pose de los pinchos (F5): fija UNA vez al montar, nunca en useFrame — son
-  // hijos estáticos del mesh del héroe (heredan su transform cada frame sin
-  // recálculo propio). Usa Quaternion.setFromUnitVectors para orientar el
-  // cono (eje +Y local) hacia fuera, en vez de trigonometría de Euler frágil.
+  // Pose de los pinchos (F5): fija al montar y cada vez que cambia de esfera
+  // a cilindro (silhouettes, ver CANDLE_SPIKE_SURFACE_* arriba) — nunca en
+  // useFrame, son hijos estáticos del mesh del héroe (heredan su transform
+  // cada frame sin recálculo propio). Usa Quaternion.setFromUnitVectors para
+  // orientar el cono (eje +Y local) hacia fuera, en vez de trigonometría de
+  // Euler frágil; la orientación usa SIEMPRE la dirección original de la
+  // esfera (no la reproyectada), así sigue apuntando "hacia fuera" en ambas
+  // geometrías sin necesitar una normal de cilindro exacta.
   useEffect(() => {
     const up = new Vector3(0, 1, 0);
+    const surfaceXZ = silhouettes ? CANDLE_SPIKE_SURFACE_XZ : 1;
+    const surfaceY = silhouettes ? CANDLE_SPIKE_SURFACE_Y : 1;
     SPIKE_DIRECTIONS.forEach((dir, i) => {
       const mesh = spikeRefs.current[i];
       if (!mesh) return;
       const dirVec = new Vector3(dir.x, dir.y, dir.z);
-      mesh.position.copy(dirVec);
+      mesh.position.set(dir.x * surfaceXZ, dir.y * surfaceY, dir.z * surfaceXZ);
       mesh.quaternion.setFromUnitVectors(up, dirVec);
     });
-  }, []);
+  }, [silhouettes]);
 
   useFrame((_, delta) => {
     const world = session.world;
@@ -316,7 +340,7 @@ export function HeroView({ session }: { session: GameSession }) {
 
   return (
     <>
-      <mesh ref={bodyRef} geometry={unitSphere} material={heroMaterial} scale={HERO_RADIUS}>
+      <mesh ref={bodyRef} geometry={silhouettes ? heroCandleGeometry : unitSphere} material={heroMaterial} scale={HERO_RADIUS}>
         {/* Pinchos del Erizo de Acero (F5): 12 pre-creados, visibilidad por nivel. */}
         {SPIKE_DIRECTIONS.map((_, i) => (
           <mesh

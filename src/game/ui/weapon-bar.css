@@ -32,15 +32,18 @@
 }
 
 /* Color por arma (feedback de playtest): cada botón usa el color de su
-   ataque — mismo color que el proyectil/estela para mapeo instantáneo. */
+   ataque — mismo color que el proyectil/estela para mapeo instantáneo.
+   Intercambio cuerpo↔flecha (rama `estilo-oscuro`, playtest): cuerpo pasa a
+   amarillo, flecha al azul que antes tenía el cuerpo — mismos hex que
+   `WEAPON_COLOR` en render/assets.ts. */
 .weapon-btn-body {
-  --weapon-color: #38bdf8;
-  --weapon-glow: rgba(56, 189, 248, 0.4);
+  --weapon-color: #fef08a;
+  --weapon-glow: rgba(254, 240, 138, 0.4);
 }
 
 .weapon-btn-arrow {
-  --weapon-color: #fef08a;
-  --weapon-glow: rgba(254, 240, 138, 0.4);
+  --weapon-color: #54c7ff;
+  --weapon-glow: rgba(84, 199, 255, 0.4);
 }
 
 .weapon-btn-spell {

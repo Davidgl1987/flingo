@@ -28,6 +28,7 @@ import { ShockwaveView } from '@/game/features/effects/ShockwaveView';
 import { TrailView } from '@/game/features/effects/TrailView';
 import { forceBossPhase } from '@/game/features/bosses/lifecycle';
 import { QueenColumnsView, QueenTethersView } from '@/game/features/bosses/queen/QueenColumnsView';
+import { BossCandlesView } from '@/game/features/dungeon/BossCandlesView';
 import { EnemyViews } from '@/game/features/enemies/EnemyViews';
 import {
   advanceToNextDungeon,
@@ -226,6 +227,8 @@ export function GameRoot({
         <HeroView session={session} />
         {/* Vela del héroe (solo dark 1-2): luz principal de la sala en penumbra. */}
         {darkMode >= 1 && <CandleLightView session={session} />}
+        {/* Cirios de la sala del jefe (punto 2b de playtest, solo dark 1-2): no-op fuera de la mazmorra (sin boss vivo). */}
+        {darkMode >= 1 && <BossCandlesView session={session} />}
         {/* Effects (GDD §12): partículas, estela y ondas expansivas, todos pools preasignados. */}
         <ParticleView pool={session.effects.particles} />
         <TrailView pool={session.effects.trail} />

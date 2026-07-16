@@ -97,9 +97,17 @@ export const glowHaloTexture = createGlowHaloTexture();
  * WeaponBar (`weapon-btn-<mode>`) y por los proyectiles (arrowMaterial /
  * spellMaterial más abajo). Único punto de verdad para no divergir del CSS.
  */
+/**
+ * Intercambio de colores cuerpo↔flecha (feedback de playtest, rama
+ * `estilo-oscuro`): cuerpo pasa a amarillo, flecha pasa al azul que antes
+ * tenía el cuerpo; hechizo no cambia. Afecta a TODOS los modos (dark 0/1/2),
+ * a diferencia del resto de este bloque de cambios — ver también
+ * `weapon-bar.css` (.weapon-btn-body/.weapon-btn-arrow) y
+ * `UpgradeIcon.tsx` (CATEGORY_COLOR), que copian estos mismos valores.
+ */
 export const WEAPON_COLOR: Record<'body' | 'arrow' | 'spell', THREE.Color> = {
-  body: new THREE.Color('#54c7ff'),
-  arrow: new THREE.Color('#fef08a'),
+  body: new THREE.Color('#fef08a'),
+  arrow: new THREE.Color('#54c7ff'),
   spell: new THREE.Color('#d8b4fe'),
 };
 
@@ -454,9 +462,9 @@ export const smallWedgeGeometry = new THREE.BoxGeometry(1, 1, 1);
 
 // Colores alineados con los botones de arma del HUD (mapeo instantáneo
 // botón↔proyectil, feedback de playtest): flecha amarilla, hechizo violeta.
-export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#fef08a' });
+export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#54c7ff' });
 /** Asta de la flecha (detrás del cono dominante): tono más oscuro, silueta de flecha reconocible. */
-export const arrowTipMaterial = new THREE.MeshLambertMaterial({ color: '#d4a017' });
+export const arrowTipMaterial = new THREE.MeshLambertMaterial({ color: '#1f6fa1' });
 export const spellMaterial = new THREE.MeshLambertMaterial({ color: '#d8b4fe' });
 /** Zigzag eléctrico del hechizo (ronda 3, punto 11: sin núcleo, solo rayo): violeta más saturado/luminoso que el cuerpo. */
 export const spellBoltMaterial = new THREE.MeshBasicMaterial({
@@ -652,6 +660,36 @@ const ACCENT_EMISSIVE_INTENSITY = 0.3;
 
 /** Cera pálida del cuerpo del héroe-vela: fija en dark>=1 (deja de lerpear con el arma; la llama de arriba es la que cambia de color). */
 const HERO_WAX_COLOR = '#e8ddc8';
+
+/**
+ * Cuerpo del héroe-vela (punto 5 de playtest, rama `estilo-oscuro`): en
+ * dark>=1 `HeroView.tsx` sustituye la esfera unitaria (`unitSphere`, radio 1)
+ * por este cilindro CHATO ("vela, no torre") en el mismo mesh compartido
+ * (`bodyRef`) — misma convención "unit-X, se escala por mesh" que el resto de
+ * geometrías de este fichero: `HeroView.tsx` sigue aplicando exactamente el
+ * mismo `visualRadius` de squash/stretch/caída-al-foso que ya usaba con la
+ * esfera, sin tocar esa lógica. Radio/alto elegidos DIRECTAMENTE en las
+ * unidades que pide el playtest (no relativos a otro "1" abstracto): al
+ * escalar por `visualRadius` (igual que la esfera) da un cuerpo visiblemente
+ * más bajo/ancho que la bola clásica — los pinchos del Erizo de Acero
+ * reproyectan su posición a esta misma proporción en `HeroView.tsx` para no
+ * quedar flotando fuera de la superficie (ver comentario allí).
+ */
+export const heroCandleGeometry = new THREE.CylinderGeometry(0.42, 0.42, 1.1, 20);
+
+/**
+ * Cirios de sala de jefe (punto 2b de playtest, `BossCandlesView.tsx`, solo
+ * dark>=1): atrezzo puro (sin colisión, la sim no los conoce), mismo par
+ * cera/llama que el héroe-vela pero geometría/material propios (no
+ * comparten mesh con el héroe: viven en varias instancias fijas a la vez por
+ * sala). Cera un pelín más oscura que `HERO_WAX_COLOR` (recibe luz de
+ * escena vía Lambert, a diferencia de la llama) para no competir visualmente
+ * con el héroe como fuente de luz principal.
+ */
+export const bossCandleWaxGeometry = new THREE.CylinderGeometry(0.25, 0.28, 1.4, 12);
+export const bossCandleWaxMaterial = new THREE.MeshLambertMaterial({ color: '#d8cdb4' });
+/** Llama del cirio de jefe: autoiluminada (Basic), mismo cálido que `CandleLightView`/`candleFlameMaterial`. */
+export const bossCandleFlameMaterial = new THREE.MeshBasicMaterial({ color: '#ffb469' });
 
 /**
  * Llama de la vela del héroe: MUTABLE, mismo criterio que `heroMaterial` en

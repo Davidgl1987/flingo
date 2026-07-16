@@ -162,14 +162,18 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
 };
 
 /**
- * Luz tenue MÓVIL de enemigo (rama `estilo-oscuro`, punto 3 de playtest:
- * "quiero ver moverse esa lucecita en la oscuridad", mucho menor que la vela
- * del héroe — CandleLightView: 45/8.5 vs esto, ~3/3): mismo color que los
- * ojos/acentos emisivos ya existentes de cada arquetipo (assets.ts), para que
- * la luz se lea como "el brillo de sus ojos alcanza el entorno", no como un
- * añadido aparte. `boss` usa un ámbar genérico tenue (no distingue por
- * bossId: los acentos de cada jefe ya tienen su propio idioma visual, esta
- * luz solo necesita delatar "algo grande se mueve ahí").
+ * Luz MÓVIL de enemigo (rama `estilo-oscuro`; punto 1 de playtest ronda 2 de
+ * penumbra: "que lo que dé la luz fueran los ojos, como linternas muy
+ * débiles, ahora es como si tuvieran una bombilla" — sustituye la pointLight
+ * omnidireccional original por una `spotLight` débil que sale de los ojos,
+ * orientada hacia donde MIRA el enemigo, + una pointLight MUY tenue para que
+ * el cuerpo no quede negro del todo): mismo color que los ojos/acentos
+ * emisivos ya existentes de cada arquetipo (assets.ts), para que la luz se
+ * lea como "el brillo de sus ojos alcanza el entorno", no como un añadido
+ * aparte. `boss` conserva su pointLight de siempre (sin linterna: punto 2 de
+ * playtest le da más luz propia, más abajo) y usa un ámbar genérico (no
+ * distingue por bossId: los acentos de cada jefe ya tienen su propio idioma
+ * visual, esta luz solo necesita delatar "algo grande se mueve ahí").
  */
 const ENEMY_LIGHT_COLOR: Record<EnemyKind, string> = {
   dummy: '#ffc169',
@@ -179,13 +183,32 @@ const ENEMY_LIGHT_COLOR: Record<EnemyKind, string> = {
   shooter: '#7cc7ff',
   boss: '#e0b56a',
 };
-/** Altura LOCAL de la luz sobre el centro del cuerpo del enemigo (el `group` ya vive a `bodyRadius` del suelo). */
+/** Altura LOCAL de la luz del jefe/relleno sobre el centro del cuerpo del enemigo (el `group` ya vive a `bodyRadius` del suelo). */
 const ENEMY_LIGHT_HEIGHT = 0.5;
-const ENEMY_LIGHT_INTENSITY = 3;
-const ENEMY_LIGHT_INTENSITY_BOSS = 4;
-const ENEMY_LIGHT_DISTANCE = 3;
-const ENEMY_LIGHT_DISTANCE_BOSS = 3.5;
+/** Jefe (punto 2a de playtest: "que el propio jefe emita [más] luz"): antes 4/3.5, ahora bastante más luminoso — las velas de sala (BossCandlesView) completan el resto. */
+const ENEMY_LIGHT_INTENSITY_BOSS = 12;
+const ENEMY_LIGHT_DISTANCE_BOSS = 6;
 const ENEMY_LIGHT_DECAY = 2;
+
+/**
+ * Linterna de ojos (spotLight, no-boss): altura LOCAL a la que viven los ojos
+ * de cada arquetipo (0.3-0.4, bastante más abajo que la vieja "bombilla" a
+ * 0.5) y distancia del punto-objetivo hacia el que apunta el cono (solo
+ * define la DIRECCIÓN vía el ángulo calculado en useFrame, la magnitud es
+ * arbitraria). Parámetros de linterna DÉBIL (los spots concentran, lucen
+ * menos que una point a igual intensidad): alcance corto, cono estrecho,
+ * penumbra suave, sin sombra (coste; solo la vela del héroe bloquea luz).
+ */
+const ENEMY_LANTERN_HEIGHT = 0.35;
+const ENEMY_LANTERN_TARGET_DISTANCE = 1;
+const ENEMY_LANTERN_INTENSITY = 10;
+const ENEMY_LANTERN_DISTANCE = 4;
+const ENEMY_LANTERN_ANGLE = 0.55;
+const ENEMY_LANTERN_PENUMBRA = 0.7;
+const ENEMY_LANTERN_DECAY = 2;
+/** Relleno MUY tenue (mismo color que la linterna) para que el cuerpo no quede negro del todo fuera del cono. */
+const ENEMY_FILL_LIGHT_INTENSITY = 0.8;
+const ENEMY_FILL_LIGHT_DISTANCE = 1.5;
 
 /**
  * Material "en reposo" del cuerpo (sin flash de golpe/fase/telegraph
@@ -394,6 +417,13 @@ function EnemyMesh({
   // desde 0).
   const orientationYaw = useRef<number | null>(null);
   const orientationTarget = useRef(0);
+  // Linterna de ojos (punto 1 de playtest, solo no-boss): spotLight + su
+  // target (Object3D hijo del mismo grupo, recolocado cada frame según el
+  // ángulo local calculado más abajo) y el ángulo persistido (para no
+  // degenerar cuando chaser/shooter coinciden con el héroe, distancia ~0).
+  const lanternRef = useRef<THREE.SpotLight>(null);
+  const lanternTargetRef = useRef<THREE.Object3D>(null);
+  const lanternAngle = useRef(0);
 
   useFrame((_, delta) => {
     const world = session.world;
@@ -499,6 +529,43 @@ function EnemyMesh({
       );
     }
     group.rotation.y = orientationYaw.current;
+
+    // Linterna de ojos (punto 1 de playtest, solo no-boss): dirección LOCAL
+    // del cono de luz según arquetipo — reutiliza la MISMA matemática que ya
+    // usa cada `<kind>/Mesh.tsx` para orientar sus ojos, sin duplicar
+    // constantes: dummy/trail no giran nada extra (el `group` ya apunta en
+    // la dirección de patrulla/velocidad vía `orientationYaw` de arriba, así
+    // que el cono mira "hacia delante" en local); spike usa su `facing` fijo
+    // (misma fórmula que `spikeSecondaryGroupRef` en spike/Mesh.tsx); chaser
+    // y shooter apuntan al héroe (misma fórmula que `chaserFaceRef`/
+    // `shooterEyeGroupRef` en sus respectivos Mesh.tsx), conservando el
+    // último ángulo válido cuando la distancia al héroe degenera a ~0.
+    if (kind !== 'boss') {
+      if (kind === 'spike') {
+        lanternAngle.current = Math.atan2(enemy.facing.x, enemy.facing.y) - group.rotation.y;
+      } else if (kind === 'chaser' || kind === 'shooter') {
+        const dxHero = world.hero.position.x - enemy.position.x;
+        const dyHero = world.hero.position.y - enemy.position.y;
+        if (Math.hypot(dxHero, dyHero) > 1e-4) {
+          lanternAngle.current = Math.atan2(dxHero, dyHero) - group.rotation.y;
+        }
+      } else {
+        lanternAngle.current = 0;
+      }
+      if (lanternTargetRef.current) {
+        lanternTargetRef.current.position.set(
+          Math.sin(lanternAngle.current) * ENEMY_LANTERN_TARGET_DISTANCE,
+          ENEMY_LANTERN_HEIGHT,
+          Math.cos(lanternAngle.current) * ENEMY_LANTERN_TARGET_DISTANCE,
+        );
+      }
+      // El target de una spotLight es un Object3D aparte que three.js no
+      // añade solo al padre correcto: se fija UNA vez que ambas refs existen
+      // (comparación de identidad, barata) en vez de depender de props JSX.
+      if (lanternRef.current && lanternTargetRef.current && lanternRef.current.target !== lanternTargetRef.current) {
+        lanternRef.current.target = lanternTargetRef.current;
+      }
+    }
 
     if (kind === 'boss') {
       // Telegraph genérico (GDD §15.1 punto 2): anillo ámbar visible mientras
@@ -781,16 +848,43 @@ function EnemyMesh({
         scale={ENEMY_RADIUS_RENDER * 1.3}
       />
 
-      {/* Luz tenue móvil (punto 3 de playtest, SOLO dark>=1): hija del
-          `group` que ya sigue la posición del enemigo cada frame — se apaga
-          sola con `group.visible=false` al morir (three.js no atraviesa
+      {/* Luces móviles (punto 1/2a de playtest, SOLO dark>=1): hijas del
+          `group` que ya sigue la posición del enemigo cada frame — se apagan
+          solas con `group.visible=false` al morir (three.js no atraviesa
           objetos invisibles al recolectar luces), sin lógica extra aquí. SIN
-          sombra (coste, y no la pide David: solo la vela debe bloquear luz). */}
-      {silhouettes && (
+          sombra (coste, y no la pide David: solo la vela debe bloquear luz).
+          No-boss: linterna de ojos (spotLight débil, dirección calculada en
+          useFrame) + relleno point MUY tenue para que el cuerpo no quede
+          negro del todo. Boss: conserva su pointLight de siempre, ahora más
+          luminosa (punto 2a) — las velas de sala (BossCandlesView) hacen el
+          resto. */}
+      {silhouettes && kind !== 'boss' && (
+        <>
+          <spotLight
+            ref={lanternRef}
+            color={ENEMY_LIGHT_COLOR[kind]}
+            intensity={ENEMY_LANTERN_INTENSITY}
+            distance={ENEMY_LANTERN_DISTANCE}
+            angle={ENEMY_LANTERN_ANGLE}
+            penumbra={ENEMY_LANTERN_PENUMBRA}
+            decay={ENEMY_LANTERN_DECAY}
+            position={[0, ENEMY_LANTERN_HEIGHT, 0]}
+          />
+          <object3D ref={lanternTargetRef} position={[0, ENEMY_LANTERN_HEIGHT, ENEMY_LANTERN_TARGET_DISTANCE]} />
+          <pointLight
+            color={ENEMY_LIGHT_COLOR[kind]}
+            intensity={ENEMY_FILL_LIGHT_INTENSITY}
+            distance={ENEMY_FILL_LIGHT_DISTANCE}
+            decay={ENEMY_LIGHT_DECAY}
+            position={[0, ENEMY_LIGHT_HEIGHT, 0]}
+          />
+        </>
+      )}
+      {silhouettes && kind === 'boss' && (
         <pointLight
-          color={ENEMY_LIGHT_COLOR[kind]}
-          intensity={kind === 'boss' ? ENEMY_LIGHT_INTENSITY_BOSS : ENEMY_LIGHT_INTENSITY}
-          distance={kind === 'boss' ? ENEMY_LIGHT_DISTANCE_BOSS : ENEMY_LIGHT_DISTANCE}
+          color={ENEMY_LIGHT_COLOR.boss}
+          intensity={ENEMY_LIGHT_INTENSITY_BOSS}
+          distance={ENEMY_LIGHT_DISTANCE_BOSS}
           decay={ENEMY_LIGHT_DECAY}
           position={[0, ENEMY_LIGHT_HEIGHT, 0]}
         />
