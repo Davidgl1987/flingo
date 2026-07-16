@@ -186,8 +186,15 @@ const ENEMY_LIGHT_COLOR: Record<EnemyKind, string> = {
 /** Altura LOCAL de la luz del jefe/relleno sobre el centro del cuerpo del enemigo (el `group` ya vive a `bodyRadius` del suelo). */
 const ENEMY_LIGHT_HEIGHT = 0.5;
 /** Jefe (punto 2a de playtest: "que el propio jefe emita [más] luz"): antes 4/3.5, ahora bastante más luminoso — las velas de sala (BossCandlesView) completan el resto. */
-const ENEMY_LIGHT_INTENSITY_BOSS = 12;
+const ENEMY_LIGHT_INTENSITY_BOSS = 14;
 const ENEMY_LIGHT_DISTANCE_BOSS = 6;
+/**
+ * La luz del jefe vive POR ENCIMA de su cuerpo (radio de render de jefe ~1),
+ * no dentro: a la altura genérica (0.5) quedaba embebida en la esfera y ni el
+ * propio cuerpo ni el suelo alrededor recibían luz apreciable (verificado en
+ * arena ?boss=b1) — el Lambert solo ilumina caras orientadas HACIA la luz.
+ */
+const ENEMY_LIGHT_HEIGHT_BOSS = 1.7;
 const ENEMY_LIGHT_DECAY = 2;
 
 /**
@@ -886,7 +893,7 @@ function EnemyMesh({
           intensity={ENEMY_LIGHT_INTENSITY_BOSS}
           distance={ENEMY_LIGHT_DISTANCE_BOSS}
           decay={ENEMY_LIGHT_DECAY}
-          position={[0, ENEMY_LIGHT_HEIGHT, 0]}
+          position={[0, ENEMY_LIGHT_HEIGHT_BOSS, 0]}
         />
       )}
 

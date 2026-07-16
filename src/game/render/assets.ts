@@ -749,6 +749,11 @@ function applySilhouettes(active: boolean): void {
     // Héroe = vela: cuerpo de cera pálida fijo (HeroView.tsx deja de lerpear
     // heroMaterial.color en dark>=1; el color de arma vive solo en la llama).
     heroMaterial.color.set(HERO_WAX_COLOR);
+    // Emissive tenue de cera: con la luz a la altura del cuerpo (0.75, bajo
+    // los muros) los laterales del cilindro reciben luz rasante y quedaban
+    // negros — la vela debe leerse pálida en la oscuridad (concept art).
+    heroMaterial.emissive.set('#8a7a58');
+    heroMaterial.emissiveIntensity = 0.5;
 
     // Vigía de hollín (dummy): campana oscura.
     dummyMaterial.color.set('#242129');
@@ -780,6 +785,9 @@ function applySilhouettes(active: boolean): void {
     stormBodyMaterial.color.set('#20242e');
   } else {
     heroMaterial.color.copy(SILHOUETTE_ORIGINAL.hero);
+    // Emissive de cera fuera: el Lambert clásico nace con emissive negro.
+    heroMaterial.emissive.set('#000000');
+    heroMaterial.emissiveIntensity = 1;
     dummyMaterial.color.copy(SILHOUETTE_ORIGINAL.dummy);
     chaserMaterial.color.copy(SILHOUETTE_ORIGINAL.chaser);
     spikeMaterial.color.copy(SILHOUETTE_ORIGINAL.spike);
