@@ -39,8 +39,12 @@ const WEAPON_TINT_FRACTION = 0.4;
 /** Rigidez del lerp de color al cambiar de arma (mismo orden que HeroView: suave, nunca un corte). */
 const CANDLE_COLOR_LERP_STIFFNESS = 10;
 
-/** Altura de la luz sobre el suelo: por encima del héroe (radio ~0.4), para que ilumine hacia abajo/alrededor. */
-const CANDLE_HEIGHT = 1.7;
+/**
+ * Altura de la luz sobre el suelo: POR DEBAJO del alto de los muros
+ * (WALL_HEIGHT = 0.9 en RoomView) — a 1.7 la luz les pasaba por encima e
+ * iluminaba la sala contigua (punto 1 de playtest ronda 2 del modo oscuro).
+ */
+const CANDLE_HEIGHT = 0.75;
 /** Alcance base (u de mundo) del círculo iluminado alrededor del héroe: generoso frente al radio de sala (~12-20). */
 const CANDLE_BASE_DISTANCE = 8.5;
 const CANDLE_BASE_INTENSITY = 45;
