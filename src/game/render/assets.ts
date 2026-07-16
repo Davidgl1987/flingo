@@ -727,6 +727,17 @@ export const bossCandleWaxMaterial = new THREE.MeshLambertMaterial({ color: '#d8
 export const bossCandleFlameMaterial = new THREE.MeshBasicMaterial({ color: '#ffb469' });
 
 /**
+ * Antorcha de muro (`TorchView.tsx`, playtest rama `estilo-oscuro`: "los
+ * cirios de los jefes parece que puedes chocar con ellos... más pequeños y
+ * pegados a la pared, como antorchas"): geometría propia, más pequeña y
+ * afilada que `bossCandleWaxGeometry`, pensada para leerse pegada al muro en
+ * vez de como una columna suelta en mitad de la sala. Reutiliza los MISMOS
+ * materiales cera/llama que el cirio de jefe (mismo cálido, atrezzo
+ * coherente en toda la mazmorra).
+ */
+export const wallTorchWaxGeometry = new THREE.CylinderGeometry(0.1, 0.12, 0.7, 10);
+
+/**
  * Llama de la vela del héroe: MUTABLE, mismo criterio que `heroMaterial` en
  * dark=0 — HeroView.tsx interpola su color hacia `WEAPON_COLOR[weaponMode]`
  * cada frame con la misma rigidez (`WEAPON_COLOR_LERP_STIFFNESS`). Autoiluminada
