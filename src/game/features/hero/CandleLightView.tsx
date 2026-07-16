@@ -42,8 +42,8 @@ const CANDLE_COLOR_LERP_STIFFNESS = 10;
 /** Altura de la luz sobre el suelo: por encima del héroe (radio ~0.4), para que ilumine hacia abajo/alrededor. */
 const CANDLE_HEIGHT = 1.7;
 /** Alcance base (u de mundo) del círculo iluminado alrededor del héroe: generoso frente al radio de sala (~12-20). */
-const CANDLE_BASE_DISTANCE = 6;
-const CANDLE_BASE_INTENSITY = 12;
+const CANDLE_BASE_DISTANCE = 8.5;
+const CANDLE_BASE_INTENSITY = 45;
 const CANDLE_DECAY = 2;
 
 /** Parpadeo: frecuencias (rad/s) inconmensuradas entre sí y su peso relativo (suman 1 → variación acotada). */

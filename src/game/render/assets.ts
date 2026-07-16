@@ -526,6 +526,10 @@ const GLOW_GROUPS = readGlowGroups();
 const GLOW_EMISSIVE_INTENSITY = 0.35;
 
 if (DARK_MODE >= 1) {
+  // Materiales Basic demasiado saturados para la penumbra (autoiluminados,
+  // deslumbran junto a la vela): tonos apagados solo en modo oscuro.
+  puddleMaterial.color.set('#1e5e3a');
+  boostMaterial.color.set('#1f7fa8');
   if (GLOW_GROUPS.has('hazards')) {
     // Pinchos: gris frío, apenas perceptible (silueta, no cartel).
     spikesMaterial.emissive.set('#7a8bb0');
