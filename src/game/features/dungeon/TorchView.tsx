@@ -26,10 +26,14 @@ import type { Mesh, PointLight } from 'three';
 import type { AABB } from '@/engine/geometry';
 import { bossCandleFlameMaterial, bossCandleWaxMaterial, unitCone, wallTorchWaxGeometry } from '@/game/render/assets';
 
-/** Distancia desde cada pared (bounds ya es el interior jugable, sin el grosor de muro): pegada, fuera del carril de juego. */
-const TORCH_WALL_INSET = 0.35;
-/** Margen mínimo respecto al borde si la sala es más pequeña que 2×TORCH_WALL_INSET (salas de test). */
-const TORCH_MIN_MARGIN = 0.25;
+/**
+ * Desplazamiento HACIA FUERA del interior jugable: la antorcha se planta
+ * SOBRE el cuerpo del muro (bounds es el interior; el muro vive más allá),
+ * no flotando dentro de la sala — con inset positivo, la del punto medio del
+ * muro sur quedaba superpuesta al héroe en cámara (verificado en preview de
+ * ?boss=b4: se leía como un apéndice oscuro colgando de la vela).
+ */
+const TORCH_WALL_OUT = 0.25;
 /** Longitud mínima del muro largo para añadir antorchas también en su punto medio (además de las 4 esquinas). */
 const MIN_WALL_LENGTH_FOR_MIDPOINTS = 8;
 
@@ -102,24 +106,19 @@ export function WallTorch({ x, z, index }: { x: number; z: number; index: number
 }
 
 /**
- * Posiciones de antorcha pegadas al perímetro de `bounds` (interior jugable
- * de la sala, YA excluye el grosor de muro): 4 esquinas siempre, más — si
+ * Posiciones de antorcha SOBRE el perímetro de muro de `bounds` (interior
+ * jugable; el muro vive justo más allá): 4 esquinas siempre, más — si
  * `includeMidpoints` y la sala es suficientemente grande — los puntos medios
  * del PAR DE MUROS MÁS LARGO, para que una sala alargada gane antorchas en
  * sus muros largos y no se amontonen todas cerca de las esquinas de un muro
- * corto. El inset se recorta si la sala es más pequeña que el offset por
- * defecto (salas de test con `world.bounds` diminuto).
+ * corto.
  */
 export function wallTorchLayout(bounds: AABB, includeMidpoints: boolean): { x: number; z: number }[] {
-  const insetX = Math.min(TORCH_WALL_INSET, (bounds.maxX - bounds.minX) / 2 - TORCH_MIN_MARGIN);
-  const insetZ = Math.min(TORCH_WALL_INSET, (bounds.maxY - bounds.minY) / 2 - TORCH_MIN_MARGIN);
-  if (insetX <= 0 || insetZ <= 0) return [];
-
   const positions = [
-    { x: bounds.minX + insetX, z: bounds.minY + insetZ },
-    { x: bounds.minX + insetX, z: bounds.maxY - insetZ },
-    { x: bounds.maxX - insetX, z: bounds.minY + insetZ },
-    { x: bounds.maxX - insetX, z: bounds.maxY - insetZ },
+    { x: bounds.minX - TORCH_WALL_OUT, z: bounds.minY - TORCH_WALL_OUT },
+    { x: bounds.minX - TORCH_WALL_OUT, z: bounds.maxY + TORCH_WALL_OUT },
+    { x: bounds.maxX + TORCH_WALL_OUT, z: bounds.minY - TORCH_WALL_OUT },
+    { x: bounds.maxX + TORCH_WALL_OUT, z: bounds.maxY + TORCH_WALL_OUT },
   ];
   if (!includeMidpoints) return positions;
 
@@ -127,10 +126,10 @@ export function wallTorchLayout(bounds: AABB, includeMidpoints: boolean): { x: n
   const depth = bounds.maxY - bounds.minY;
   if (width >= depth && width >= MIN_WALL_LENGTH_FOR_MIDPOINTS) {
     const midX = (bounds.minX + bounds.maxX) / 2;
-    positions.push({ x: midX, z: bounds.minY + insetZ }, { x: midX, z: bounds.maxY - insetZ });
+    positions.push({ x: midX, z: bounds.minY - TORCH_WALL_OUT }, { x: midX, z: bounds.maxY + TORCH_WALL_OUT });
   } else if (depth > width && depth >= MIN_WALL_LENGTH_FOR_MIDPOINTS) {
     const midZ = (bounds.minY + bounds.maxY) / 2;
-    positions.push({ x: bounds.minX + insetX, z: midZ }, { x: bounds.maxX - insetX, z: midZ });
+    positions.push({ x: bounds.minX - TORCH_WALL_OUT, z: midZ }, { x: bounds.maxX + TORCH_WALL_OUT, z: midZ });
   }
   return positions;
 }

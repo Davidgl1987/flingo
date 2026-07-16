@@ -544,7 +544,10 @@ export function HeroView({ session }: { session: GameSession }) {
         geometry={unitCircle}
         material={blobShadowMaterial}
         rotation-x={-Math.PI / 2}
-        scale={HERO_RADIUS * 1.25}
+        // Silueta: la sombra blob dimensionada para la ESFERA sobresalía por
+        // delante del cilindro-vela (más estrecho) y se leía como un apéndice
+        // oscuro (visto en preview de arena de jefe) — se encoge al radio real.
+        scale={HERO_RADIUS * (silhouettes ? 0.7 : 1.25)}
       />
     </>
   );
