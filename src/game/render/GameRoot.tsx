@@ -144,7 +144,13 @@ export function GameRoot({
             import.meta.env.DEV && new URLSearchParams(window.location.search).has('rafshim'),
         }}
         camera={{ fov: 45, near: 0.5, far: 80, position: [0, 9.5, 11] }}
-        shadows={false}
+        // Sombras (rama estilo-oscuro, punto 1 de playtest: "la luz de la
+        // vela no debe atravesar paredes"): SOLO dark>=1 — en dark=0
+        // (paridad EXACTA con `main`) el motor de sombras ni se activa, cero
+        // coste y cero diferencia visual con el look clásico. Una única luz
+        // con sombra (CandleLightView, cúbica por ser pointLight) es
+        // asumible en forward rendering.
+        shadows={darkMode >= 1}
       >
         <SimDriver session={session} />
         {/* Penumbra experimental (?dark=, debug-params.ts): dark=0 mantiene la

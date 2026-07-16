@@ -162,6 +162,32 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
 };
 
 /**
+ * Luz tenue MÓVIL de enemigo (rama `estilo-oscuro`, punto 3 de playtest:
+ * "quiero ver moverse esa lucecita en la oscuridad", mucho menor que la vela
+ * del héroe — CandleLightView: 45/8.5 vs esto, ~3/3): mismo color que los
+ * ojos/acentos emisivos ya existentes de cada arquetipo (assets.ts), para que
+ * la luz se lea como "el brillo de sus ojos alcanza el entorno", no como un
+ * añadido aparte. `boss` usa un ámbar genérico tenue (no distingue por
+ * bossId: los acentos de cada jefe ya tienen su propio idioma visual, esta
+ * luz solo necesita delatar "algo grande se mueve ahí").
+ */
+const ENEMY_LIGHT_COLOR: Record<EnemyKind, string> = {
+  dummy: '#ffc169',
+  chaser: '#b18cff',
+  spike: '#ffb36b',
+  trail: '#c9bce8',
+  shooter: '#7cc7ff',
+  boss: '#e0b56a',
+};
+/** Altura LOCAL de la luz sobre el centro del cuerpo del enemigo (el `group` ya vive a `bodyRadius` del suelo). */
+const ENEMY_LIGHT_HEIGHT = 0.5;
+const ENEMY_LIGHT_INTENSITY = 3;
+const ENEMY_LIGHT_INTENSITY_BOSS = 4;
+const ENEMY_LIGHT_DISTANCE = 3;
+const ENEMY_LIGHT_DISTANCE_BOSS = 3.5;
+const ENEMY_LIGHT_DECAY = 2;
+
+/**
  * Material "en reposo" del cuerpo (sin flash de golpe/fase/telegraph
  * encima): el genérico por arquetipo, salvo el Guardián de Canto
  * (`bossId==='guardian'`), que sustituye el violeta genérico de jefe por su
@@ -753,6 +779,21 @@ function EnemyMesh({
         rotation-x={-Math.PI / 2}
         scale={ENEMY_RADIUS_RENDER * 1.3}
       />
+
+      {/* Luz tenue móvil (punto 3 de playtest, SOLO dark>=1): hija del
+          `group` que ya sigue la posición del enemigo cada frame — se apaga
+          sola con `group.visible=false` al morir (three.js no atraviesa
+          objetos invisibles al recolectar luces), sin lógica extra aquí. SIN
+          sombra (coste, y no la pide David: solo la vela debe bloquear luz). */}
+      {DARK_SILHOUETTES && (
+        <pointLight
+          color={ENEMY_LIGHT_COLOR[kind]}
+          intensity={kind === 'boss' ? ENEMY_LIGHT_INTENSITY_BOSS : ENEMY_LIGHT_INTENSITY}
+          distance={kind === 'boss' ? ENEMY_LIGHT_DISTANCE_BOSS : ENEMY_LIGHT_DISTANCE}
+          decay={ENEMY_LIGHT_DECAY}
+          position={[0, ENEMY_LIGHT_HEIGHT, 0]}
+        />
+      )}
 
       {kind === 'dummy' && <DummyMesh session={session} enemyId={enemyId} groupRef={groupRef} />}
       {kind === 'chaser' && <ChaserMesh session={session} enemyId={enemyId} groupRef={groupRef} />}

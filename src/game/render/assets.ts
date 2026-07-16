@@ -57,6 +57,37 @@ function createRadialTexture(): THREE.Texture {
   return texture;
 }
 
+/**
+ * Textura radial BLANCA (centro opaco → borde transparente), generada UNA vez
+ * y reutilizada por TODOS los halos de brillo falso (rama `estilo-oscuro`,
+ * punto 2 de playtest: "las monedas se ven de otra habitación sin iluminar
+ * nada"). A diferencia de `createRadialTexture` (negra, para blob shadows),
+ * esta es blanca porque cada halo la tiñe multiplicando por `material.color`
+ * con blending ADITIVO (ver más abajo) — así un único mapa sirve para
+ * cualquier color de brillo sin generar una textura por objeto.
+ */
+function createGlowHaloTexture(): THREE.Texture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Mapa radial blanco→transparente compartido por todos los halos de brillo (ver `createGlowHaloTexture`). */
+export const glowHaloTexture = createGlowHaloTexture();
+
 // ── Materiales ────────────────────────────────────────────────────────────
 
 /**
@@ -655,4 +686,63 @@ export const pitGlowMaterial = new THREE.MeshBasicMaterial({
   transparent: true,
   opacity: 0.2,
   depthWrite: false,
+});
+
+// ── Halos de brillo real (rama `estilo-oscuro`, punto 2 de playtest: "se ven
+// las monedas de otra habitación sin iluminar nada"): disco autoemisivo bajo
+// cada objeto brillante, `AdditiveBlending` + `depthWrite:false` para que se
+// lea como un charco de luz sobre el suelo (nunca como una pegatina opaca) y
+// no compita en el z-buffer con el propio objeto. Reutiliza SIEMPRE
+// `glowHaloTexture` (blanca→transparente, generada una vez arriba); el color
+// de cada halo es el `color` propio del material — no hace falta textura por
+// objeto. Gateado por grupo de `?glow=` (mismo criterio que PIT_GLOW_ENABLED)
+// y SOLO dark>=1: en dark=0 estos materiales existen pero nunca se montan
+// (ver ItemView.tsx/RoomView.tsx), cero diferencia con `main`.
+export const GLOW_ITEMS_ENABLED = DARK_MODE >= 1 && GLOW_GROUPS.has('items');
+export const GLOW_PUERTAS_ENABLED = DARK_MODE >= 1 && GLOW_GROUPS.has('puertas');
+
+/** Halo de moneda: dorado, mismo tono que `coinMaterial`. */
+export const coinGlowHaloMaterial = new THREE.MeshBasicMaterial({
+  map: glowHaloTexture,
+  color: '#ffd166',
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  opacity: 0.16,
+});
+/** Halo de llave: dorado pálido, mismo tono que `keyMaterial`. */
+export const keyGlowHaloMaterial = new THREE.MeshBasicMaterial({
+  map: glowHaloTexture,
+  color: '#ffe082',
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  opacity: 0.16,
+});
+/** Halo de poción: rosa, mismo tono que `potionMaterial` (algo más tenue: la poción es más pequeña que la moneda/llave a efectos de "charco de luz"). */
+export const potionGlowHaloMaterial = new THREE.MeshBasicMaterial({
+  map: glowHaloTexture,
+  color: '#ff6bcb',
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  opacity: 0.12,
+});
+/** Halo de puerta normal: azul, mismo tono que `doorMaterial` (el más tenue de todos: un portón entero ya es grande, no debe deslumbrar). */
+export const doorGlowHaloMaterial = new THREE.MeshBasicMaterial({
+  map: glowHaloTexture,
+  color: '#5a6db3',
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  opacity: 0.1,
+});
+/** Halo de puerta de jefe (requiere llave): dorado, mismo tono que `doorKeyMaterial` — algo más intenso que la puerta normal (es la puerta "importante"). */
+export const doorKeyGlowHaloMaterial = new THREE.MeshBasicMaterial({
+  map: glowHaloTexture,
+  color: '#d9a531',
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  opacity: 0.14,
 });

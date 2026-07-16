@@ -19,7 +19,20 @@ import { DOOR_WIDTH, WALL_THICKNESS } from '@/game/world/constants';
 import { QUEEN_COLUMN_ID_PREFIX } from '@/game/features/bosses/queen/constants';
 import { DOOR_GATE_ID_PREFIX } from '@/game/features/dungeon/dungeon-world';
 import type { Obstacle, World } from '@/game/world/types';
-import { doorKeyMaterial, doorMaterial, floorMaterial, rockMaterial, unitBox, unitPlane, wallMaterial } from './assets';
+import {
+  DARK_SILHOUETTES,
+  doorGlowHaloMaterial,
+  doorKeyGlowHaloMaterial,
+  doorKeyMaterial,
+  doorMaterial,
+  floorMaterial,
+  GLOW_PUERTAS_ENABLED,
+  rockMaterial,
+  unitBox,
+  unitCircle,
+  unitPlane,
+  wallMaterial,
+} from './assets';
 
 const WALL_HEIGHT = 0.9;
 const ROCK_HEIGHT = 0.8;
@@ -76,7 +89,17 @@ function InstancedBoxes({
   }, [obstacles, height]);
 
   if (obstacles.length === 0) return null;
-  return <instancedMesh ref={meshRef} args={[unitBox, material, obstacles.length]} />;
+  // Sombras (punto 1 de playtest, SOLO dark>=1): muros/rocas castean sobre el
+  // suelo y entre sí — en dark=0 (`DARK_SILHOUETTES` false) ninguna de las dos
+  // props se activa, paridad EXACTA con `main` (ni Canvas tiene shadows ahí).
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[unitBox, material, obstacles.length]}
+      castShadow={DARK_SILHOUETTES}
+      receiveShadow={DARK_SILHOUETTES}
+    />
+  );
 }
 
 /** Portones de puerta cerrados: pocos (≤ nº de conexiones), mallas normales reconstruidas al abrir puertas. */
@@ -94,14 +117,30 @@ function DoorGates({ world }: { world: World }) {
     <>
       {gates.map((gate) => {
         const { minX, minY, maxX, maxY } = gate.aabb;
+        const isKeyGate = gate.id.endsWith('-key');
+        const cx = (minX + maxX) / 2;
+        const cz = (minY + maxY) / 2;
         return (
-          <mesh
-            key={gate.id}
-            geometry={unitBox}
-            material={gate.id.endsWith('-key') ? doorKeyMaterial : doorMaterial}
-            position={[(minX + maxX) / 2, GATE_HEIGHT / 2, (minY + maxY) / 2]}
-            scale={[maxX - minX, GATE_HEIGHT, maxY - minY]}
-          />
+          <group key={gate.id}>
+            <mesh
+              geometry={unitBox}
+              material={isKeyGate ? doorKeyMaterial : doorMaterial}
+              position={[cx, GATE_HEIGHT / 2, cz]}
+              scale={[maxX - minX, GATE_HEIGHT, maxY - minY]}
+            />
+            {/* Halo de luz falsa (grupo "puertas" de ?glow=, punto 2 de
+                playtest, SOLO dark>=1): la puerta "emite" sobre el suelo del
+                paso en vez de leerse como una pegatina brillante. */}
+            {GLOW_PUERTAS_ENABLED && (
+              <mesh
+                geometry={unitCircle}
+                material={isKeyGate ? doorKeyGlowHaloMaterial : doorGlowHaloMaterial}
+                rotation-x={-Math.PI / 2}
+                position={[cx, 0.03, cz]}
+                scale={1.1}
+              />
+            )}
+          </group>
         );
       })}
     </>
@@ -132,6 +171,7 @@ function DungeonStructureView({ world }: { world: World }) {
           rotation-x={-Math.PI / 2}
           position={[placed.origin.x, 0, placed.origin.y]}
           scale={[placed.room.width, placed.room.height, 1]}
+          receiveShadow={DARK_SILHOUETTES}
         />
       ))}
       {/* Parche de suelo bajo cada hueco de puerta (el paso entre interiores). */}
@@ -148,6 +188,7 @@ function DungeonStructureView({ world }: { world: World }) {
             rotation-x={-Math.PI / 2}
             position={[cx, 0, cy]}
             scale={horizontal ? [t, DOOR_WIDTH, 1] : [DOOR_WIDTH, t, 1]}
+            receiveShadow={DARK_SILHOUETTES}
           />
         );
       })}
@@ -173,6 +214,7 @@ function SingleRoomView({ world }: { world: World }) {
         material={floorMaterial}
         rotation-x={-Math.PI / 2}
         scale={[width, height, 1]}
+        receiveShadow={DARK_SILHOUETTES}
       />
       {/* Paredes: cajas apoyadas fuera del interior jugable. */}
       <mesh
@@ -180,24 +222,32 @@ function SingleRoomView({ world }: { world: World }) {
         material={wallMaterial}
         position={[0, WALL_HEIGHT / 2, -(halfH + t / 2)]}
         scale={[width + 2 * t, WALL_HEIGHT, t]}
+        castShadow={DARK_SILHOUETTES}
+        receiveShadow={DARK_SILHOUETTES}
       />
       <mesh
         geometry={unitBox}
         material={wallMaterial}
         position={[0, WALL_HEIGHT / 2, halfH + t / 2]}
         scale={[width + 2 * t, WALL_HEIGHT, t]}
+        castShadow={DARK_SILHOUETTES}
+        receiveShadow={DARK_SILHOUETTES}
       />
       <mesh
         geometry={unitBox}
         material={wallMaterial}
         position={[-(halfW + t / 2), WALL_HEIGHT / 2, 0]}
         scale={[t, WALL_HEIGHT, height]}
+        castShadow={DARK_SILHOUETTES}
+        receiveShadow={DARK_SILHOUETTES}
       />
       <mesh
         geometry={unitBox}
         material={wallMaterial}
         position={[halfW + t / 2, WALL_HEIGHT / 2, 0]}
         scale={[t, WALL_HEIGHT, height]}
+        castShadow={DARK_SILHOUETTES}
+        receiveShadow={DARK_SILHOUETTES}
       />
       {/* Rocas (obstáculos AABB). Las columnas de la Reina (`isQueenColumnObstacle`)
           se excluyen aquí: las pinta QueenColumnsView desde queenState(world).columns,
@@ -211,6 +261,8 @@ function SingleRoomView({ world }: { world: World }) {
             material={rockMaterial}
             position={[(minX + maxX) / 2, ROCK_HEIGHT / 2, (minY + maxY) / 2]}
             scale={[maxX - minX, ROCK_HEIGHT, maxY - minY]}
+            castShadow={DARK_SILHOUETTES}
+            receiveShadow={DARK_SILHOUETTES}
           />
         );
       })}

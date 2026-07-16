@@ -98,6 +98,15 @@ export function CandleLightView({ session }: { session: GameSession }) {
       distance={CANDLE_BASE_DISTANCE}
       intensity={CANDLE_BASE_INTENSITY}
       color={CANDLE_WARM_COLOR}
+      // Sombra (punto 1 de playtest: "la luz de la vela no debe atravesar
+      // paredes"): única luz con sombra de toda la escena (cúbica, al ser
+      // pointLight — 6 caras), asumible en forward rendering. near/far del
+      // cubo de sombra acordes al alcance real de la luz (CANDLE_BASE_DISTANCE
+      // ≈ 8.5, con margen por el parpadeo que lo estira hasta ~9.5).
+      castShadow
+      shadow-mapSize={[1024, 1024]}
+      shadow-camera-near={0.3}
+      shadow-camera-far={10}
     />
   );
 }
