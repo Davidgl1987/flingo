@@ -18,8 +18,9 @@
 import { Canvas } from '@react-three/fiber';
 import { useCallback, useState } from 'react';
 import { getRoomPool } from '@/game/features/dungeon/rooms';
-import { applyForcedUpgrades, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades, readGodMode } from './debug-params';
+import { applyForcedUpgrades, readDarkMode, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades, readGodMode } from './debug-params';
 import { AimInput } from '@/game/features/hero/AimInput';
+import { CandleLightView } from '@/game/features/hero/CandleLightView';
 import { ParticleView } from '@/game/features/effects/ParticleView';
 import { ShockwaveView } from '@/game/features/effects/ShockwaveView';
 import { TrailView } from '@/game/features/effects/TrailView';
@@ -98,6 +99,11 @@ export function GameRoot({
   // Secuencia de run: cambia solo al reiniciar tras game-over/victoria (remonta el canvas).
   const [runSeq, setRunSeq] = useState(0);
 
+  // Penumbra experimental (rama estilo-oscuro, ?dark=): fijo por carga de
+  // página, igual que el resto de parámetros de debug-params.ts — no hace
+  // falta que reaccione a cambios de URL en caliente.
+  const darkMode = readDarkMode();
+
   const handleRestart = useCallback(() => {
     restartSession(session);
     useUiStore.getState().resetRun();
@@ -129,8 +135,23 @@ export function GameRoot({
         shadows={false}
       >
         <SimDriver session={session} />
-        <ambientLight intensity={0.75} />
-        <directionalLight position={[4, 8, 3]} intensity={1.15} />
+        {/* Penumbra experimental (?dark=, debug-params.ts): dark=0 mantiene la
+            luz EXACTA de siempre (paridad con main, cero regresiones); dark 1-2
+            la bajan casi a cero para que la vela del héroe (CandleLightView)
+            sea la fuente de luz principal de la sala. */}
+        {darkMode === 0 ? (
+          <>
+            <ambientLight intensity={0.75} />
+            <directionalLight position={[4, 8, 3]} intensity={1.15} />
+          </>
+        ) : (
+          <>
+            <ambientLight intensity={darkMode === 1 ? 0.1 : 0.02} color="#7c8fc9" />
+            {darkMode === 1 && <directionalLight position={[4, 8, 3]} intensity={0.08} color="#aab6e0" />}
+            <color attach="background" args={['#050508']} />
+            <fog attach="fog" args={['#05050a', 12, 38]} />
+          </>
+        )}
         <RoomView world={session.world} />
         {/* Columnas de la Reina del Enjambre + sus cuerdas (GDD §15.3): no-op
             (return null) fuera de su sala, ver QueenColumnsView.tsx. */}
@@ -143,6 +164,8 @@ export function GameRoot({
         <EnemyViews session={session} />
         <ProjectileViews session={session} />
         <HeroView session={session} />
+        {/* Vela del héroe (solo dark 1-2): luz principal de la sala en penumbra. */}
+        {darkMode >= 1 && <CandleLightView session={session} />}
         {/* Effects (GDD §12): partículas, estela y ondas expansivas, todos pools preasignados. */}
         <ParticleView pool={session.effects.particles} />
         <TrailView pool={session.effects.trail} />

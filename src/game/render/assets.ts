@@ -5,6 +5,7 @@
  */
 
 import * as THREE from 'three';
+import { readDarkMode, readGlowGroups } from './debug-params';
 
 // ── Geometrías unitarias (se escalan por mesh) ────────────────────────────
 
@@ -505,3 +506,72 @@ export const potionBodyGeometry = new THREE.SphereGeometry(1, 16, 12);
 export const potionNeckGeometry = new THREE.CylinderGeometry(0.3, 0.38, 1, 12);
 /** Tapón/corcho en la boca del frasco. */
 export const potionCapGeometry = new THREE.CylinderGeometry(0.4, 0.36, 1, 12);
+
+// ── Penumbra experimental (rama `estilo-oscuro`): brillo propio tenue ─────
+//
+// En dark 1-2 (?dark=, debug-params.ts) los elementos de jugabilidad deben
+// "intuirse" fuera del alcance de la vela del héroe. Los materiales Lambert
+// de arriba reaccionan a la luz de escena (que en penumbra es casi nula), así
+// que se les da un `emissive` tenue UNA sola vez al cargar este módulo, según
+// `?glow=` (debug-params.ts: lista de grupos, o TODOS por defecto). Los
+// materiales Basic (pit/charco/barro/acelerador) YA ignoran la iluminación de
+// escena — son autoemisivos de facto — y no necesitan tocarse.
+//
+// `dark=0` (paridad EXACTA con `main`) nunca entra en este bloque: cero
+// regresiones sobre el look actual con ese modo.
+const DARK_MODE = readDarkMode();
+const GLOW_GROUPS = readGlowGroups();
+
+/** Intensidad de emissive TENUE de referencia: se intuye, no brilla como neón. */
+const GLOW_EMISSIVE_INTENSITY = 0.35;
+
+if (DARK_MODE >= 1) {
+  if (GLOW_GROUPS.has('hazards')) {
+    // Pinchos: gris frío, apenas perceptible (silueta, no cartel).
+    spikesMaterial.emissive.set('#7a8bb0');
+    spikesMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.6;
+    spikesNeedleMaterial.emissive.set('#cfd6e8');
+    spikesNeedleMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
+    // Barril: rescoldo cálido (pólvora/madera), aros metálicos con reflejo tenue.
+    barrelMaterial.emissive.set('#ff5a33');
+    barrelMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.5;
+    barrelHoopMaterial.emissive.set('#e8d9a0');
+    barrelHoopMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.4;
+  }
+  if (GLOW_GROUPS.has('items')) {
+    // Monedas/llave: dorado suave, deben poder encontrarse a oscuras.
+    coinMaterial.emissive.set('#ffd166');
+    coinMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
+    coinRimMaterial.emissive.set('#c98f1b');
+    coinRimMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.8;
+    keyMaterial.emissive.set('#ffe082');
+    keyMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
+    // Poción: mantiene su propio tono (rosa) en vez de forzar dorado — sigue
+    // siendo "objeto" legible a oscuras sin desentonar con su silueta/color.
+    potionMaterial.emissive.set('#ff6bcb');
+    potionMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.6;
+  }
+  if (GLOW_GROUPS.has('puertas')) {
+    doorMaterial.emissive.set('#5a6db3');
+    doorMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
+    doorKeyMaterial.emissive.set('#d9a531');
+    doorKeyMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
+  }
+}
+
+/** true si el grupo "fosos" de `?glow=` debe pintar el aro tenue del borde (leído por HazardView.tsx). */
+export const PIT_GLOW_ENABLED = DARK_MODE >= 1 && GLOW_GROUPS.has('fosos');
+
+/**
+ * Borde tenue del foso (grupo "fosos" de `?glow=`): quad Basic (autoemisivo)
+ * ligeramente MÁS GRANDE que el quad negro del foso, pintado justo debajo —
+ * el margen que asoma alrededor es el "aro" que se intuye en la penumbra. Sin
+ * geometría nueva: mismo `unitPlane`, solo un tamaño distinto por hazard (ver
+ * HazardView.tsx `PitQuad`).
+ */
+export const pitGlowMaterial = new THREE.MeshBasicMaterial({
+  color: '#3fd8ff',
+  transparent: true,
+  opacity: 0.2,
+  depthWrite: false,
+});
