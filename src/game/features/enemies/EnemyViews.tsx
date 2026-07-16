@@ -200,14 +200,23 @@ const ENEMY_LIGHT_DECAY = 2;
 /**
  * Linterna de ojos (spotLight, no-boss): altura LOCAL a la que viven los ojos
  * de cada arquetipo (0.3-0.4, bastante más abajo que la vieja "bombilla" a
- * 0.5) y distancia del punto-objetivo hacia el que apunta el cono (solo
- * define la DIRECCIÓN vía el ángulo calculado en useFrame, la magnitud es
- * arbitraria). Parámetros de linterna DÉBIL (los spots concentran, lucen
- * menos que una point a igual intensidad): alcance corto, cono estrecho,
- * penumbra suave, sin sombra (coste; solo la vela del héroe bloquea luz).
+ * 0.5). Parámetros de linterna DÉBIL (los spots concentran, lucen menos que
+ * una point a igual intensidad): alcance corto, cono estrecho, penumbra
+ * suave, sin sombra (coste; solo la vela del héroe bloquea luz).
+ *
+ * Punto 6 de playtest ronda 4 ("apuntan hacia donde miran, y un poco abajo
+ * para que dejen el rastro de luz"): el punto-objetivo (target) de la
+ * spotLight ya NO vive a la misma altura que la luz (eso apuntaba el cono en
+ * horizontal, paralelo al suelo, sin proyectar ningún charco) — su altura
+ * LOCAL se fija cada frame a `-group.position.y` (ver useFrame), que cancela
+ * exactamente la altura a la que `lightsGroupRef` (el padre, que solo
+ * TRASLADA, mirroreando `group.position`) vive sobre el suelo, así el target
+ * cae siempre en el PLANO DEL SUELO (y=0 de mundo) sea cual sea el radio del
+ * enemigo. `ENEMY_LANTERN_TARGET_DISTANCE` (antes 1, alcance corto para no
+ * degenerar la dirección) pasa a marcar cuánto por DELANTE cae ese charco.
  */
 const ENEMY_LANTERN_HEIGHT = 0.35;
-const ENEMY_LANTERN_TARGET_DISTANCE = 1;
+const ENEMY_LANTERN_TARGET_DISTANCE = 1.3;
 const ENEMY_LANTERN_INTENSITY = 10;
 const ENEMY_LANTERN_DISTANCE = 4;
 const ENEMY_LANTERN_ANGLE = 0.55;
@@ -592,9 +601,16 @@ function EnemyMesh({
         lanternAngle.current = orientationYaw.current ?? 0;
       }
       if (lanternTargetRef.current) {
+        // Altura LOCAL = -group.position.y: `lightsGroupRef` (el padre de
+        // este target) mirrorea `group.position` cada frame (más arriba,
+        // `lightsGroupRef.current.position.copy(group.position)`), así que
+        // restar esa misma altura aquí cancela el offset y deja el target en
+        // el plano del suelo real (y=0 de mundo) — el cono apunta hacia
+        // abajo y por delante en vez de en horizontal (punto 6 de playtest
+        // ronda 4).
         lanternTargetRef.current.position.set(
           Math.sin(lanternAngle.current) * ENEMY_LANTERN_TARGET_DISTANCE,
-          ENEMY_LANTERN_HEIGHT,
+          -group.position.y,
           Math.cos(lanternAngle.current) * ENEMY_LANTERN_TARGET_DISTANCE,
         );
       }
@@ -1055,7 +1071,7 @@ function EnemyMesh({
             decay={ENEMY_LANTERN_DECAY}
             position={[0, ENEMY_LANTERN_HEIGHT, 0]}
           />
-          <object3D ref={lanternTargetRef} position={[0, ENEMY_LANTERN_HEIGHT, ENEMY_LANTERN_TARGET_DISTANCE]} />
+          <object3D ref={lanternTargetRef} position={[0, -ENEMY_RADIUS_RENDER, ENEMY_LANTERN_TARGET_DISTANCE]} />
           <pointLight
             ref={fillLightRef}
             color={ENEMY_LIGHT_COLOR[kind]}

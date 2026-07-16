@@ -67,7 +67,16 @@ function BossCandle({ x, z, index }: { x: number; z: number; index: number }) {
     const t = state.clock.elapsedTime + index * FLICKER_PHASE_STEP;
     const flicker = FLICKER_WEIGHT_A * Math.sin(t * FLICKER_FREQ_A) + FLICKER_WEIGHT_B * Math.sin(t * FLICKER_FREQ_B);
     if (light) light.intensity = LIGHT_INTENSITY * (1 + FLICKER_AMPLITUDE * flicker);
-    if (flame) flame.scale.set(FLAME_SCALE_XZ, FLAME_SCALE_Y * (1 + flicker * 0.1), FLAME_SCALE_XZ);
+    // Pulso de tamaño puro (punto 3 de playtest ronda 4, "revisa que sea
+    // pulso de tamaño puro y sutil, no vaivén"): ya no había vaivén de
+    // posición/rotación (nunca lo hubo aquí), solo faltaba que el pulso
+    // fuera UNIFORME (antes solo variaba el alto Y, ahora también X/Z) para
+    // leerse como "crece y decrece" en vez de "se estira en vertical".
+    // Amplitud sin cambios (ya era sutil).
+    if (flame) {
+      const pulse = 1 + flicker * 0.1;
+      flame.scale.set(FLAME_SCALE_XZ * pulse, FLAME_SCALE_Y * pulse, FLAME_SCALE_XZ * pulse);
+    }
   });
 
   return (

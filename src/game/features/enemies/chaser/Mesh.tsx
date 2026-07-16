@@ -115,21 +115,28 @@ export function ChaserMesh({
           <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[0.13, -0.02, 0.06]} scale={0.045} />
         </>
       )}
-      {/* Cejas agresivas: cuñas inclinadas hacia el centro (ceño fruncido). */}
-      <mesh
-        geometry={smallWedgeGeometry}
-        material={chaserBrowMaterial}
-        position={[-0.13, 0.09, 0.02]}
-        rotation-z={0.5}
-        scale={[0.16, 0.045, 0.05]}
-      />
-      <mesh
-        geometry={smallWedgeGeometry}
-        material={chaserBrowMaterial}
-        position={[0.13, 0.09, 0.02]}
-        rotation-z={-0.5}
-        scale={[0.16, 0.045, 0.05]}
-      />
+      {/* Cejas agresivas: cuñas inclinadas hacia el centro (ceño fruncido).
+          Ocultas en dark>=1 (punto 4 de playtest ronda 4: "quítale las cejas
+          a los enemigos"); en dark=0 se quedan tal cual (paridad con el
+          look clásico). */}
+      {!silhouettes && (
+        <>
+          <mesh
+            geometry={smallWedgeGeometry}
+            material={chaserBrowMaterial}
+            position={[-0.13, 0.09, 0.02]}
+            rotation-z={0.5}
+            scale={[0.16, 0.045, 0.05]}
+          />
+          <mesh
+            geometry={smallWedgeGeometry}
+            material={chaserBrowMaterial}
+            position={[0.13, 0.09, 0.02]}
+            rotation-z={-0.5}
+            scale={[0.16, 0.045, 0.05]}
+          />
+        </>
+      )}
     </group>
   );
 }
