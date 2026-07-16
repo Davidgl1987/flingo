@@ -31,7 +31,8 @@ import {
 import type { GameSession } from '@/game/session/session';
 import { pushEvent } from '@/engine/events';
 import { barrelInAir, type HazardSpawn } from '@/game/world/types';
-import { barrelHoopMaterial, barrelMaterial, blobShadowMaterial, boostMaterial, mudMaterial, PIT_GLOW_ENABLED, pitGlowMaterial, pitMaterial, scorchMaterial, spikesMaterial, spikesNeedleMaterial, unitCircle, unitCylinder, unitPlane, unitSpikeNeedle } from '@/game/render/assets';
+import { barrelHoopMaterial, barrelMaterial, blobShadowMaterial, boostMaterial, mudMaterial, pitGlowMaterial, pitMaterial, scorchMaterial, spikesMaterial, spikesNeedleMaterial, unitCircle, unitCylinder, unitPlane, unitSpikeNeedle } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 
 const HAZARD_QUAD_Y = 0.03;
 const BARREL_HEIGHT = 0.7;
@@ -125,16 +126,18 @@ function SpikesField({ hazard }: { hazard: HazardSpawn }) {
  * contraste suelo/foso deja de leerse (ambos caen a negro), así que se pinta
  * un quad Basic (autoemisivo) ligeramente MÁS GRANDE justo debajo del quad
  * negro — el margen que asoma alrededor es el aro tenue del borde. `dark=0`
- * nunca renderiza este quad extra (PIT_GLOW_ENABLED ya viene en `false`).
+ * nunca renderiza este quad extra (el selector de `useDarkStore` de abajo ya
+ * viene en `false`).
  */
 const PIT_GLOW_MARGIN = 0.18;
 
 function PitQuad({ hazard }: { hazard: HazardSpawn }) {
+  const pitGlowEnabled = useDarkStore((s) => s.dark >= 1 && s.glow.fosos);
   const x = hazard.position.x;
   const z = hazard.position.y;
   return (
     <>
-      {PIT_GLOW_ENABLED && (
+      {pitGlowEnabled && (
         <mesh
           geometry={unitPlane}
           material={pitGlowMaterial}

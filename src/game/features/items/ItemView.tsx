@@ -27,7 +27,6 @@ import {
   coinGlowHaloMaterial,
   coinMaterial,
   coinRimMaterial,
-  GLOW_ITEMS_ENABLED,
   keyGlowHaloMaterial,
   keyMaterial,
   potionBodyGeometry,
@@ -43,6 +42,7 @@ import {
   unitCone,
   unitSphere,
 } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 
 const ITEM_HEIGHT: Record<Item['kind'], number> = { coin: 0.3, potion: 0.32, key: 0.3, shopkeeper: 0 };
 /** Radio visual de la moneda (diámetro del cilindro plano de assets.ts, escalado). */
@@ -107,6 +107,7 @@ function PotionShape() {
 }
 
 function ItemMesh({ session, itemId }: { session: GameSession; itemId: string }) {
+  const glowItemsEnabled = useDarkStore((s) => s.dark >= 1 && s.glow.items);
   const groupRef = useRef<Group>(null);
   // Halo de brillo: NO es hijo del group de arriba (que gira/rebota con el
   // objeto — un disco heredando ese giro se vería "inclinarse" fuera del
@@ -155,7 +156,7 @@ function ItemMesh({ session, itemId }: { session: GameSession; itemId: string })
         {kind === 'key' && <mesh geometry={unitBox} material={keyMaterial} scale={0.22} />}
         {kind === 'shopkeeper' && <ShopkeeperShape />}
       </group>
-      {GLOW_ITEMS_ENABLED && glowMaterial && (
+      {glowItemsEnabled && glowMaterial && (
         <mesh
           ref={haloRef}
           geometry={unitCircle}

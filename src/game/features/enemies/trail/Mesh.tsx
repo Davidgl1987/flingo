@@ -19,13 +19,13 @@ import type { Group, Mesh } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
 import {
-  DARK_SILHOUETTES,
   eyePupilMaterial,
   smallDotGeometry,
   trailDripMaterial,
   trailMaterial,
   unitCone,
 } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 
 /**
  * Radio visual del cuerpo: igual que ENEMY_RADIUS_RENDER en
@@ -46,6 +46,7 @@ export function TrailMesh({
   enemyId: string;
   bodyRef: RefObject<Mesh | null>;
 }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const trailDripRefs = useRef<(Mesh | null)[]>([]);
   // Lacrimera (dark>=1): punta de la gota + ojos oscuros, siblings del
   // cuerpo (mismo espacio local que las gotas de arriba, no hijos de
@@ -68,7 +69,7 @@ export function TrailMesh({
     if (body) {
       body.scale.set(TRAIL_BODY_RADIUS * widen, TRAIL_BODY_RADIUS * squash, TRAIL_BODY_RADIUS * widen);
     }
-    if (DARK_SILHOUETTES) {
+    if (silhouettes) {
       const teardrop = teardropRef.current;
       if (teardrop) {
         teardrop.position.set(0, TRAIL_BODY_RADIUS * squash * 0.85, 0);
@@ -108,7 +109,7 @@ export function TrailMesh({
           visible={false}
         />
       ))}
-      {DARK_SILHOUETTES && (
+      {silhouettes && (
         <>
           {/* Punta de la gota (cono apex-arriba, base fundida con el cuerpo):
               mismo material MUTABLE que el cuerpo (trailMaterial, ya

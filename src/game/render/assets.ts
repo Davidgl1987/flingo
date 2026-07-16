@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three';
-import { readDarkMode, readGlowGroups } from './debug-params';
+import { useDarkStore } from './dark-store';
 
 // ── Geometrías unitarias (se escalan por mesh) ────────────────────────────
 
@@ -540,57 +540,97 @@ export const potionCapGeometry = new THREE.CylinderGeometry(0.4, 0.36, 1, 12);
 
 // ── Penumbra experimental (rama `estilo-oscuro`): brillo propio tenue ─────
 //
-// En dark 1-2 (?dark=, debug-params.ts) los elementos de jugabilidad deben
-// "intuirse" fuera del alcance de la vela del héroe. Los materiales Lambert
-// de arriba reaccionan a la luz de escena (que en penumbra es casi nula), así
-// que se les da un `emissive` tenue UNA sola vez al cargar este módulo, según
-// `?glow=` (debug-params.ts: lista de grupos, o TODOS por defecto). Los
-// materiales Basic (pit/charco/barro/acelerador) YA ignoran la iluminación de
-// escena — son autoemisivos de facto — y no necesitan tocarse.
+// En dark 1-2 (?dark=, debug-params.ts, editable en runtime desde el menú de
+// pausa vía `useDarkStore`, ver dark-store.ts) los elementos de jugabilidad
+// deben "intuirse" fuera del alcance de la vela del héroe. Los materiales
+// Lambert de arriba reaccionan a la luz de escena (que en penumbra es casi
+// nula), así que se les da un `emissive` tenue según `?glow=`/el store (lista
+// de grupos, o TODOS por defecto). Los materiales Basic (pit/charco/barro/
+// acelerador) YA ignoran la iluminación de escena — son autoemisivos de
+// facto — y no necesitan tocarse.
 //
-// `dark=0` (paridad EXACTA con `main`) nunca entra en este bloque: cero
-// regresiones sobre el look actual con ese modo.
-const DARK_MODE = readDarkMode();
-const GLOW_GROUPS = readGlowGroups();
-
-/** Intensidad de emissive TENUE de referencia: se intuye, no brilla como neón. */
+// Todo lo de aquí abajo pasa por `applyDarkMaterials(dark, glow)`: función
+// IDEMPOTENTE (se puede llamar cualquier número de veces con cualquier
+// combinación de argumentos sin degradar nada) que SIEMPRE parte de los
+// valores ORIGINALES capturados justo debajo de cada material — nunca del
+// último estado aplicado — así que alternar 1→0→2→1 repetidas veces nunca
+// acumula error ni dependencia de historial. `dark=0` deja TODO este bloque
+// en su valor original: paridad EXACTA con `main`.
 const GLOW_EMISSIVE_INTENSITY = 0.35;
 
-if (DARK_MODE >= 1) {
-  // Materiales Basic demasiado saturados para la penumbra (autoiluminados,
-  // deslumbran junto a la vela): tonos apagados solo en modo oscuro.
-  puddleMaterial.color.set('#1e5e3a');
-  boostMaterial.color.set('#1f7fa8');
-  if (GLOW_GROUPS.has('hazards')) {
-    // Pinchos: gris frío, apenas perceptible (silueta, no cartel).
-    spikesMaterial.emissive.set('#7a8bb0');
-    spikesMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.6;
-    spikesNeedleMaterial.emissive.set('#cfd6e8');
-    spikesNeedleMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
-    // Barril: rescoldo cálido (pólvora/madera), aros metálicos con reflejo tenue.
-    barrelMaterial.emissive.set('#ff5a33');
-    barrelMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.5;
-    barrelHoopMaterial.emissive.set('#e8d9a0');
-    barrelHoopMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.4;
+/** Snapshot de color plano, capturado antes de cualquier mutación. */
+function snapshotColor(material: { color: THREE.Color }): THREE.Color {
+  return material.color.clone();
+}
+
+// -- Tono oscuro de materiales Basic (independiente de `?glow=`, solo de dark>=1) --
+const TONE_DARK_ORIGINAL = {
+  puddle: snapshotColor(puddleMaterial),
+  boost: snapshotColor(boostMaterial),
+};
+const TONE_DARK_COLOR = {
+  puddle: new THREE.Color('#1e5e3a'),
+  boost: new THREE.Color('#1f7fa8'),
+};
+
+function applyToneDark(active: boolean): void {
+  if (active) {
+    puddleMaterial.color.copy(TONE_DARK_COLOR.puddle);
+    boostMaterial.color.copy(TONE_DARK_COLOR.boost);
+  } else {
+    puddleMaterial.color.copy(TONE_DARK_ORIGINAL.puddle);
+    boostMaterial.color.copy(TONE_DARK_ORIGINAL.boost);
   }
-  if (GLOW_GROUPS.has('items')) {
-    // Monedas/llave: dorado suave, deben poder encontrarse a oscuras.
-    coinMaterial.emissive.set('#ffd166');
-    coinMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
-    coinRimMaterial.emissive.set('#c98f1b');
-    coinRimMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.8;
-    keyMaterial.emissive.set('#ffe082');
-    keyMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
-    // Poción: mantiene su propio tono (rosa) en vez de forzar dorado — sigue
-    // siendo "objeto" legible a oscuras sin desentonar con su silueta/color.
-    potionMaterial.emissive.set('#ff6bcb');
-    potionMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY * 0.6;
-  }
-  if (GLOW_GROUPS.has('puertas')) {
-    doorMaterial.emissive.set('#5a6db3');
-    doorMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
-    doorKeyMaterial.emissive.set('#d9a531');
-    doorKeyMaterial.emissiveIntensity = GLOW_EMISSIVE_INTENSITY;
+}
+
+// -- Emissive tenue por grupo de `?glow=` (hazards/items/puertas) ─────────
+interface EmissiveGlowTarget {
+  material: THREE.MeshLambertMaterial;
+  color: string;
+  intensity: number;
+  originalEmissive: THREE.Color;
+  originalIntensity: number;
+}
+
+function emissiveTarget(material: THREE.MeshLambertMaterial, color: string, intensity: number): EmissiveGlowTarget {
+  return {
+    material,
+    color,
+    intensity,
+    originalEmissive: material.emissive.clone(),
+    originalIntensity: material.emissiveIntensity,
+  };
+}
+
+/** Pinchos/barril: gris frío casi imperceptible y rescoldo cálido de pólvora/madera (silueta, no cartel). */
+const HAZARDS_GLOW_TARGETS: EmissiveGlowTarget[] = [
+  emissiveTarget(spikesMaterial, '#7a8bb0', GLOW_EMISSIVE_INTENSITY * 0.6),
+  emissiveTarget(spikesNeedleMaterial, '#cfd6e8', GLOW_EMISSIVE_INTENSITY),
+  emissiveTarget(barrelMaterial, '#ff5a33', GLOW_EMISSIVE_INTENSITY * 0.5),
+  emissiveTarget(barrelHoopMaterial, '#e8d9a0', GLOW_EMISSIVE_INTENSITY * 0.4),
+];
+/** Monedas/llave/poción: dorado suave (poción mantiene su propio tono rosa). */
+const ITEMS_GLOW_TARGETS: EmissiveGlowTarget[] = [
+  emissiveTarget(coinMaterial, '#ffd166', GLOW_EMISSIVE_INTENSITY),
+  emissiveTarget(coinRimMaterial, '#c98f1b', GLOW_EMISSIVE_INTENSITY * 0.8),
+  emissiveTarget(keyMaterial, '#ffe082', GLOW_EMISSIVE_INTENSITY),
+  emissiveTarget(potionMaterial, '#ff6bcb', GLOW_EMISSIVE_INTENSITY * 0.6),
+];
+/** Puertas normal/de jefe. */
+const PUERTAS_GLOW_TARGETS: EmissiveGlowTarget[] = [
+  emissiveTarget(doorMaterial, '#5a6db3', GLOW_EMISSIVE_INTENSITY),
+  emissiveTarget(doorKeyMaterial, '#d9a531', GLOW_EMISSIVE_INTENSITY),
+];
+
+function applyEmissiveGroup(targets: EmissiveGlowTarget[], active: boolean): void {
+  for (const t of targets) {
+    if (active) {
+      t.material.emissive.set(t.color);
+      t.material.emissiveIntensity = t.intensity;
+    } else {
+      t.material.emissive.copy(t.originalEmissive);
+      t.material.emissiveIntensity = t.originalIntensity;
+    }
   }
 }
 
@@ -601,12 +641,11 @@ if (DARK_MODE >= 1) {
 // vela: cuerpos oscuros + ojos/acentos emisivos (MeshBasicMaterial, ignoran
 // la luz de escena — visibles incluso a oscuras, "es EL rasgo del concept").
 // Placeholders: primitivas de Three combinadas, no modelos; importa la
-// silueta + los ojos, no el detalle. SOLO dark>=1: con dark=0 este bloque no
-// se ejecuta y los materiales de arriba quedan con su color original
-// (paridad EXACTA con `main`). No toca radios de colisión ni la sim: es
-// render puro (JSX/materiales), igual que el resto de "personalidad de
-// enemigos" de más arriba.
-export const DARK_SILHOUETTES = DARK_MODE >= 1;
+// silueta + los ojos, no el detalle. SOLO dark>=1: con dark=0 estos
+// materiales quedan restaurados a su color original (paridad EXACTA con
+// `main`). No toca radios de colisión ni la sim: es render puro (JSX/
+// materiales), igual que el resto de "personalidad de enemigos" de más
+// arriba.
 
 /** Intensidad de emissive de acentos de jefe (cuernos/corona) sobre su Lambert base: se intuyen, no brillan como neón (mismo orden que GLOW_EMISSIVE_INTENSITY de arriba). */
 const ACCENT_EMISSIVE_INTENSITY = 0.3;
@@ -636,43 +675,125 @@ export const spikeEyeGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffb36
 export const shooterTubeRestMaterial = new THREE.MeshBasicMaterial({ color: '#2a2730' });
 export const shooterTubeGlowMaterial = new THREE.MeshBasicMaterial({ color: '#7cc7ff' });
 
-if (DARK_SILHOUETTES) {
-  // Héroe = vela: cuerpo de cera pálida fijo (HeroView.tsx deja de lerpear
-  // heroMaterial.color en dark>=1; el color de arma vive solo en la llama).
-  heroMaterial.color.set(HERO_WAX_COLOR);
+/** Snapshot de todo lo que `applySilhouettes` puede mutar, capturado antes de la primera mutación. */
+const SILHOUETTE_ORIGINAL = {
+  hero: snapshotColor(heroMaterial),
+  dummy: snapshotColor(dummyMaterial),
+  chaser: snapshotColor(chaserMaterial),
+  spike: snapshotColor(spikeMaterial),
+  spikeCone: snapshotColor(spikeConeMaterial),
+  trail: {
+    color: snapshotColor(trailMaterial),
+    transparent: trailMaterial.transparent,
+    opacity: trailMaterial.opacity,
+    emissive: trailMaterial.emissive.clone(),
+    emissiveIntensity: trailMaterial.emissiveIntensity,
+  },
+  shooter: snapshotColor(shooterMaterial),
+  bossBody: snapshotColor(bossBodyMaterial),
+  guardianBody: snapshotColor(guardianBodyMaterial),
+  guardianHorn: {
+    color: snapshotColor(guardianHornMaterial),
+    emissive: guardianHornMaterial.emissive.clone(),
+    emissiveIntensity: guardianHornMaterial.emissiveIntensity,
+  },
+  queenBody: snapshotColor(queenBodyMaterial),
+  queenCrown: {
+    emissive: queenCrownMaterial.emissive.clone(),
+    emissiveIntensity: queenCrownMaterial.emissiveIntensity,
+  },
+  stormBody: snapshotColor(stormBodyMaterial),
+};
 
-  // Vigía de hollín (dummy): campana oscura.
-  dummyMaterial.color.set('#242129');
-  // Acechador del Umbral (chaser): figura alta y fina, casi negra.
-  chaserMaterial.color.set('#0d0c12');
-  // Penitente de Púas (spike): bola y conos de piedra oscura.
-  spikeMaterial.color.set('#211f26');
-  spikeConeMaterial.color.set('#17151b');
-  // Lacrimera (trail): gota pálida translúcida con brillo interior violeta.
-  trailMaterial.color.set('#cfc4e8');
-  trailMaterial.transparent = true;
-  trailMaterial.opacity = 0.85;
-  trailMaterial.emissive.set('#b18cff');
-  trailMaterial.emissiveIntensity = 0.25;
-  // Aguaboca (shooter): pedrusco oscuro.
-  shooterMaterial.color.set('#232028');
+/** Aplica (`active=true`) o restaura (`active=false`) las siluetas oscuras de personajes. Idempotente. */
+function applySilhouettes(active: boolean): void {
+  if (active) {
+    // Héroe = vela: cuerpo de cera pálida fijo (HeroView.tsx deja de lerpear
+    // heroMaterial.color en dark>=1; el color de arma vive solo en la llama).
+    heroMaterial.color.set(HERO_WAX_COLOR);
 
-  // Jefes (GDD §15): NO se remodela su composición, solo se oscurece el
-  // cuerpo y se da un pelín de emissive a acentos ya existentes para que se
-  // lean en la oscuridad (prismaCoreMaterial sigue el arma, ya es legible).
-  bossBodyMaterial.color.set('#26232c');
-  guardianBodyMaterial.color.set('#242229');
-  guardianHornMaterial.color.set('#18161c');
-  guardianHornMaterial.emissive.set('#d9a531');
-  guardianHornMaterial.emissiveIntensity = ACCENT_EMISSIVE_INTENSITY;
-  queenBodyMaterial.color.set('#221f2a');
-  queenCrownMaterial.emissive.set('#9fd65c');
-  queenCrownMaterial.emissiveIntensity = ACCENT_EMISSIVE_INTENSITY;
-  stormBodyMaterial.color.set('#20242e');
+    // Vigía de hollín (dummy): campana oscura.
+    dummyMaterial.color.set('#242129');
+    // Acechador del Umbral (chaser): figura alta y fina, casi negra.
+    chaserMaterial.color.set('#0d0c12');
+    // Penitente de Púas (spike): bola y conos de piedra oscura.
+    spikeMaterial.color.set('#211f26');
+    spikeConeMaterial.color.set('#17151b');
+    // Lacrimera (trail): gota pálida translúcida con brillo interior violeta.
+    trailMaterial.color.set('#cfc4e8');
+    trailMaterial.transparent = true;
+    trailMaterial.opacity = 0.85;
+    trailMaterial.emissive.set('#b18cff');
+    trailMaterial.emissiveIntensity = 0.25;
+    // Aguaboca (shooter): pedrusco oscuro.
+    shooterMaterial.color.set('#232028');
+
+    // Jefes (GDD §15): NO se remodela su composición, solo se oscurece el
+    // cuerpo y se da un pelín de emissive a acentos ya existentes para que se
+    // lean en la oscuridad (prismaCoreMaterial sigue el arma, ya es legible).
+    bossBodyMaterial.color.set('#26232c');
+    guardianBodyMaterial.color.set('#242229');
+    guardianHornMaterial.color.set('#18161c');
+    guardianHornMaterial.emissive.set('#d9a531');
+    guardianHornMaterial.emissiveIntensity = ACCENT_EMISSIVE_INTENSITY;
+    queenBodyMaterial.color.set('#221f2a');
+    queenCrownMaterial.emissive.set('#9fd65c');
+    queenCrownMaterial.emissiveIntensity = ACCENT_EMISSIVE_INTENSITY;
+    stormBodyMaterial.color.set('#20242e');
+  } else {
+    heroMaterial.color.copy(SILHOUETTE_ORIGINAL.hero);
+    dummyMaterial.color.copy(SILHOUETTE_ORIGINAL.dummy);
+    chaserMaterial.color.copy(SILHOUETTE_ORIGINAL.chaser);
+    spikeMaterial.color.copy(SILHOUETTE_ORIGINAL.spike);
+    spikeConeMaterial.color.copy(SILHOUETTE_ORIGINAL.spikeCone);
+    trailMaterial.color.copy(SILHOUETTE_ORIGINAL.trail.color);
+    trailMaterial.transparent = SILHOUETTE_ORIGINAL.trail.transparent;
+    trailMaterial.opacity = SILHOUETTE_ORIGINAL.trail.opacity;
+    trailMaterial.emissive.copy(SILHOUETTE_ORIGINAL.trail.emissive);
+    trailMaterial.emissiveIntensity = SILHOUETTE_ORIGINAL.trail.emissiveIntensity;
+    shooterMaterial.color.copy(SILHOUETTE_ORIGINAL.shooter);
+    bossBodyMaterial.color.copy(SILHOUETTE_ORIGINAL.bossBody);
+    guardianBodyMaterial.color.copy(SILHOUETTE_ORIGINAL.guardianBody);
+    guardianHornMaterial.color.copy(SILHOUETTE_ORIGINAL.guardianHorn.color);
+    guardianHornMaterial.emissive.copy(SILHOUETTE_ORIGINAL.guardianHorn.emissive);
+    guardianHornMaterial.emissiveIntensity = SILHOUETTE_ORIGINAL.guardianHorn.emissiveIntensity;
+    queenBodyMaterial.color.copy(SILHOUETTE_ORIGINAL.queenBody);
+    queenCrownMaterial.emissive.copy(SILHOUETTE_ORIGINAL.queenCrown.emissive);
+    queenCrownMaterial.emissiveIntensity = SILHOUETTE_ORIGINAL.queenCrown.emissiveIntensity;
+    stormBodyMaterial.color.copy(SILHOUETTE_ORIGINAL.stormBody);
+  }
+  // El toggle de `transparent` de arriba (trailMaterial) cambia el programa
+  // de blending del material: fuerza recompilación de shader (GameRoot ya
+  // hace un scene.traverse equivalente al cambiar `dark`, esto es insurance
+  // barata e idempotente si algo llega a mutar el material fuera de ese flujo).
+  trailMaterial.needsUpdate = true;
 }
 
-/** true si el grupo "fosos" de `?glow=` debe pintar el aro tenue del borde (leído por HazardView.tsx). */
-export const PIT_GLOW_ENABLED = DARK_MODE >= 1 && GLOW_GROUPS.has('fosos');
+/**
+ * Punto de entrada ÚNICO de la penumbra experimental: aplica (o restaura)
+ * TODAS las mutaciones de materiales de este bloque según `dark`/`glow`
+ * actuales. IDEMPOTENTE — puede llamarse con cualquier combinación de
+ * argumentos, cualquier número de veces, sin degradar nada (siempre parte de
+ * los originales capturados arriba). `dark=0` deja TODO restaurado: paridad
+ * EXACTA con `main`.
+ */
+export function applyDarkMaterials(
+  dark: 0 | 1 | 2,
+  glow: { fosos: boolean; hazards: boolean; items: boolean; puertas: boolean },
+): void {
+  const active = dark >= 1;
+  applyToneDark(active);
+  applyEmissiveGroup(HAZARDS_GLOW_TARGETS, active && glow.hazards);
+  applyEmissiveGroup(ITEMS_GLOW_TARGETS, active && glow.items);
+  applyEmissiveGroup(PUERTAS_GLOW_TARGETS, active && glow.puertas);
+  applySilhouettes(active);
+}
+
+// Suscripción fuera de React (menú de pausa → useDarkStore → aquí) + llamada
+// inicial con el valor de arranque (mismo default de siempre: dark=1, todos
+// los grupos de `?glow=` activos si no se pasó el parámetro).
+useDarkStore.subscribe((state) => applyDarkMaterials(state.dark, state.glow));
+applyDarkMaterials(useDarkStore.getState().dark, useDarkStore.getState().glow);
 
 /**
  * Borde tenue del foso (grupo "fosos" de `?glow=`): quad Basic (autoemisivo)
@@ -695,11 +816,10 @@ export const pitGlowMaterial = new THREE.MeshBasicMaterial({
 // no compita en el z-buffer con el propio objeto. Reutiliza SIEMPRE
 // `glowHaloTexture` (blanca→transparente, generada una vez arriba); el color
 // de cada halo es el `color` propio del material — no hace falta textura por
-// objeto. Gateado por grupo de `?glow=` (mismo criterio que PIT_GLOW_ENABLED)
-// y SOLO dark>=1: en dark=0 estos materiales existen pero nunca se montan
-// (ver ItemView.tsx/RoomView.tsx), cero diferencia con `main`.
-export const GLOW_ITEMS_ENABLED = DARK_MODE >= 1 && GLOW_GROUPS.has('items');
-export const GLOW_PUERTAS_ENABLED = DARK_MODE >= 1 && GLOW_GROUPS.has('puertas');
+// objeto. Gateado en runtime por grupo de `?glow=`/el store (mismo criterio
+// que el aro del foso de arriba) y SOLO dark>=1: los componentes leen esto
+// con un selector de `useDarkStore` (dark-store.ts), nunca de una constante
+// fija de carga de módulo — ver ItemView.tsx/RoomView.tsx.
 
 /** Halo de moneda: dorado, mismo tono que `coinMaterial`. */
 export const coinGlowHaloMaterial = new THREE.MeshBasicMaterial({

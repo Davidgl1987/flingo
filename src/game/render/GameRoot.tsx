@@ -15,10 +15,12 @@
  * es un evento rarísimo (muerte/victoria), no un patrón de render por estado.
  */
 
-import { Canvas } from '@react-three/fiber';
-import { useCallback, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import { useCallback, useEffect, useState } from 'react';
+import type { Material, Object3D } from 'three';
 import { getRoomPool } from '@/game/features/dungeon/rooms';
-import { applyForcedUpgrades, readDarkMode, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades, readGodMode } from './debug-params';
+import { applyForcedUpgrades, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades, readGodMode } from './debug-params';
+import { useDarkStore } from './dark-store';
 import { AimInput } from '@/game/features/hero/AimInput';
 import { CandleLightView } from '@/game/features/hero/CandleLightView';
 import { ParticleView } from '@/game/features/effects/ParticleView';
@@ -62,6 +64,42 @@ function SimDriver({ session }: { session: GameSession }) {
   return null;
 }
 
+/**
+ * Sincroniza `gl.shadowMap.enabled` con el store en RUNTIME (controles en
+ * vivo de dark/glow desde el menú de pausa): el prop `shadows` del Canvas
+ * (más abajo) solo aplica al CREAR el contexto WebGL, así que alternar
+ * `dark` en caliente después de montado necesita tocar el renderer
+ * directamente aquí. Solo al CAMBIAR `dark` (deps del efecto), nunca cada
+ * frame: fuerza `needsUpdate` en todos los materiales de la escena porque
+ * activar/desactivar el shadowMap exige que three.js recompile los shaders
+ * de sombra — sin esto las sombras quedarían a medio aplicar tras el toggle.
+ * Defensivo con `background`/`fog`: aunque `attach` (RoomView.tsx/GameRoot
+ * JSX de abajo) ya debería limpiarlos solo al desmontar el JSX condicional
+ * de dark=0, forzarlos a `null` aquí es gratis y cierra cualquier resquicio.
+ */
+function DarkModeSync({ dark }: { dark: 0 | 1 | 2 }) {
+  const { gl, scene } = useThree();
+  useEffect(() => {
+    gl.shadowMap.enabled = dark >= 1;
+    scene.traverse((obj: Object3D) => {
+      const material = (obj as unknown as { material?: Material | Material[] }).material;
+      if (!material) return;
+      if (Array.isArray(material)) {
+        material.forEach((m) => {
+          m.needsUpdate = true;
+        });
+      } else {
+        material.needsUpdate = true;
+      }
+    });
+    if (dark === 0) {
+      scene.background = null;
+      scene.fog = null;
+    }
+  }, [dark, gl, scene]);
+  return null;
+}
+
 export function GameRoot({
   playtestRoom = null,
   onExitToTitle,
@@ -99,10 +137,11 @@ export function GameRoot({
   // Secuencia de run: cambia solo al reiniciar tras game-over/victoria (remonta el canvas).
   const [runSeq, setRunSeq] = useState(0);
 
-  // Penumbra experimental (rama estilo-oscuro, ?dark=): fijo por carga de
-  // página, igual que el resto de parámetros de debug-params.ts — no hace
-  // falta que reaccione a cambios de URL en caliente.
-  const darkMode = readDarkMode();
+  // Penumbra experimental (rama estilo-oscuro): controles en vivo desde el
+  // menú de pausa (PauseModal → useDarkStore → dark-store.ts). El valor
+  // INICIAL sigue viniendo de `?dark=` (mismo default de siempre), pero a
+  // partir de ahí el store manda — este selector reacciona a cada cambio.
+  const darkMode = useDarkStore((s) => s.dark);
 
   const handleRestart = useCallback(() => {
     restartSession(session);
@@ -153,6 +192,7 @@ export function GameRoot({
         shadows={darkMode >= 1}
       >
         <SimDriver session={session} />
+        <DarkModeSync dark={darkMode} />
         {/* Penumbra experimental (?dark=, debug-params.ts): dark=0 mantiene la
             luz EXACTA de siempre (paridad con main, cero regresiones); dark 1-2
             la bajan casi a cero para que la vela del héroe (CandleLightView)

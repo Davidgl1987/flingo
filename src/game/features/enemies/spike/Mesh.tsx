@@ -21,12 +21,12 @@ import type { Group } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
 import {
-  DARK_SILHOUETTES,
   smallDotGeometry,
   spikeConeMaterial,
   spikeEyeGlowMaterial,
   unitSpike,
 } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 
 /**
  * Púas del Spike (punto 9 de playtest ronda 3): exactamente 3, todas en la
@@ -48,6 +48,7 @@ export function SpikeMesh({
   enemyId: string;
   groupRef: RefObject<Group | null>;
 }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const spikeSecondaryGroupRef = useRef<Group>(null);
 
   useFrame(() => {
@@ -73,7 +74,7 @@ export function SpikeMesh({
       {/* Púas decorativas del erizo (dark>=1, puramente estéticas): NUNCA
           rotan con `facing` (a diferencia de las 3 reales de abajo), para no
           confundir cuál cara es la peligrosa. Anillo ecuatorial + 2 polos. */}
-      {DARK_SILHOUETTES && (
+      {silhouettes && (
         <>
           {Array.from({ length: SPIKE_DECOR_RING_COUNT }, (_, i) => {
             const angle = (i / SPIKE_DECOR_RING_COUNT) * Math.PI * 2;
@@ -120,7 +121,7 @@ export function SpikeMesh({
           );
         })}
         {/* Penitente de Púas: un único ojo cálido grande, siempre en la cara peligrosa. */}
-        {DARK_SILHOUETTES && (
+        {silhouettes && (
           <mesh geometry={smallDotGeometry} material={spikeEyeGlowMaterial} position={[0, 0.06, 0.42]} scale={[0.13, 0.15, 0.06]} />
         )}
       </group>

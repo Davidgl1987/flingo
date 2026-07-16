@@ -93,7 +93,6 @@ import {
   bossTelegraphMaterial,
   bossVulnerableMaterial,
   chaserMaterial,
-  DARK_SILHOUETTES,
   dummyMaterial,
   enemyHitFlashMaterial,
   guardianBodyMaterial,
@@ -126,6 +125,7 @@ import {
   unitSphere,
   WEAPON_COLOR,
 } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 import {
   STORM_PATTERN_RINGS,
   STORM_PATTERN_SPIRAL,
@@ -231,8 +231,8 @@ const ENEMY_RADIUS_RENDER = 0.4;
  * es solo la escala visual del mesh). `dark=0`: siempre el escalar plano de
  * siempre (paridad exacta con `main`).
  */
-function bodyScaleForKind(kind: EnemyKind): number | [number, number, number] {
-  if (!DARK_SILHOUETTES) return ENEMY_RADIUS_RENDER;
+function bodyScaleForKind(kind: EnemyKind, silhouettes: boolean): number | [number, number, number] {
+  if (!silhouettes) return ENEMY_RADIUS_RENDER;
   if (kind === 'dummy') {
     return [ENEMY_RADIUS_RENDER * 1.08, ENEMY_RADIUS_RENDER * 0.82, ENEMY_RADIUS_RENDER * 1.08];
   }
@@ -353,6 +353,7 @@ function EnemyMesh({
   kind: EnemyKind;
   bossId?: BossId;
 }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const bodyRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
   const groupRef = useRef<Group>(null);
@@ -770,7 +771,7 @@ function EnemyMesh({
         ref={bodyRef}
         geometry={unitSphere}
         material={restingBodyMaterial(kind, bossId)}
-        scale={bodyScaleForKind(kind)}
+        scale={bodyScaleForKind(kind, silhouettes)}
       />
       <mesh
         ref={shadowRef}
@@ -785,7 +786,7 @@ function EnemyMesh({
           sola con `group.visible=false` al morir (three.js no atraviesa
           objetos invisibles al recolectar luces), sin lógica extra aquí. SIN
           sombra (coste, y no la pide David: solo la vela debe bloquear luz). */}
-      {DARK_SILHOUETTES && (
+      {silhouettes && (
         <pointLight
           color={ENEMY_LIGHT_COLOR[kind]}
           intensity={kind === 'boss' ? ENEMY_LIGHT_INTENSITY_BOSS : ENEMY_LIGHT_INTENSITY}

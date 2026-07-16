@@ -32,7 +32,6 @@ import {
   blobShadowMaterial,
   candleEyeMaterial,
   candleFlameMaterial,
-  DARK_SILHOUETTES,
   heroMaterial,
   heroShieldMaterial,
   heroSpikeGeometry,
@@ -43,6 +42,7 @@ import {
   unitSphere,
   WEAPON_COLOR,
 } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 import { boulderScaleFactor, cometStretchFactor, shieldBubbleOpacity, spikeCountForLevel } from './upgrade-visuals';
 
 /** Frecuencia del parpadeo de invulnerabilidad (alternancias por segundo). */
@@ -123,6 +123,7 @@ function buildSpikeDirections(): Array<{ x: number; y: number; z: number }> {
 const SPIKE_DIRECTIONS = buildSpikeDirections();
 
 export function HeroView({ session }: { session: GameSession }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const bodyRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
   const shieldRef = useRef<Mesh>(null);
@@ -189,7 +190,7 @@ export function HeroView({ session }: { session: GameSession }) {
     // assets.ts) y el lerp se aplica a la llama en su lugar.
     const targetColor = WEAPON_COLOR[hero.weaponMode];
     const colorK = 1 - Math.exp(-WEAPON_COLOR_LERP_STIFFNESS * delta);
-    if (DARK_SILHOUETTES) {
+    if (silhouettes) {
       candleFlameMaterial.color.lerp(targetColor, colorK);
     } else {
       heroMaterial.color.lerp(targetColor, colorK);
@@ -228,7 +229,7 @@ export function HeroView({ session }: { session: GameSession }) {
         body.scale.setScalar(scale);
       }
       if (shadow) shadow.visible = false;
-      if (DARK_SILHOUETTES && candleGroupRef.current) candleGroupRef.current.visible = false;
+      if (silhouettes && candleGroupRef.current) candleGroupRef.current.visible = false;
       prevSpeed.current = 0;
       return;
     }
@@ -292,7 +293,7 @@ export function HeroView({ session }: { session: GameSession }) {
     // Héroe = vela (dark>=1): la llama/ojos siguen al cuerpo en x/z e y base,
     // pero NUNCA su squash/stretch/rotación (ver comentario de
     // FLAME_WIND_FREQ_A) — grupo aparte, actualizado a mano.
-    if (DARK_SILHOUETTES) {
+    if (silhouettes) {
       const candleGroup = candleGroupRef.current;
       if (candleGroup) {
         candleGroup.visible = blinkOn;
@@ -338,7 +339,7 @@ export function HeroView({ session }: { session: GameSession }) {
         rotation-x={-Math.PI / 2}
         scale={HERO_RADIUS * 1.25}
       />
-      {DARK_SILHOUETTES && (
+      {silhouettes && (
         <group ref={candleGroupRef}>
           {/* Llama (MUTABLE, ver useFrame): cono estrecho, autoiluminado. */}
           <mesh ref={flameRef} geometry={unitCone} material={candleFlameMaterial} />

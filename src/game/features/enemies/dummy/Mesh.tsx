@@ -16,7 +16,6 @@ import type { Group } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
 import {
-  DARK_SILHOUETTES,
   dummyEyeGlowMaterial,
   dummySkirtMaterial,
   eyePupilMaterial,
@@ -24,6 +23,7 @@ import {
   smallDotGeometry,
   unitCone,
 } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 
 export function DummyMesh({
   session,
@@ -34,6 +34,7 @@ export function DummyMesh({
   enemyId: string;
   groupRef: RefObject<Group | null>;
 }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const dummyEyesRef = useRef<Group>(null);
 
   useFrame(() => {
@@ -58,7 +59,7 @@ export function DummyMesh({
   return (
     <>
       <group ref={dummyEyesRef} position={[0, 0.08, 0.34]}>
-        {DARK_SILHOUETTES ? (
+        {silhouettes ? (
           <>
             <mesh geometry={smallDotGeometry} material={dummyEyeGlowMaterial} position={[-0.12, 0, 0]} scale={[0.07, 0.1, 0.04]} />
             <mesh geometry={smallDotGeometry} material={dummyEyeGlowMaterial} position={[0.12, 0, 0]} scale={[0.07, 0.1, 0.04]} />
@@ -73,7 +74,7 @@ export function DummyMesh({
         )}
       </group>
       {/* Falda cónica de la campana (estática: no rota con la mirada). */}
-      {DARK_SILHOUETTES && (
+      {silhouettes && (
         <mesh geometry={unitCone} material={dummySkirtMaterial} position={[0, -0.16, 0]} scale={[0.34, 0.24, 0.34]} />
       )}
     </>

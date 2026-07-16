@@ -12,12 +12,12 @@ import type { Enemy } from '@/game/world/types';
 import {
   chaserBrowMaterial,
   chaserEyeGlowMaterial,
-  DARK_SILHOUETTES,
   eyePupilMaterial,
   eyeWhiteMaterial,
   smallDotGeometry,
   smallWedgeGeometry,
 } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 
 /**
  * Radio/altura del pivote de la cara del Chaser sobre la superficie de su
@@ -39,6 +39,7 @@ export function ChaserMesh({
 }) {
   // `chaserFaceAngle` conserva el último ángulo válido hacia el héroe (mundo)
   // para no degenerar cuando coincide con el centro del enemigo (distancia ~0).
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const chaserFaceRef = useRef<Group>(null);
   const chaserFaceAngle = useRef(0);
 
@@ -88,7 +89,7 @@ export function ChaserMesh({
     // useFrame (proyección sobre la superficie esférica); el valor JSX
     // es solo el estado inicial antes del primer frame.
     <group ref={chaserFaceRef} position={[0, CHASER_FACE_HEIGHT, CHASER_FACE_RADIUS]}>
-      {DARK_SILHOUETTES ? (
+      {silhouettes ? (
         <>
           {/* Acechador del Umbral: ojos rasgados violeta emisivos (concept art). */}
           <mesh

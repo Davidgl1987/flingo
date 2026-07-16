@@ -16,7 +16,6 @@ import type { Group, Mesh } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
 import {
-  DARK_SILHOUETTES,
   shooterEyeChargeMaterial,
   shooterEyeMaterial,
   shooterTelegraphMaterial,
@@ -26,10 +25,7 @@ import {
   unitCircle,
   unitCylinder,
 } from '@/game/render/assets';
-
-/** Material/geometría "en reposo" y "cargando" del ojo/cañón, según modo. */
-const EYE_REST_MATERIAL = DARK_SILHOUETTES ? shooterTubeRestMaterial : shooterEyeMaterial;
-const EYE_CHARGE_MATERIAL = DARK_SILHOUETTES ? shooterTubeGlowMaterial : shooterEyeChargeMaterial;
+import { useDarkStore } from '@/game/render/dark-store';
 
 export function ShooterMesh({
   session,
@@ -40,10 +36,16 @@ export function ShooterMesh({
   enemyId: string;
   groupRef: RefObject<Group | null>;
 }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
+  // Material/geometría "en reposo" y "cargando" del ojo/cañón, según modo:
+  // recalculado cada render (objeto barato) para reaccionar en caliente al
+  // toggle de `dark` desde el menú de pausa — antes eran constantes fijas de
+  // carga de módulo (`EYE_REST_MATERIAL`/`EYE_CHARGE_MATERIAL`).
+  const eyeRestMaterial = silhouettes ? shooterTubeRestMaterial : shooterEyeMaterial;
+  const eyeChargeMaterial = silhouettes ? shooterTubeGlowMaterial : shooterEyeChargeMaterial;
   const telegraphRef = useRef<Mesh>(null);
   const shooterEyeGroupRef = useRef<Group>(null);
   const shooterEyeMeshRef = useRef<Mesh>(null);
-  const wasCharging = useRef(false);
 
   useFrame(() => {
     const world = session.world;
@@ -65,26 +67,29 @@ export function ShooterMesh({
       const dy = world.hero.position.y - enemy.position.y;
       shooterEyeGroupRef.current.rotation.y = Math.atan2(dx, dy) - group.rotation.y;
     }
-    if (charging !== wasCharging.current) {
-      wasCharging.current = charging;
-      const eye = shooterEyeMeshRef.current;
-      if (eye) eye.material = charging ? EYE_CHARGE_MATERIAL : EYE_REST_MATERIAL;
-    }
+    // Asignación directa cada frame (barata: un solo property write, sin
+    // allocation) en vez de solo en la transición de `charging`: así el
+    // material se mantiene correcto también justo tras remontar por un
+    // toggle de `dark` en caliente desde el menú de pausa (que cambia
+    // `eyeRestMaterial`/`eyeChargeMaterial`, ver comentario de cabecera del
+    // componente), sin depender de que `charging` cambie ese mismo frame.
+    const eye = shooterEyeMeshRef.current;
+    if (eye) eye.material = charging ? eyeChargeMaterial : eyeRestMaterial;
   });
 
   return (
     <>
       <group ref={shooterEyeGroupRef} position={[0, 0.05, 0.36]}>
-        {DARK_SILHOUETTES ? (
+        {silhouettes ? (
           <mesh
             ref={shooterEyeMeshRef}
             geometry={unitCylinder}
-            material={EYE_REST_MATERIAL}
+            material={eyeRestMaterial}
             rotation-x={Math.PI / 2}
             scale={[0.22, 0.22, 0.42]}
           />
         ) : (
-          <mesh ref={shooterEyeMeshRef} geometry={smallDotGeometry} material={EYE_REST_MATERIAL} scale={0.13} />
+          <mesh ref={shooterEyeMeshRef} geometry={smallDotGeometry} material={eyeRestMaterial} scale={0.13} />
         )}
       </group>
       <mesh
