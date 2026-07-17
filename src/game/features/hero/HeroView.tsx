@@ -170,12 +170,12 @@ const CANDLE_HALF_HEIGHT = 0.55;
  * sube los ojos a 1.12·HERO_RADIUS absolutos ⇒ (1.12−0.45)/1.10 ≈ 61% de la
  * altura del cilindro (pedido: 55-65%).
  */
-/** Separación entre CENTROS de ambos ojos, en × HERO_RADIUS (pedido: 0.18-0.22). */
-const CANDLE_EYE_SEPARATION = 0.2;
+/** Separación entre CENTROS de ambos ojos, en × HERO_RADIUS (juntos, carita del concept; un pelín más anchos al engordar la vela a radio 0.85). */
+const CANDLE_EYE_SEPARATION = 0.28;
 const CANDLE_EYE_X = (HERO_RADIUS * CANDLE_EYE_SEPARATION) / 2;
 const CANDLE_EYE_Y = HERO_RADIUS * 0.12;
-/** Radio local del cilindro (0.42) × visualRadius ≈ HERO_RADIUS: los ojos se posan JUSTO dentro de la cara frontal, no muy por delante de ella. */
-const CANDLE_EYE_Z = HERO_RADIUS * 0.4;
+/** Radio local del cilindro (0.85, vela rechoncha de ronda 6) × visualRadius: los ojos se posan JUSTO dentro de la cara frontal, no muy por delante de ella. */
+const CANDLE_EYE_Z = HERO_RADIUS * 0.82;
 /** Tamaño de cada ojo: un pelín mayor que antes (0.065/0.1/0.04) para seguir leyéndose como carita ahora que están más juntos. */
 const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.075, HERO_RADIUS * 0.115, HERO_RADIUS * 0.05];
 
@@ -272,7 +272,7 @@ const SPIKE_DIRECTIONS = buildSpikeDirections();
  * quaternion de abajo sigue usando la dirección ORIGINAL sin escalar, así los
  * pinchos siguen apuntando hacia fuera).
  */
-const CANDLE_SPIKE_SURFACE_XZ = 0.42;
+const CANDLE_SPIKE_SURFACE_XZ = 0.85;
 const CANDLE_SPIKE_SURFACE_Y = 0.55;
 
 export function HeroView({ session }: { session: GameSession }) {
@@ -465,9 +465,13 @@ export function HeroView({ session }: { session: GameSession }) {
         let targetLeanX = 0;
         let targetLeanZ = 0;
         if (aiming) {
+          // Signo INVERTIDO respecto al lanzamiento (playtest ronda 6): al
+          // apuntar, la vela se echa HACIA ATRÁS como la goma de un
+          // tirachinas tensándose; al soltar, la inclinación de vuelo la
+          // lleva hacia delante — anticipación → acción.
           const aimAngle = CANDLE_AIM_TILT_MAX * aim.force;
-          targetLeanX = aim.dirX * aimAngle;
-          targetLeanZ = aim.dirY * aimAngle;
+          targetLeanX = -aim.dirX * aimAngle;
+          targetLeanZ = -aim.dirY * aimAngle;
         } else if (speed > 1e-4) {
           const targetAngle = Math.min(CANDLE_TILT_MAX, speed * CANDLE_TILT_PER_SPEED);
           targetLeanX = (hero.velocity.x / speed) * targetAngle;
@@ -637,10 +641,9 @@ export function HeroView({ session }: { session: GameSession }) {
         geometry={unitCircle}
         material={blobShadowMaterial}
         rotation-x={-Math.PI / 2}
-        // Silueta: la sombra blob dimensionada para la ESFERA sobresalía por
-        // delante del cilindro-vela (más estrecho) y se leía como un apéndice
-        // oscuro (visto en preview de arena de jefe) — se encoge al radio real.
-        scale={HERO_RADIUS * (silhouettes ? 0.7 : 1.25)}
+        // Silueta: sombra blob al radio real del cilindro (0.85 desde la
+        // ronda 6 de playtest; con el fino de 0.42 sobresalía como apéndice).
+        scale={HERO_RADIUS * (silhouettes ? 1.0 : 1.25)}
       />
     </>
   );

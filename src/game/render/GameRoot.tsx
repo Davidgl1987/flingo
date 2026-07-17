@@ -80,9 +80,15 @@ function SimDriver({ session }: { session: GameSession }) {
  * de dark=0, forzarlos a `null` aquí es gratis y cierra cualquier resquicio.
  */
 function DarkModeSync({ dark }: { dark: 0 | 1 | 2 }) {
-  const { gl, scene } = useThree();
+  const { gl, scene, setDpr } = useThree();
   useEffect(() => {
     gl.shadowMap.enabled = dark >= 1;
+    // Presupuesto de píxeles (playtest ronda 6: 23 FPS en ventana grande):
+    // en dark>=1 cada frame paga la escena + 6 caras de sombra cúbica de la
+    // vela — a dpr 2 en un monitor grande eso hunde el framerate. Tope 1.5
+    // solo en oscuro (la nitidez extra de dpr 2 no se aprecia en penumbra);
+    // dark=0 conserva el presupuesto clásico [1, 2] exacto.
+    setDpr(Math.min(window.devicePixelRatio, dark >= 1 ? 1.5 : 2));
     scene.traverse((obj: Object3D) => {
       const material = (obj as unknown as { material?: Material | Material[] }).material;
       if (!material) return;
@@ -98,7 +104,7 @@ function DarkModeSync({ dark }: { dark: 0 | 1 | 2 }) {
       scene.background = null;
       scene.fog = null;
     }
-  }, [dark, gl, scene]);
+  }, [dark, gl, scene, setDpr]);
   return null;
 }
 

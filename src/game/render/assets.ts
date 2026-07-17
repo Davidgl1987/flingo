@@ -826,7 +826,14 @@ export const HERO_WAX_COLOR = '#e8ddc8';
  * reproyectan su posición a esta misma proporción en `HeroView.tsx` para no
  * quedar flotando fuera de la superficie (ver comentario allí).
  */
-export const heroCandleGeometry = new THREE.CylinderGeometry(0.42, 0.42, 1.1, 20);
+/*
+ * Radio 0.85 (playtest ronda 6, "la hitbox habría que ajustarla"): el
+ * cilindro fino (0.42) dejaba el cuerpo visible a ~42% del diámetro de
+ * COLISIÓN real (HERO_RADIUS, la sim no cambia) y los golpes parecían
+ * injustos. Con 0.85 la vela es rechoncha como el concept y su silueta queda
+ * solo un pelín por dentro de la hitbox (generosa a favor del jugador).
+ */
+export const heroCandleGeometry = new THREE.CylinderGeometry(0.85, 0.85, 1.1, 20);
 
 /**
  * Cirios de sala de jefe (punto 2b de playtest, `BossCandlesView.tsx`, solo

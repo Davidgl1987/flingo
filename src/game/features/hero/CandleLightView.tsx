@@ -108,7 +108,11 @@ export function CandleLightView({ session }: { session: GameSession }) {
       // cubo de sombra acordes al alcance real de la luz (CANDLE_BASE_DISTANCE
       // ≈ 8.5, con margen por el parpadeo que lo estira hasta ~9.5).
       castShadow
-      shadow-mapSize={[1024, 1024]}
+      // 512 (antes 1024, playtest ronda 6: 23 FPS): la sombra de una
+      // pointLight es CÚBICA — 6 pasadas de render por frame — y a 1024² son
+      // 6 M de texels/frame solo de sombra. A 512² cuesta ¼ y el borde
+      // ligeramente más blando hasta favorece el look de vela.
+      shadow-mapSize={[512, 512]}
       shadow-camera-near={0.3}
       shadow-camera-far={10}
     />
