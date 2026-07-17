@@ -4,12 +4,22 @@
  * desvanecido). Color por instancia (punto 1 de playtest ronda 3): sigue el
  * color del arma activa del héroe en el momento de depositarse (TrailPool ya
  * guarda r/g/b por punto), mismo lenguaje visual que heroMaterial.
+ *
+ * Rastro de cera (playtest ronda 5, punto 4, solo dark>=1): en silueta,
+ * `HeroView.tsx` ya emite estos puntos con color/vida de cera en vez de
+ * color de arma (ver WAX_TRAIL_COLOR allí) — aquí solo falta el APLASTADO
+ * ("goterón contra el suelo", no esferita): se lee el store directamente
+ * (menos invasivo que añadir un flag por punto al pool, ya que en silueta
+ * NUNCA se emiten esferitas de color de arma, todos los puntos activos son
+ * cera) y se aplica a TODOS los puntos activos por igual cuando dark>=1.
+ * En clásico (dark=0) el render es EXACTAMENTE el de siempre.
  */
 
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { unitSphere } from '@/game/render/assets';
+import { useDarkStore } from '@/game/render/dark-store';
 import type { TrailPool } from './trail';
 
 const trailMaterial = new THREE.MeshBasicMaterial({
@@ -18,7 +28,13 @@ const trailMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 
+/** Altura del goterón de cera: casi a ras de suelo (evita z-fighting con el suelo de la sala). */
+const WAX_DROP_GROUND_Y = 0.03;
+/** Aplastamiento vertical del goterón: escala Y mínima, se lee como disco/gota, no como bola. */
+const WAX_DROP_FLATTEN = 0.12;
+
 export function TrailView({ pool }: { pool: TrailPool }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const scratch = useMemo(() => ({ obj: new THREE.Object3D(), color: new THREE.Color() }), []);
 
@@ -29,8 +45,14 @@ export function TrailView({ pool }: { pool: TrailPool }) {
     for (let i = 0; i < pool.capacity; i++) {
       if (pool.active[i]) {
         const t = pool.life[i] / pool.maxLife[i];
-        obj.position.set(pool.x[i], 0.25, pool.z[i]);
-        obj.scale.setScalar(pool.size[i] * t);
+        const scale = pool.size[i] * t;
+        if (silhouettes) {
+          obj.position.set(pool.x[i], WAX_DROP_GROUND_Y, pool.z[i]);
+          obj.scale.set(scale, scale * WAX_DROP_FLATTEN, scale);
+        } else {
+          obj.position.set(pool.x[i], 0.25, pool.z[i]);
+          obj.scale.setScalar(scale);
+        }
         color.setRGB(pool.r[i], pool.g[i], pool.b[i]);
       } else {
         obj.position.set(0, -1000, 0);

@@ -15,6 +15,18 @@
 export type GameEventType =
   | 'launch'
   | 'wall-bounce'
+  /**
+   * Playtest 2026-07-16 ("las flechas no tienen efecto al chocar con las
+   * paredes"): un proyectil del HÉROE (flecha o hechizo) choca contra un
+   * muro/obstáculo — se emite en cada colisión de `stepHeroProjectileCollisions`
+   * (`features/combat/combat.ts`), tanto si el proyectil se apaga (flecha,
+   * o hechizo sin rebotes) como si sobrevive rebotando (hechizo con
+   * `bouncesLeft`). label = arma que impactó ('arrow'|'spell'), usado por
+   * `reactToEvent.ts`/`burstTable.ts` para colorear el burst del arma
+   * (distinto del 'wall-bounce' genérico gris, que sigue cubriendo el rebote
+   * del CUERPO del héroe y de proyectiles enemigos).
+   */
+  | 'projectile-wall'
   | 'enemy-hit'
   /** Golpe del jugador que daña a un JEFE (vs 'enemy-hit' de enemigos normales): shake grande, escalado por daño (playtest 2026-07-10: "más shake al dañar al jefe, menos a enemigos pequeños"). intensity = daño. */
   | 'boss-hit'

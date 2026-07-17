@@ -693,8 +693,14 @@ function applyEmissiveGroup(targets: EmissiveGlowTarget[], active: boolean): voi
 /** Intensidad de emissive de acentos de jefe (cuernos/corona) sobre su Lambert base: se intuyen, no brillan como neón (mismo orden que GLOW_EMISSIVE_INTENSITY de arriba). */
 const ACCENT_EMISSIVE_INTENSITY = 0.3;
 
-/** Cera pálida del cuerpo del héroe-vela: fija en dark>=1 (deja de lerpear con el arma; la llama de arriba es la que cambia de color). */
-const HERO_WAX_COLOR = '#e8ddc8';
+/**
+ * Cera pálida del cuerpo del héroe-vela: fija en dark>=1 (deja de lerpear con
+ * el arma; la llama de arriba es la que cambia de color). Exportada: también
+ * la usa `HeroView.tsx` para pintar el RASTRO de cera del héroe en silueta
+ * (playtest 2026-07-16, "haz que la vela deje un rastro de cera al
+ * moverse") — mismo tono que el propio cuerpo, coherente.
+ */
+export const HERO_WAX_COLOR = '#e8ddc8';
 
 /**
  * Cuerpo del héroe-vela (punto 5 de playtest, rama `estilo-oscuro`): en

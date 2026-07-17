@@ -201,12 +201,18 @@ function stepHeroProjectileCollisions(world: World, p: Projectile, events: Event
   }
 
   if (hitBounds || hitObstacle) {
+    // Playtest 2026-07-16 ("las flechas no tienen efecto al chocar con las
+    // paredes"): un único punto de emisión para AMBAS armas, se rebote o se
+    // apague — antes solo el hechizo emitía 'wall-bounce' (y solo mientras le
+    // quedaba presupuesto de rebote), así que la flecha no tenía feedback
+    // alguno y el último rebote del hechizo (el que agota `bouncesLeft`)
+    // tampoco. label = arma, para colorear el burst en reactToEvent.ts.
+    pushEvent(events, 'projectile-wall', p.position.x, p.position.y, 1, p.kind);
     if (p.kind === 'spell' && p.bouncesLeft > 0) {
       p.bouncesLeft--;
       p.velocity.x *= SPELL_BOUNCE_FACTOR;
       p.velocity.y *= SPELL_BOUNCE_FACTOR;
       p.ttl -= 0.4;
-      pushEvent(events, 'wall-bounce', p.position.x, p.position.y, 1);
     } else {
       deactivateProjectile(p);
       return false;

@@ -35,6 +35,11 @@ export const BURST_BY_EVENT: Record<GameEventType, BurstSpec> = {
   // armas (cuerpo/flecha/hechizo), no puede tener un color fijo correcto.
   launch: { color: '#54c7ff', size: 0.09, count: 10, life: 0.3, speed: 2.2, trauma: 0.06 },
   'wall-bounce': { color: '#c7ccdf', size: 0.06, count: 5, life: 0.22, speed: 1.6, trauma: 0.08 },
+  // Playtest 2026-07-16: chispas del color del ARMA (reactToEvent.ts lo
+  // sustituye vía PROJECTILE_WALL_COLOR/label, igual que 'launch'), más
+  // pequeñas/breves y sin apenas trauma — "más humilde" que 'enemy-hit', es
+  // un impacto contra un muro inerte, no contra un enemigo.
+  'projectile-wall': { color: '#c7ccdf', size: 0.05, count: 5, life: 0.18, speed: 1.8, trauma: 0.02 },
   'enemy-hit': { color: '#ffffff', size: 0.08, count: 8, life: 0.25, speed: 2.6, trauma: 0.06 },
   // Golpe a un JEFE (playtest 2026-07-10): shake grande, escalado por daño en
   // reactToEvent.ts — mucho más notorio que un enemigo pequeño (enemy-hit).
@@ -119,4 +124,15 @@ export const ITEM_PICKUP_COLOR: Record<string, string> = {
   coin: '#ffd166',
   potion: '#ff6bcb',
   key: '#8fe3ff',
+};
+
+/**
+ * Color de burst de 'projectile-wall' según el arma que impactó (label del
+ * evento: 'arrow'|'spell'). Mismos hex que `WEAPON_COLOR.arrow`/`.spell` en
+ * `render/assets.ts`, duplicados aquí a propósito (mismo criterio que
+ * `ITEM_PICKUP_COLOR`): reactToEvent.ts no importa three.js.
+ */
+export const PROJECTILE_WALL_COLOR: Record<string, string> = {
+  arrow: '#54c7ff',
+  spell: '#d8b4fe',
 };

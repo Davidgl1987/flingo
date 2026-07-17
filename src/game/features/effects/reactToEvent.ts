@@ -9,7 +9,7 @@
  */
 
 import type { GameEvent } from '@/engine/events';
-import { BURST_BY_EVENT, ITEM_PICKUP_COLOR } from './burstTable';
+import { BURST_BY_EVENT, ITEM_PICKUP_COLOR, PROJECTILE_WALL_COLOR } from './burstTable';
 import { vibrate, HAPTIC_PATTERN } from './haptics';
 import { addTrauma, triggerHitStop, type EffectsState } from './effectsState';
 import type { ParticlePool } from './particles';
@@ -59,6 +59,8 @@ export function reactToEvent(
     color = ITEM_PICKUP_COLOR[event.label];
   } else if (event.type === 'launch' && heroWeaponColorHex) {
     color = heroWeaponColorHex;
+  } else if (event.type === 'projectile-wall' && event.label in PROJECTILE_WALL_COLOR) {
+    color = PROJECTILE_WALL_COLOR[event.label];
   }
 
   if (spec.count > 0) {

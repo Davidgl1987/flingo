@@ -267,11 +267,52 @@ describe('hechizo: rebote en pared', () => {
     expect(Math.abs(spell!.velocity.x)).toBeLessThan(speedBefore); // pierde fuerza
     expect(spell!.ttl).toBeLessThan(ttlBefore - 0.3); // vida acortada por el rebote
 
-    // Segundo choque contra la pared oeste: desaparece.
+    // Playtest 2026-07-16: el primer rebote ya emite 'projectile-wall' (arma =
+    // hechizo), no solo el 'wall-bounce' genérico.
+    const firstBounceTypes: string[] = [];
+    const firstBounceLabels: string[] = [];
+    drainEvents(events, (e: GameEvent) => {
+      firstBounceTypes.push(e.type);
+      if (e.type === 'projectile-wall') firstBounceLabels.push(e.label);
+    });
+    expect(firstBounceTypes).toContain('projectile-wall');
+    expect(firstBounceLabels).toContain('spell');
+
+    // Segundo choque contra la pared oeste: desaparece, y también emite
+    // 'projectile-wall' (antes este último impacto no tenía NINGÚN feedback).
     for (let i = 0; i < 600 && spell!.active; i++) {
       stepProjectiles(world, FIXED_DT, events);
     }
     expect(spell!.active).toBe(false);
+    const secondBounceTypes: string[] = [];
+    drainEvents(events, (e: GameEvent) => secondBounceTypes.push(e.type));
+    expect(secondBounceTypes).toContain('projectile-wall');
+  });
+});
+
+describe('flecha: impacto contra muro (playtest 2026-07-16)', () => {
+  it('al chocar con la pared se apaga y emite projectile-wall con label "arrow"', () => {
+    const world = createWorld(makeRoom({ width: 10, height: 10 }));
+    const events = createEventQueue(64);
+
+    expect(fireProjectile(world, 'arrow', 1, 0, 1, events)).toBe(true);
+    const arrow = world.projectiles.find((p) => p.active);
+    expect(arrow).toBeDefined();
+    drainEvents(events, () => {}); // descarta el evento 'launch' del disparo
+
+    for (let i = 0; i < 300 && arrow!.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+    expect(arrow!.active).toBe(false); // la flecha nunca rebota, se apaga contra la pared
+
+    const types: string[] = [];
+    const labels: string[] = [];
+    drainEvents(events, (e: GameEvent) => {
+      types.push(e.type);
+      if (e.type === 'projectile-wall') labels.push(e.label);
+    });
+    expect(types).toContain('projectile-wall');
+    expect(labels).toEqual(['arrow']);
   });
 });
 

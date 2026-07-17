@@ -20,7 +20,7 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
-import { Quaternion, Vector3, type Group, type Mesh } from 'three';
+import { Color, Quaternion, Vector3, type Group, type Mesh } from 'three';
 import { HERO_RADIUS } from './constants';
 import { PIT_FALL_DURATION } from '@/game/features/hazards/constants';
 import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '@/game/features/effects/trail';
@@ -32,6 +32,7 @@ import {
   blobShadowMaterial,
   candleEyeMaterial,
   candleFlameMaterial,
+  HERO_WAX_COLOR,
   heroCandleGeometry,
   heroMaterial,
   heroShieldMaterial,
@@ -91,6 +92,26 @@ const CANDLE_TILT_PER_SPEED = STRETCH_PER_SPEED;
 const CANDLE_TILT_LERP_STIFFNESS = 9;
 
 /**
+ * Inclinación al apuntar (playtest ronda 5, punto 3: "el efecto de la vela
+ * al moverse (se echa para alante) ponlo también mientras se está
+ * apuntando"): mientras `world.heroAiming` y el héroe está parado o casi
+ * (velocidad por debajo de CANDLE_AIM_TILT_SPEED_THRESHOLD — si ya iba
+ * lanzado más rápido que eso, la inclinación de vuelo por velocidad de abajo
+ * ya se está mostrando y no hace falta la de apuntado), se inclina hacia la
+ * DIRECCIÓN DE LANZAMIENTO prevista (`session.aim.dirX/dirY`, el mismo
+ * vector que ya dibuja `AimIndicatorView`), con ángulo proporcional a la
+ * fuerza del arrastre (`session.aim.force`, [0,1]) y tope menor que el de
+ * vuelo (CANDLE_TILT_MAX = 0.35). Reutiliza el MISMO `candleLean`/`tiltK` de
+ * abajo (nunca un lerp aparte): al soltar, el target simplemente pasa a
+ * depender de la velocidad en vez del aim en el frame siguiente, y como el
+ * lerp nunca salta de golpe a un valor nuevo, el relevo entre ambos es
+ * continuo (sin salto), tal como pide el encargo.
+ */
+const CANDLE_AIM_TILT_MAX = 0.18;
+/** Por debajo de esta velocidad (u/s) se considera "parado o casi" a efectos de la inclinación de apuntado. */
+const CANDLE_AIM_TILT_SPEED_THRESHOLD = 0.6;
+
+/**
  * Estiramiento VERTICAL de la vela con la velocidad (rama `estilo-oscuro`,
  * mismo punto de playtest): sustituye, SOLO en dark>=1, al estiramiento
  * horizontal de la esfera — alargar un cilindro fino tumbado en el plano del
@@ -118,6 +139,63 @@ const CANDLE_VERTICAL_STRETCH_PER_SPEED = STRETCH_PER_SPEED * 0.5;
 const CANDLE_PIVOT_HEIGHT_FRACTION = 1 - 0.55;
 /** Mitad del alto local de `heroCandleGeometry` (radio 0.42, alto 1.1): mantiene la base pinchada al pivote pase lo que pase con el escalado vertical (squash o estiramiento). */
 const CANDLE_HALF_HEIGHT = 0.55;
+
+/**
+ * Ojos de la vela (playtest ronda 5, punto 2: "parece que tiene ruedas...
+ * ponlos más juntos y a más altura"): con los valores anteriores se leían
+ * como ruedas laterales por DOS motivos combinados —
+ * (a) la separación en X (0.35·HERO_RADIUS por ojo ⇒ 0.70·HERO_RADIUS entre
+ *     centros) era casi el DIÁMETRO entero del cilindro (radio local 0.42 ×
+ *     visualRadius, `heroCandleGeometry`), así que los ojos quedaban pegados
+ *     a los bordes izquierdo/derecho en vez de agrupados al frente;
+ * (b) el offset en Z (0.82·HERO_RADIUS) casi DOBLABA el radio real de la
+ *     cara frontal (0.42·visualRadius), así que sobresalían muy por delante
+ *     de la superficie en vez de posarse sobre ella — combinado con (a),
+ *     "dos ruedas" flotando a los lados.
+ *
+ * Cuenta de ALTURAS (números absolutos, visualRadius ≈ HERO_RADIUS a nivel
+ * base de Firmeza): `candleGroup` (padre de estos ojos) es hijo de
+ * `tiltGroup`, situado en mundo a `visualRadius · CANDLE_PIVOT_HEIGHT_FRACTION`
+ * (0.45·HERO_RADIUS), y su propio y local es
+ * `visualRadius · (1 − CANDLE_PIVOT_HEIGHT_FRACTION)` (0.55·HERO_RADIUS) ⇒
+ * origen de `candleGroup` en mundo = 0.45 + 0.55 = 1.00·HERO_RADIUS.
+ * El cilindro (`body`, alto local 1.1, centrado en su propio origen a
+ * `scaleY·CANDLE_HALF_HEIGHT` = 0.55·HERO_RADIUS de `tiltGroup`) ocupa en
+ * altura ABSOLUTA de mundo [0.45, 1.55]·HERO_RADIUS (base a 0.45 — flota un
+ * poco sobre el suelo, ver nota de `CANDLE_PIVOT_HEIGHT_FRACTION`: no es
+ * parte de este encargo — y techo a 1.55), altura total 1.10·HERO_RADIUS.
+ * `candleGroup` (1.00) cae pues EXACTAMENTE en el centro del cilindro: 50%
+ * de su altura — de ahí que "a media altura" en el código anterior en
+ * realidad leyera en la MITAD, no arriba. `CANDLE_EYE_Y` = 0.12·HERO_RADIUS
+ * sube los ojos a 1.12·HERO_RADIUS absolutos ⇒ (1.12−0.45)/1.10 ≈ 61% de la
+ * altura del cilindro (pedido: 55-65%).
+ */
+/** Separación entre CENTROS de ambos ojos, en × HERO_RADIUS (pedido: 0.18-0.22). */
+const CANDLE_EYE_SEPARATION = 0.2;
+const CANDLE_EYE_X = (HERO_RADIUS * CANDLE_EYE_SEPARATION) / 2;
+const CANDLE_EYE_Y = HERO_RADIUS * 0.12;
+/** Radio local del cilindro (0.42) × visualRadius ≈ HERO_RADIUS: los ojos se posan JUSTO dentro de la cara frontal, no muy por delante de ella. */
+const CANDLE_EYE_Z = HERO_RADIUS * 0.4;
+/** Tamaño de cada ojo: un pelín mayor que antes (0.065/0.1/0.04) para seguir leyéndose como carita ahora que están más juntos. */
+const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.075, HERO_RADIUS * 0.115, HERO_RADIUS * 0.05];
+
+/**
+ * Rastro de CERA (playtest ronda 5, punto 4: "haz que la vela deje un
+ * rastro de cera al moverse", SOLO dark>=1): en vez del color del arma
+ * activa, la estela se emite en el mismo tono pálido que el propio cuerpo
+ * de la vela (`HERO_WAX_COLOR`, `render/assets.ts`) y con vida algo más
+ * larga que la estela clásica (`TRAIL_LIFE` = 0.35 s, `features/effects/
+ * trail.ts`) para que se sienta como goterones que se enfrían despacio, no
+ * como chispas de impacto. Menos invasivo: TrailPool.emit no cambia de
+ * firma, solo el color/vida que le pasa HeroView según `silhouettes`; el
+ * APLASTADO contra el suelo (aplicado a TODOS los puntos activos cuando
+ * dark>=1, ya que en silueta nunca se emiten esferitas de color de arma) lo
+ * decide `TrailView.tsx` leyendo el mismo store. En clásico (dark=0) el
+ * emit de más abajo sigue exactamente igual que siempre (color de arma,
+ * `TRAIL_LIFE` por defecto).
+ */
+const WAX_TRAIL_COLOR = new Color(HERO_WAX_COLOR);
+const WAX_TRAIL_LIFE = 0.55;
 
 /**
  * Héroe = vela (rama `estilo-oscuro`, solo dark>=1): la llama/ojos viven en
@@ -346,7 +424,13 @@ export function HeroView({ session }: { session: GameSession }) {
       trailAccumulator.current += delta;
       while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
         trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
-        session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
+        if (silhouettes) {
+          // Rastro de cera (ver WAX_TRAIL_COLOR arriba): color/vida fijos,
+          // independientes del arma activa.
+          session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, WAX_TRAIL_LIFE, WAX_TRAIL_COLOR.r, WAX_TRAIL_COLOR.g, WAX_TRAIL_COLOR.b);
+        } else {
+          session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
+        }
       }
     } else {
       trailAccumulator.current = 0;
@@ -373,10 +457,19 @@ export function HeroView({ session }: { session: GameSession }) {
       if (tiltGroup) {
         tiltGroup.position.set(x, visualRadius * CANDLE_PIVOT_HEIGHT_FRACTION + victoryHop, z);
 
-        const targetAngle = Math.min(CANDLE_TILT_MAX, speed * CANDLE_TILT_PER_SPEED);
+        // Inclinación de apuntado (ver CANDLE_AIM_TILT_MAX arriba) vs.
+        // inclinación de vuelo por velocidad: exclusivas, la de apuntado
+        // gana solo mientras se apunta parado o casi.
+        const aim = session.aim;
+        const aiming = world.heroAiming && speed < CANDLE_AIM_TILT_SPEED_THRESHOLD && aim.force > 0;
         let targetLeanX = 0;
         let targetLeanZ = 0;
-        if (speed > 1e-4) {
+        if (aiming) {
+          const aimAngle = CANDLE_AIM_TILT_MAX * aim.force;
+          targetLeanX = aim.dirX * aimAngle;
+          targetLeanZ = aim.dirY * aimAngle;
+        } else if (speed > 1e-4) {
+          const targetAngle = Math.min(CANDLE_TILT_MAX, speed * CANDLE_TILT_PER_SPEED);
           targetLeanX = (hero.velocity.x / speed) * targetAngle;
           targetLeanZ = (hero.velocity.y / speed) * targetAngle;
         }
@@ -523,18 +616,18 @@ export function HeroView({ session }: { session: GameSession }) {
           <group ref={candleGroupRef}>
             {/* Llama (MUTABLE, ver useFrame): cono estrecho, autoiluminado. */}
             <mesh ref={flameRef} geometry={unitCone} material={candleFlameMaterial} />
-            {/* Carita de vela: dos ojos negros ovalados simples (concept art), a media altura del cilindro (punto 2 de playtest ronda 4), tamaño reducido a la mitad. */}
+            {/* Carita de vela: dos ojos negros ovalados simples (concept art), juntos y a ~61% de la altura del cilindro, en la cara frontal (playtest ronda 5, punto 2 — ver cuenta de alturas en CANDLE_EYE_Y arriba). */}
             <mesh
               geometry={smallDotGeometry}
               material={candleEyeMaterial}
-              position={[-HERO_RADIUS * 0.35, 0, HERO_RADIUS * 0.82]}
-              scale={[HERO_RADIUS * 0.065, HERO_RADIUS * 0.1, HERO_RADIUS * 0.04]}
+              position={[-CANDLE_EYE_X, CANDLE_EYE_Y, CANDLE_EYE_Z]}
+              scale={CANDLE_EYE_SCALE}
             />
             <mesh
               geometry={smallDotGeometry}
               material={candleEyeMaterial}
-              position={[HERO_RADIUS * 0.35, 0, HERO_RADIUS * 0.82]}
-              scale={[HERO_RADIUS * 0.065, HERO_RADIUS * 0.1, HERO_RADIUS * 0.04]}
+              position={[CANDLE_EYE_X, CANDLE_EYE_Y, CANDLE_EYE_Z]}
+              scale={CANDLE_EYE_SCALE}
             />
           </group>
         )}
