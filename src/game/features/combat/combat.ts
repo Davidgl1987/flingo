@@ -327,8 +327,9 @@ export type DamageSource = 'ram' | 'arrow' | 'spell' | 'other';
  * no es '', solo el arma de ese color (o de `bossWeaponGateB`, el solape de
  * fase 3) hace daño de verdad — cualquier otra ARMA (nunca 'other': un barril
  * no es un arma y pasa el gate igual que siempre) rebota sin efecto y emite
- * 'boss-immune-hit' en vez de bajar HP. Acertar el color durante el solape de
- * fase 3 (`bossWeaponGateB !== ''`) dobla el daño. Se comprueba ANTES que la
+ * 'boss-immune-hit' en vez de bajar HP. Acertar cualquiera de los dos colores
+ * del solape de fase 3 hace daño NORMAL (el ×2 se retiró en playtest
+ * 2026-07-17: "siempre con el daño normal"). Se comprueba ANTES que la
  * ventana de vulnerabilidad: un gate equivocado nunca debería "colarse" solo
  * por pillar al jefe fuera de ventana.
  *
@@ -370,9 +371,9 @@ export function applyDamageToEnemy(
       pushEvent(events, 'boss-immune-hit', enemy.position.x, enemy.position.y, 1);
       return;
     }
-    if (matchesGate && enemy.bossWeaponGateB !== '') {
-      damage *= 2;
-    }
+    // Sin bonus por solape de fase 3 (playtest 2026-07-17: "solo le afectan
+    // los ataques de su color, pero SIEMPRE con el daño normal"): acertar
+    // cualquiera de los dos colores válidos hace daño normal, nunca doble.
   }
   if (enemy.kind === 'boss' && !enemy.bossVulnerable && !ignoreVulnerabilityWindow) {
     // Fuera de ventana el daño del ARMA se escala por el factor del jefe. Sin

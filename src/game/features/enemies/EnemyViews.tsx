@@ -636,9 +636,12 @@ function EnemyMesh({
       }
       // Ventana de vulnerabilidad (GDD §15.1 punto 4): anillo verde mientras
       // `bossVulnerable`, radio fijo (no pulsa: se distingue del telegraph
-      // por color Y por comportamiento, para que nunca se confundan).
+      // por color Y por comportamiento, para que nunca se confundan). El
+      // Prisma queda fuera: desde playtest 2026-07-17 es vulnerable SIEMPRE
+      // (solo gate de color, sin ventana) y el anillo perpetuo sería ruido —
+      // su señal es el color del núcleo, no este anillo.
       if (bossVulnerableRingRef.current) {
-        bossVulnerableRingRef.current.visible = enemy.bossVulnerable;
+        bossVulnerableRingRef.current.visible = enemy.bossVulnerable && enemy.bossId !== 'prisma';
         bossVulnerableRingRef.current.scale.setScalar(bodyRadius * 1.5);
       }
       // Flash de cambio de fase (GDD §15.1 punto 3): retrigger al detectar

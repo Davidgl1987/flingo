@@ -534,12 +534,12 @@ describe('El Prisma (GDD §15.4, Fase B3): gate de color en applyDamageToEnemy',
     expect(types).not.toContain('boss-immune-hit');
   });
 
-  it('solape de fase 3 (bossWeaponGateB): cualquiera de los dos colores hace daño DOBLE', () => {
+  it('solape de fase 3 (bossWeaponGateB): cualquiera de los dos colores hace daño NORMAL (el ×2 se retiró en playtest 2026-07-17: "siempre con el daño normal")', () => {
     const world = makeBossWorld();
     const events = createEventQueue(16);
     const boss = world.enemies[0];
     // HP amplio (el placeholder de createEnemy es 1): applyDamageToEnemy
-    // corta en seco si hp<=0, y este test encadena dos golpes de 10.
+    // corta en seco si hp<=0, y este test encadena dos golpes.
     boss.hp = 100;
     boss.maxHp = 100;
     boss.bossWeaponGateA = 'spell';
@@ -548,11 +548,11 @@ describe('El Prisma (GDD §15.4, Fase B3): gate de color en applyDamageToEnemy',
 
     const hpBefore = boss.hp;
     applyDamageToEnemy(world, boss, 5, 1, 0, events, false, 'arrow');
-    expect(boss.hp).toBe(hpBefore - 10); // ×2, acierta por el gate B
+    expect(boss.hp).toBe(hpBefore - 5); // daño normal, acierta por el gate B
 
     const hpBefore2 = boss.hp;
     applyDamageToEnemy(world, boss, 5, 1, 0, events, false, 'spell');
-    expect(boss.hp).toBe(hpBefore2 - 10); // ×2, acierta por el gate A
+    expect(boss.hp).toBe(hpBefore2 - 5); // daño normal, acierta por el gate A
   });
 
   it('sin gate activo (bossWeaponGateA === ""): comportamiento normal de cualquier otro jefe/enemigo', () => {
