@@ -482,6 +482,116 @@ export const spellSparkMaterial = new THREE.MeshBasicMaterial({
 });
 export const enemyProjectileMaterial = new THREE.MeshLambertMaterial({ color: '#ff3b3b' });
 
+/**
+ * Tinte de proyectil enemigo por `Projectile.colorTag` (rama `estilo-oscuro`,
+ * feedback playtest 2026-07-17: "que cada bola tuviera su luz" + "un color
+ * por ataque" en La Tormenta; "los ataques de proyectiles de su color" en el
+ * Prisma). Un `MeshLambertMaterial`/`MeshBasicMaterial` FIJO por etiqueta —
+ * NUNCA se muta el `.color` de un material compartido en tiempo de render
+ * (`enemyProjectileMaterial` lo usan a la vez TODOS los slots del pool;
+ * tocar su color afectaría a cualquier otro proyectil enemigo en pantalla,
+ * no solo al propio). `ProjectileView.tsx` REASIGNA la referencia
+ * `mesh.material` cada frame según `p.colorTag` (mismo truco de swap que el
+ * flash de golpe en `EnemyViews.tsx`), cero asignaciones nuevas por frame.
+ *
+ * Colores de La Tormenta (GDD §15.5, un color por patrón, "que se lean
+ * distintos en la oscuridad"): espiral=violeta, anillos=azul hielo,
+ * ráfaga=ámbar — ninguno coincide con `WEAPON_COLOR.arrow`/`.spell` del
+ * héroe, para no confundir "mi disparo" con "el suyo". El Prisma (GDD §15.4)
+ * reutiliza directamente `WEAPON_COLOR` (mismo mapeo arma↔color que
+ * `prismaCoreMaterial`/`prismaWeaponColor` en `EnemyViews.tsx`): sus
+ * proyectiles se tiñen del color de su gate activo.
+ */
+export const STORM_SPIRAL_PROJECTILE_COLOR = '#b18cff';
+export const STORM_RINGS_PROJECTILE_COLOR = '#7cc7ff';
+export const STORM_BURST_PROJECTILE_COLOR = '#ffb36b';
+
+const enemyProjectileTintMaterials: Record<string, THREE.MeshLambertMaterial> = {
+  ram: new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.body.clone() }),
+  arrow: new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.arrow.clone() }),
+  spell: new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.spell.clone() }),
+  'storm-spiral': new THREE.MeshLambertMaterial({ color: STORM_SPIRAL_PROJECTILE_COLOR }),
+  'storm-rings': new THREE.MeshLambertMaterial({ color: STORM_RINGS_PROJECTILE_COLOR }),
+  'storm-burst': new THREE.MeshLambertMaterial({ color: STORM_BURST_PROJECTILE_COLOR }),
+};
+
+/** Material de CUERPO del proyectil enemigo para su `colorTag` ('' u otra etiqueta sin mapear = clásico rojo). */
+export function enemyProjectileMaterialForTag(colorTag: string): THREE.MeshLambertMaterial {
+  return enemyProjectileTintMaterials[colorTag] ?? enemyProjectileMaterial;
+}
+
+/**
+ * Halo aditivo bajo cada proyectil enemigo (mismo mecanismo barato que
+ * `coinGlowHaloMaterial`/`keyGlowHaloMaterial`/`potionGlowHaloMaterial` más
+ * abajo: `glowHaloTexture` + `AdditiveBlending` + `depthWrite:false`), con el
+ * mismo color que el tinte de cuerpo de arriba. Generalizado a TODO
+ * proyectil enemigo (no solo los de La Tormenta): el shooter clásico (sin
+ * `colorTag`) recibe el halo rojo por defecto.
+ */
+const enemyProjectileGlowHaloMaterials: Record<string, THREE.MeshBasicMaterial> = {
+  '': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: '#ff3b3b',
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  ram: new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: WEAPON_COLOR.body.clone(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  arrow: new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: WEAPON_COLOR.arrow.clone(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  spell: new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: WEAPON_COLOR.spell.clone(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  'storm-spiral': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: STORM_SPIRAL_PROJECTILE_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.18,
+  }),
+  'storm-rings': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: STORM_RINGS_PROJECTILE_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.18,
+  }),
+  'storm-burst': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: STORM_BURST_PROJECTILE_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.18,
+  }),
+};
+
+/** Material de HALO del proyectil enemigo para su `colorTag` ('' u otra etiqueta sin mapear = clásico rojo). */
+export function enemyProjectileGlowHaloMaterialForTag(colorTag: string): THREE.MeshBasicMaterial {
+  return enemyProjectileGlowHaloMaterials[colorTag] ?? enemyProjectileGlowHaloMaterials[''];
+}
+
 // ── Hazards ────────────────────────────────────────────────────────────────
 
 /**

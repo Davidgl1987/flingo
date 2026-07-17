@@ -81,6 +81,11 @@ export function fireProjectile(
     slot.velocity.y = rDirY * speed;
     slot.ttl = PROJECTILE_LIFETIME;
     slot.hitEnemyIds.length = 0;
+    // Siempre clásico: el slot puede venir reciclado de un disparo enemigo
+    // con colorTag relleno (Prisma/Tormenta) — sin esto un proyectil del
+    // héroe podría heredar el tinte de la bala enemiga que ocupaba antes ese
+    // mismo slot del pool.
+    slot.colorTag = '';
 
     if (mode === 'arrow') {
       slot.radius = PROJECTILE_RADIUS;
@@ -116,11 +121,15 @@ export function fireProjectile(
 }
 
 /**
- * Dispara un proyectil hostil (Shooter, El Prisma) hacia una dirección
- * unitaria dada. `bouncesLeft` (El Prisma, GDD §15.4, modo Sombra: "arcos
- * lentos que rebotan en las paredes"): por defecto 0 (comportamiento intacto
- * del Shooter, que nunca rebota); ver `stepEnemyProjectileCollision` para el
- * mecanismo de rebote en sí (mismo que el hechizo del héroe).
+ * Dispara un proyectil hostil (Shooter, El Prisma, La Tormenta) hacia una
+ * dirección unitaria dada. `bouncesLeft` (El Prisma, GDD §15.4, modo Sombra:
+ * "arcos lentos que rebotan en las paredes"): por defecto 0 (comportamiento
+ * intacto del Shooter, que nunca rebota); ver `stepEnemyProjectileCollision`
+ * para el mecanismo de rebote en sí (mismo que el hechizo del héroe).
+ * `colorTag` (rama `estilo-oscuro`, feedback playtest 2026-07-17): por
+ * defecto '' (color clásico rojo, comportamiento intacto del Shooter, que no
+ * rellena este campo); el Prisma/la Tormenta pasan la etiqueta de su ataque
+ * activo — ver `Projectile.colorTag` (world/types.ts) para el contrato completo.
  */
 export function fireEnemyProjectile(
   world: World,
@@ -132,6 +141,7 @@ export function fireEnemyProjectile(
   damage: number,
   radius: number,
   bouncesLeft = 0,
+  colorTag = '',
 ): boolean {
   const slot = acquireProjectile(world);
   if (!slot) return false;
@@ -148,6 +158,7 @@ export function fireEnemyProjectile(
   slot.bouncesLeft = bouncesLeft;
   slot.pierceLeft = 0;
   slot.hitEnemyIds.length = 0;
+  slot.colorTag = colorTag;
   return true;
 }
 

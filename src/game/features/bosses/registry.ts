@@ -79,9 +79,11 @@ export const BOSS_DEFS: Record<BossId, BossDef> = {
     hitDamageCapFraction: PRISMA_HIT_DAMAGE_CAP_FRACTION,
     // Escudo de color rotatorio (GDD §15.4): el gate real (solo el arma del
     // color activo hace daño de verdad) vive en `Enemy.bossWeaponGateA/B` y
-    // se comprueba en `applyDamageToEnemy` (combat.ts) ANTES de esta ventana;
-    // este factor solo decide cuánto pasa una vez acertado el color, igual
-    // criterio "apenas hace daño, pero se nota" que el Guardián.
+    // se comprueba en `applyDamageToEnemy` (combat.ts). Sin ventana de
+    // vulnerabilidad (tuning post-playtest 2026-07-17): `bossVulnerable` es
+    // permanentemente `true` (`prisma/pattern.ts::prismaOnInit`), así que
+    // este factor (1 = neutro) nunca llega a aplicarse — se deja explícito
+    // por defensividad, ver `PRISMA_DAMAGE_OUTSIDE_WINDOW`.
     damageOutsideWindow: PRISMA_DAMAGE_OUTSIDE_WINDOW,
     stepPattern: prismaStepPattern,
     onPhaseChanged: prismaOnPhaseChanged,

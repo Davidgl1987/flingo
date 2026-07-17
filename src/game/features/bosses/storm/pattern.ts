@@ -168,6 +168,17 @@ function stormResetPatternState(world: World, boss: Enemy, state: StormState): v
  */
 let stormWorldRef: World | null = null;
 let stormBossPhaseRef: 1 | 2 | 3 = 1;
+/**
+ * Etiqueta de color del ciclo en curso (feedback playtest 2026-07-17: "pon en
+ * cada ataque los proyectiles de un color"), reescrita junto a las dos
+ * anteriores al principio de cada `stormStepPattern`. Reutiliza literalmente
+ * `STORM_TELEGRAPH_KIND[boss.bossCounter]` (ya indexado por patrón, ya usado
+ * para el aviso ámbar genérico) como `Projectile.colorTag` — el render
+ * (`ProjectileView.tsx`) mapea esas mismas etiquetas
+ * ('storm-spiral'/'storm-rings'/'storm-burst') a un color fijo por patrón,
+ * sin duplicar la tabla patrón→string aquí.
+ */
+let stormColorTagRef = '';
 
 /**
  * Mismo cálculo que `bosses/lifecycle.ts::capBossHitDamage`, inline para no
@@ -184,7 +195,7 @@ const stormEmit: StormEmit = (originX, originY, dirX, dirY, speed, damage, radiu
   const world = stormWorldRef;
   if (!world) return;
   const capped = stormCapHitDamage(world.hero.maxHp, stormBossPhaseRef, damage);
-  fireEnemyProjectile(world, originX, originY, dirX, dirY, speed, capped, radius);
+  fireEnemyProjectile(world, originX, originY, dirX, dirY, speed, capped, radius, 0, stormColorTagRef);
 };
 
 /**
@@ -323,6 +334,10 @@ export function stormOnInit(world: World, boss: Enemy): void {
 export function stormStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
   stormWorldRef = world;
   stormBossPhaseRef = boss.bossPhase;
+  // Sin patrón decidido todavía (justo tras onInit, ver comentario de
+  // cabecera): sin colorTag, las balas (si las hubiera, que no las hay en
+  // ese instante) caerían al color clásico.
+  stormColorTagRef = boss.bossCounter >= 0 ? STORM_TELEGRAPH_KIND[boss.bossCounter] : '';
 
   // Ventana de vulnerabilidad estándar (igual criterio que Prisma/Reina): se
   // deriva del reloj absoluto cada tick en vez de mantener un sub-stage aparte.

@@ -39,7 +39,7 @@ import type { Group, Mesh, PointLight } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Projectile } from '@/game/world/types';
 import { getUpgradeLevel } from '@/game/session/upgrades';
-import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileMaterial, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCone, unitSphere, WEAPON_COLOR } from '@/game/render/assets';
+import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileGlowHaloMaterialForTag, enemyProjectileMaterial, enemyProjectileMaterialForTag, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCircle, unitCone, unitSphere, WEAPON_COLOR } from '@/game/render/assets';
 import { useDarkStore } from '@/game/render/dark-store';
 import { arrowWidthScaleForLevel } from './upgrade-visuals';
 
@@ -71,6 +71,24 @@ const PROJECTILE_LIGHT_INTENSITY_ENEMY = 3;
 const PROJECTILE_LIGHT_DISTANCE_ENEMY = 2.2;
 /** Altura Y del centro del proyectil (mismo valor que `group.position.set` en `ProjectileSlot`). */
 const PROJECTILE_LIGHT_HEIGHT = 0.3;
+
+/**
+ * Halo aditivo bajo CADA proyectil enemigo (rama `estilo-oscuro`, feedback
+ * playtest 2026-07-17: "me gustaría que cada bola tuviera su luz"), solo
+ * dark>=1 — mismo truco barato ya validado con las monedas/llaves/pociones
+ * (`ItemView.tsx`: sprite aditivo con `glowHaloTexture` pegado al suelo,
+ * indistinguible de una luz real desde la cámara cenital y coste ~0). NO es
+ * una pointLight nueva: el recuento de luces reales de la escena se queda
+ * fijo (`ProjectileLightPool`, más abajo) — este halo es un mesh MÁS por
+ * slot del pool de proyectiles, no una luz.
+ */
+const PROJECTILE_ENEMY_HALO_RADIUS = 0.6;
+/**
+ * Altura LOCAL del halo dentro del group del slot (que ya vive a
+ * `PROJECTILE_LIGHT_HEIGHT`=0.3 de mundo): offset negativo para dejarlo
+ * pegado al suelo (~0.03 de mundo, mismo criterio que `ItemView.tsx`).
+ */
+const PROJECTILE_ENEMY_HALO_LOCAL_Y = 0.03 - PROJECTILE_LIGHT_HEIGHT;
 
 /**
  * Tamaño VISUAL de los proyectiles (playtest: "los proyectiles mejor un
@@ -216,10 +234,12 @@ function SpellShape({ session, slotIndex }: { session: GameSession; slotIndex: n
 }
 
 function ProjectileSlot({ session, index }: { session: GameSession; index: number }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const groupRef = useRef<Group>(null);
   const arrowGroupRef = useRef<Group>(null);
   const spellGroupRef = useRef<Group>(null);
   const enemyBodyRef = useRef<Mesh>(null);
+  const enemyHaloRef = useRef<Mesh>(null);
   const lastKind = useRef<ProjectileKind | null>(null);
 
   useFrame(() => {
@@ -262,7 +282,20 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
     const enemyBody = enemyBodyRef.current;
     if (enemyBody) {
       enemyBody.visible = p.kind === 'enemy';
-      if (p.kind === 'enemy') enemyBody.scale.setScalar(p.radius * PROJECTILE_VISUAL_SCALE);
+      if (p.kind === 'enemy') {
+        enemyBody.scale.setScalar(p.radius * PROJECTILE_VISUAL_SCALE);
+        // Tinte por-proyectil (colorTag): reasigna la REFERENCIA del
+        // material (nunca muta `.color` de uno compartido, ver cabecera de
+        // `assets.ts`) — mismo truco de swap que el flash de golpe de
+        // EnemyViews.tsx, cero asignaciones nuevas.
+        enemyBody.material = enemyProjectileMaterialForTag(p.colorTag);
+      }
+    }
+    const enemyHalo = enemyHaloRef.current;
+    if (enemyHalo) {
+      const showHalo = p.kind === 'enemy' && silhouettes;
+      enemyHalo.visible = showHalo;
+      if (showHalo) enemyHalo.material = enemyProjectileGlowHaloMaterialForTag(p.colorTag);
     }
   });
 
@@ -275,6 +308,19 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
         <SpellShape session={session} slotIndex={index} />
       </group>
       <mesh ref={enemyBodyRef} geometry={unitSphere} material={enemyProjectileMaterial} />
+      {/* Halo de "luz por bala" (solo proyectiles enemigos, solo dark>=1):
+          disco aditivo pegado al suelo, mismo mecanismo que los halos de
+          moneda/llave/poción (ItemView.tsx) — indistinguible de una luz real
+          desde la cámara cenital y coste ~0 (sin pointLight nueva). */}
+      <mesh
+        ref={enemyHaloRef}
+        geometry={unitCircle}
+        material={enemyProjectileGlowHaloMaterialForTag('')}
+        rotation-x={-Math.PI / 2}
+        position={[0, PROJECTILE_ENEMY_HALO_LOCAL_Y, 0]}
+        scale={PROJECTILE_ENEMY_HALO_RADIUS}
+        visible={false}
+      />
     </group>
   );
 }
@@ -364,7 +410,9 @@ function ProjectileLightPool({ session }: { session: GameSession }) {
         light.intensity = PROJECTILE_LIGHT_INTENSITY;
         light.distance = PROJECTILE_LIGHT_DISTANCE;
       } else {
-        light.color.copy(enemyProjectileMaterial.color);
+        // Mismo colorTag que tiñe el cuerpo/halo del proyectil (ver
+        // `ProjectileSlot`): reutiliza la misma tabla, sin duplicar colores.
+        light.color.copy(enemyProjectileMaterialForTag(p.colorTag).color);
         light.intensity = PROJECTILE_LIGHT_INTENSITY_ENEMY;
         light.distance = PROJECTILE_LIGHT_DISTANCE_ENEMY;
       }

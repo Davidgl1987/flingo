@@ -226,6 +226,17 @@ export interface Projectile {
   pierceLeft: number;
   /** IDs de enemigos ya golpeados por este proyectil (evita doble impacto el mismo tick). */
   hitEnemyIds: string[];
+  /**
+   * Etiqueta de color por-proyectil (rama `estilo-oscuro`, feedback playtest
+   * 2026-07-17: "luz por bola" + "un color por ataque" en La Tormenta, "los
+   * ataques de proyectiles de su color" en el Prisma). '' = color clásico por
+   * defecto (proyectil del héroe, o enemigo que no rellena el campo, p.ej. el
+   * Shooter). Rellenado por el patrón que dispara (storm/pattern.ts,
+   * prisma/pattern.ts) al llamar a `fireEnemyProjectile`; leído por el render
+   * (ProjectileView.tsx: cuerpo, halo y pool de luces) para teñir — escalar
+   * plano, cero coste en la sim.
+   */
+  colorTag: string;
 }
 
 export type ShooterPhase = 'chase' | 'charge';

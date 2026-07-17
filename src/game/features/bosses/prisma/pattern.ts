@@ -1,16 +1,30 @@
 /**
  * El Prisma (GDD §15.4, Fase B3): escudo de color rotatorio azul→amarillo→
- * violeta→azul, con un ataque temático por color y una ventana de
- * vulnerabilidad al final de cada uno. Solo el arma del color activo hace
- * daño de verdad (gate en `features/combat/combat.ts::applyDamageToEnemy`,
- * vía `Enemy.bossWeaponGateA/B`); el resto rebota con el evento
+ * violeta→azul, con un ataque temático por color. Solo el arma del color
+ * activo hace daño de verdad (gate en
+ * `features/combat/combat.ts::applyDamageToEnemy`, vía
+ * `Enemy.bossWeaponGateA/B`); el resto rebota con el evento
  * 'boss-immune-hit'.
+ *
+ * SIN ventana de vulnerabilidad (tuning post-playtest 2026-07-17, David:
+ * "quita la ventana de vulnerabilidad, haz que sólo le afecten los ataques de
+ * su color, pero siempre con el daño normal"): a diferencia del resto de
+ * jefes (Guardián/Reina/Tormenta, que sí alternan fases "apenas daña"/"daño
+ * completo"), el Prisma es dañable SIEMPRE — en cualquier momento de su
+ * ciclo, telegrafiando, atacando o esperando — mientras el arma coincida con
+ * su color activo. `bossVulnerable` se fija a `true` una vez en `onInit` y no
+ * vuelve a tocarse: el ÚNICO filtro de daño que le queda es el gate de color
+ * ya existente. Solo afecta al Prisma; el resto de jefes conserva su propia
+ * ventana sin cambios (cada `pattern.ts` es independiente).
  *
  * Reuso de campos escalares/vectoriales de `Enemy` (mismo espíritu que
  * Guardián/Reina, ver sus respectivos `pattern.ts`): el Prisma nunca pasa por
  * `stepEnemyAi`, así que:
  * - `bossCounter`: índice de color ACTIVO (`PRISMA_COLOR_RAM/ARROW/SPELL`,
- *   0/1/2). Solo cambia al rotar.
+ *   0/1/2). Solo cambia al rotar. También sirve directamente como
+ *   `Projectile.colorTag` de sus proyectiles (`PRISMA_COLOR_WEAPON[bossCounter]`
+ *   ya es 'ram'|'arrow'|'spell' — mismo string que lee el render para teñir,
+ *   ver `ProjectileView.tsx`).
  * - `patrolFrom.x`: world.time absoluto en el que toca la PRÓXIMA rotación de
  *   color (el "reloj maestro" del modo). `patrolFrom.y`/`patrolTo.y` no se
  *   usan.
@@ -31,9 +45,6 @@
  *   segundos del modo, momento en el que ya no se inician ataques nuevos).
  * - `facing`: dirección de la embestida/disparo en curso (fijada al terminar
  *   el telegraph del ataque, como el Guardián).
- * - `bossVulnerableUntil`/`bossVulnerable`: ventana de vulnerabilidad
- *   estándar del framework (world.time absoluto), derivada cada tick como
- *   hace la Reina.
  */
 
 import { applyDamageToHero, applyKnockbackToHero, fireEnemyProjectile } from '@/game/features/combat/combat';
@@ -71,7 +82,6 @@ import {
   PRISMA_SPELL_RADIUS,
   PRISMA_SPELL_SPEED,
   PRISMA_SPELL_TELEGRAPH_DURATION,
-  PRISMA_VULNERABLE_WINDOW,
   PRISMA_WIND_MOVE_SPEED,
   PRISMA_WIND_STANDOFF_DISTANCE,
   PRISMA_WIND_STRAFE_ANGULAR_SPEED,
@@ -136,11 +146,15 @@ function prismaEnterTelegraph(world: World, boss: Enemy, events: EventQueue): vo
   pushEvent(events, 'boss-telegraph', boss.position.x, boss.position.y, 1, boss.bossTelegraphKind);
 }
 
-/** Cierra el ataque en curso: abre la ventana de vulnerabilidad y arma la cadencia hasta el próximo intento. */
-function prismaEnterVulnerable(world: World, boss: Enemy): void {
+/**
+ * Cierra el ataque en curso y arma la cadencia hasta el próximo intento (sin
+ * ventana de vulnerabilidad que abrir, tuning post-playtest 2026-07-17: el
+ * Prisma ya es dañable siempre que el color coincida, ver cabecera del
+ * fichero — este helper solo devuelve el ciclo a IDLE).
+ */
+function prismaFinishAttack(boss: Enemy): void {
   boss.bossTelegraphUntil = 0;
   boss.bossTelegraphKind = '';
-  boss.bossVulnerableUntil = world.time + PRISMA_VULNERABLE_WINDOW;
   boss.bossStage = PRISMA_ATTACK_IDLE;
   boss.bossTimer = prismaCadenceForColor(boss.bossCounter, boss.bossPhase);
   boss.velocity.x = 0;
@@ -162,7 +176,18 @@ function prismaFireArrowBurst(world: World, boss: Enemy, events: EventQueue): vo
     const sin = Math.sin(angle);
     const rDirX = dirX * cos - dirY * sin;
     const rDirY = dirX * sin + dirY * cos;
-    fireEnemyProjectile(world, boss.position.x, boss.position.y, rDirX, rDirY, PRISMA_ARROW_SPEED, damage, PRISMA_ARROW_RADIUS);
+    fireEnemyProjectile(
+      world,
+      boss.position.x,
+      boss.position.y,
+      rDirX,
+      rDirY,
+      PRISMA_ARROW_SPEED,
+      damage,
+      PRISMA_ARROW_RADIUS,
+      0,
+      PRISMA_COLOR_WEAPON[boss.bossCounter],
+    );
   }
   pushEvent(events, 'boss-telegraph', boss.position.x, boss.position.y, 0, 'prisma-arrow-fire');
 }
@@ -192,6 +217,7 @@ function prismaFireSpellArcs(world: World, boss: Enemy, events: EventQueue): voi
       damage,
       PRISMA_SPELL_RADIUS,
       PRISMA_SPELL_BOUNCES,
+      PRISMA_COLOR_WEAPON[boss.bossCounter],
     );
   }
   pushEvent(events, 'boss-telegraph', boss.position.x, boss.position.y, 0, 'prisma-spell-fire');
@@ -218,7 +244,7 @@ function prismaStepRamCharge(world: World, boss: Enemy, dt: number, events: Even
   }
 
   if (bossHitsSolid(world, boss, nextX, nextY)) {
-    prismaEnterVulnerable(world, boss);
+    prismaFinishAttack(boss);
     return;
   }
   boss.position.x = nextX;
@@ -227,7 +253,7 @@ function prismaStepRamCharge(world: World, boss: Enemy, dt: number, events: Even
   boss.velocity.y = boss.facing.y * PRISMA_RAM_CHARGE_SPEED;
 
   if (boss.bossTimer <= 0) {
-    prismaEnterVulnerable(world, boss);
+    prismaFinishAttack(boss);
   }
 }
 
@@ -249,7 +275,7 @@ function prismaExecuteAttack(world: World, boss: Enemy, events: EventQueue): voi
   } else {
     prismaFireSpellArcs(world, boss, events);
   }
-  prismaEnterVulnerable(world, boss);
+  prismaFinishAttack(boss);
 }
 
 /** Viento (GDD §15.4 "se mueve rápido"): reposicionamiento suave orbitando al héroe; los otros dos modos se quedan quietos entre ataques. */
@@ -276,17 +302,21 @@ export function prismaOnInit(world: World, boss: Enemy): void {
   boss.patrolTo.x = 0;
   boss.bossTelegraphUntil = 0;
   boss.bossTelegraphKind = '';
-  boss.bossVulnerable = false;
-  boss.bossVulnerableUntil = 0;
+  // Sin ventana de vulnerabilidad (tuning post-playtest 2026-07-17, ver
+  // cabecera del fichero): fijado UNA vez aquí, `prismaStepPattern` ya no lo
+  // toca — el gate de color es el único filtro de daño que le queda.
+  boss.bossVulnerable = true;
 }
 
 export function prismaStepPattern(world: World, boss: Enemy, dt: number, events: EventQueue): void {
-  // Ventana de vulnerabilidad estándar (igual criterio que la Reina): se
-  // deriva del reloj absoluto cada tick, en vez de mantener un sub-stage aparte.
-  boss.bossVulnerable = world.time < boss.bossVulnerableUntil;
+  // Sin ventana de vulnerabilidad (tuning post-playtest 2026-07-17, ver
+  // cabecera del fichero): `bossVulnerable` quedó fijado a `true` en
+  // `prismaOnInit` y no se toca aquí — reasertado por defensividad, por si
+  // algo externo lo tocara entre ticks.
+  boss.bossVulnerable = true;
 
-  // Gate de color (GDD §15.4): el arma activa SIEMPRE gatea, dentro o fuera de
-  // ventana — la ventana solo decide CUÁNTO daño pasa una vez acertado el color.
+  // Gate de color (GDD §15.4): el arma activa SIEMPRE gatea — es el ÚNICO
+  // filtro de daño que le queda al Prisma (sin ventana que module cuánto pasa).
   boss.bossWeaponGateA = PRISMA_COLOR_WEAPON[boss.bossCounter];
   // Solape de fase 3: el color anterior (derivado de la rotación fija) sigue
   // siendo válido un rato tras el cambio.
