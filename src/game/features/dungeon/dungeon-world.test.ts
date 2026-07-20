@@ -12,6 +12,7 @@ import { seriesRooms } from './rooms';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
 import { BOSS_VICTORY_PAUSE_DURATION, stepWorld } from '@/game/world/step';
 import { DOOR_CONTACT_MARGIN, DOOR_TOUCH_MARGIN, WALL_THICKNESS } from '@/game/world/constants';
+import { HERO_RADIUS } from '@/game/features/hero/constants';
 import type { AABB, Vec2 } from '@/engine/geometry';
 import type { EnemySpawn, Obstacle, RoomData, RoomTag } from '@/game/world/types';
 
@@ -169,7 +170,7 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     const dir = variesOnY
       ? Math.sign(roomCenterY - bossDoor.center.y)
       : Math.sign(roomCenterX - bossDoor.center.x);
-    const contactDistance = (DOOR_CONTACT_MARGIN + 0.38) / 2; // entre HERO_RADIUS y DOOR_CONTACT_MARGIN
+    const contactDistance = (DOOR_CONTACT_MARGIN + HERO_RADIUS) / 2; // entre HERO_RADIUS y DOOR_CONTACT_MARGIN
     world.hero.position.x = variesOnY ? bossDoor.center.x : bossDoor.center.x + dir * contactDistance;
     world.hero.position.y = variesOnY ? bossDoor.center.y + dir * contactDistance : bossDoor.center.y;
 
@@ -234,7 +235,7 @@ describe('flujo de puertas y transición de sala (mazmorra multi-sala)', () => {
     expect(bossDoor.open).toBe(false);
 
     // Ahora al contacto real (por encima del suelo físico HERO_RADIUS): se abre.
-    Object.assign(world.hero.position, heroPositionAt((DOOR_CONTACT_MARGIN + 0.38) / 2));
+    Object.assign(world.hero.position, heroPositionAt((DOOR_CONTACT_MARGIN + HERO_RADIUS) / 2));
     stepWorld(world, events);
     expect(bossDoor.open).toBe(true);
   });

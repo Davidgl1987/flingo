@@ -36,8 +36,9 @@ describe('rebote círculo-vs-AABB', () => {
   it('refleja la componente normal con restitución 0.86 y conserva la tangencial', () => {
     const events = createEventQueue(8);
     const box = { minX: 0, maxX: 2, minY: -5, maxY: 5 };
-    // Círculo penetrando la cara izquierda, moviéndose en diagonal hacia ella.
-    const position = { x: -0.3, y: 0 };
+    // Círculo penetrando la cara izquierda, moviéndose en diagonal hacia ella
+    // (a medio radio de la cara, así siempre solapa sea cual sea HERO_RADIUS).
+    const position = { x: -HERO_RADIUS / 2, y: 0 };
     const velocity = { x: 5, y: 2 };
     const hit = collideCircleAabb(position, velocity, HERO_RADIUS, box, events);
 
@@ -67,8 +68,9 @@ describe('rebote círculo-vs-AABB', () => {
 
   it('en una esquina la normal es diagonal y el rebote aleja al círculo', () => {
     const box = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
-    // Círculo solapando la esquina (0,0) desde fuera, en diagonal hacia ella.
-    const position = { x: -0.2, y: -0.2 };
+    // Círculo solapando la esquina (0,0) desde fuera, en diagonal hacia ella:
+    // distancia a la esquina = HERO_RADIUS/√2 < HERO_RADIUS, así siempre solapa.
+    const position = { x: -HERO_RADIUS / 2, y: -HERO_RADIUS / 2 };
     const velocity = { x: 4, y: 4 };
     const hit = collideCircleAabb(position, velocity, HERO_RADIUS, box, null);
 

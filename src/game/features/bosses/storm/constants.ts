@@ -58,9 +58,11 @@ export const STORM_RADIUS = 0.95;
 /**
  * Radio mínimo desde el centro del jefe al que puede nacer una bala (req. 2:
  * "ninguna bala a bocajarro"). Debe superar cuerpo del jefe + cuerpo del héroe
- * con margen: 0.95 + 0.38 = 1.33 → 1.6 deja 0.27 u de aire. TODAS las olas de
- * los tres patrones emiten exactamente a este radio, así que es el radio de
- * referencia (el más estrecho en unidades lineales) para el pasillo.
+ * con margen: 0.95 + HERO_RADIUS (0.24 desde ronda 7 de playtest de la vela)
+ * = 1.19 → 1.6 deja 0.41 u de aire (más holgado aún que antes de reducir
+ * HERO_RADIUS). TODAS las olas de los tres patrones emiten exactamente a este
+ * radio, así que es el radio de referencia (el más estrecho en unidades
+ * lineales) para el pasillo.
  */
 export const STORM_MIN_EMISSION_RADIUS = 1.6;
 
@@ -85,8 +87,8 @@ export const STORM_ARENA_CORNER_RADIUS = 8.6;
 
 // ── Pasillo garantizado (regla de honestidad §15.5) ─────────────────────────
 
-/** Diámetro del cuerpo del héroe (GDD apéndice: radio 0.38). El pasillo debe superarlo. */
-export const STORM_HERO_DIAMETER = HERO_RADIUS * 2; // 0.76
+/** Diámetro del cuerpo del héroe (`HERO_RADIUS`, `hero/constants.ts` — 0.24 desde ronda 7 de playtest). El pasillo debe superarlo. */
+export const STORM_HERO_DIAMETER = HERO_RADIUS * 2; // 0.48
 /**
  * Margen generoso del pasillo por encima del diámetro del héroe (req. 1). Las
  * balas son lentas y "esquivables en todo momento con movimiento normal"
@@ -102,7 +104,7 @@ export const STORM_CORRIDOR_MARGIN = 0.85;
 /**
  * Ancho LINEAL mínimo de aire libre del pasillo (entre los BORDES de las balas
  * que lo flanquean), en unidades de mundo: diámetro del héroe + margen.
- * 0.76 + 0.85 = 1.61 u.
+ * 0.48 + 0.85 = 1.33 u.
  */
 export const STORM_CORRIDOR_MIN_WIDTH = STORM_HERO_DIAMETER + STORM_CORRIDOR_MARGIN;
 /**

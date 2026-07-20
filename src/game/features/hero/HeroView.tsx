@@ -126,57 +126,48 @@ const CANDLE_VERTICAL_STRETCH_PER_SPEED = STRETCH_PER_SPEED * 0.5;
 
 /**
  * Pivote de inclinación = "la base" de la vela (punto 1 de playtest ronda 4:
- * "la base no debe despegarse ni hundirse en el suelo"): fracción de
- * `visualRadius` a la que ya quedaba la base del cilindro con el código
- * anterior a este cambio (`body.position.y = visualRadius` fijo, menos la
- * mitad del alto local de `heroCandleGeometry`, 0.55) — se reutiliza tal
- * cual para que el reposo (velocidad ~0, sin inclinar) se vea IDÉNTICO a
- * como se veía antes de este cambio. No es literalmente el suelo (y=0):
- * corregir ese posible pequeño flotado no es parte de este encargo, solo
- * fijar el PIVOTE de la inclinación a ese punto (sea cual sea) para que
- * nunca se despegue ni se hunda AL INCLINARSE.
+ * "la base no debe despegarse ni hundirse en el suelo"). Con la vela fina y
+ * alta de ronda 7 (`heroCandleGeometry` = radio local 1, alto local 2.8, ver
+ * `render/assets.ts`) la fórmula anterior (fracción = 1 − mitad-de-alto-
+ * local) ya no vale: esa cuenta asumía un cilindro CHATO cuya mitad de alto
+ * era menor que el radio (0.55 < 1), y con un alto local de 2.8 (mitad 1.4)
+ * daría una fracción NEGATIVA — la base se hundiría bajo el suelo. En vez de
+ * arrastrar esa aproximación, se fija el pivote LITERALMENTE en el suelo
+ * (fracción 0 ⇒ `tiltGroup` siempre a y=0, salvo el saltito de victoria):
+ * cumple el pedido original al pie de la letra y es correcto para cualquier
+ * proporción de la vela, no solo la chata de antes.
  */
-const CANDLE_PIVOT_HEIGHT_FRACTION = 1 - 0.55;
-/** Mitad del alto local de `heroCandleGeometry` (radio 0.42, alto 1.1): mantiene la base pinchada al pivote pase lo que pase con el escalado vertical (squash o estiramiento). */
-const CANDLE_HALF_HEIGHT = 0.55;
+const CANDLE_PIVOT_HEIGHT_FRACTION = 0;
+/** Mitad del alto local de `heroCandleGeometry` (radio 1, alto 2.8): mantiene la base pinchada al pivote pase lo que pase con el escalado vertical (squash o estiramiento). */
+const CANDLE_HALF_HEIGHT = 1.4;
 
 /**
- * Ojos de la vela (playtest ronda 5, punto 2: "parece que tiene ruedas...
- * ponlos más juntos y a más altura"): con los valores anteriores se leían
- * como ruedas laterales por DOS motivos combinados —
- * (a) la separación en X (0.35·HERO_RADIUS por ojo ⇒ 0.70·HERO_RADIUS entre
- *     centros) era casi el DIÁMETRO entero del cilindro (radio local 0.42 ×
- *     visualRadius, `heroCandleGeometry`), así que los ojos quedaban pegados
- *     a los bordes izquierdo/derecho en vez de agrupados al frente;
- * (b) el offset en Z (0.82·HERO_RADIUS) casi DOBLABA el radio real de la
- *     cara frontal (0.42·visualRadius), así que sobresalían muy por delante
- *     de la superficie en vez de posarse sobre ella — combinado con (a),
- *     "dos ruedas" flotando a los lados.
+ * Ojos de la vela, reajustados a la vela fina y alta de ronda 7 (radio local
+ * 1, alto local 2.8 — ver comentario de `CANDLE_PIVOT_HEIGHT_FRACTION` y de
+ * `heroCandleGeometry` en `render/assets.ts`).
  *
- * Cuenta de ALTURAS (números absolutos, visualRadius ≈ HERO_RADIUS a nivel
- * base de Firmeza): `candleGroup` (padre de estos ojos) es hijo de
- * `tiltGroup`, situado en mundo a `visualRadius · CANDLE_PIVOT_HEIGHT_FRACTION`
- * (0.45·HERO_RADIUS), y su propio y local es
- * `visualRadius · (1 − CANDLE_PIVOT_HEIGHT_FRACTION)` (0.55·HERO_RADIUS) ⇒
- * origen de `candleGroup` en mundo = 0.45 + 0.55 = 1.00·HERO_RADIUS.
- * El cilindro (`body`, alto local 1.1, centrado en su propio origen a
- * `scaleY·CANDLE_HALF_HEIGHT` = 0.55·HERO_RADIUS de `tiltGroup`) ocupa en
- * altura ABSOLUTA de mundo [0.45, 1.55]·HERO_RADIUS (base a 0.45 — flota un
- * poco sobre el suelo, ver nota de `CANDLE_PIVOT_HEIGHT_FRACTION`: no es
- * parte de este encargo — y techo a 1.55), altura total 1.10·HERO_RADIUS.
- * `candleGroup` (1.00) cae pues EXACTAMENTE en el centro del cilindro: 50%
- * de su altura — de ahí que "a media altura" en el código anterior en
- * realidad leyera en la MITAD, no arriba. `CANDLE_EYE_Y` = 0.12·HERO_RADIUS
- * sube los ojos a 1.12·HERO_RADIUS absolutos ⇒ (1.12−0.45)/1.10 ≈ 61% de la
- * altura del cilindro (pedido: 55-65%).
+ * Cuenta de ALTURAS (números en × visualRadius; visualRadius ≈ HERO_RADIUS a
+ * nivel base de Firmeza): con `CANDLE_PIVOT_HEIGHT_FRACTION = 0`, `tiltGroup`
+ * (y por tanto la base del cilindro) vive en mundo a y=0 exacto. `candleGroup`
+ * (padre de los ojos) tiene y local = `visualRadius · (1 −
+ * CANDLE_PIVOT_HEIGHT_FRACTION)` = 1.00·visualRadius — nótese que esta cuenta
+ * se CANCELA sola respecto a `CANDLE_PIVOT_HEIGHT_FRACTION` (tiltGroup.y +
+ * candleGroup.y_local = fracción + (1−fracción) = 1 siempre), así que
+ * `candleGroup` cae en el mismo sitio absoluto pase lo que pase con el
+ * pivote. El cilindro (alto local 2.8, base en y=0) ocupa en altura absoluta
+ * [0, 2.8]·visualRadius, así que el origen de `candleGroup` (1.00) cae al
+ * 1.00/2.8 ≈ 36% de la altura — bastante por debajo de donde deben ir los
+ * ojos. `CANDLE_EYE_Y` = 0.68·HERO_RADIUS los sube a 1.68·visualRadius
+ * absolutos ⇒ 1.68/2.8 = 60% de la altura del cilindro (pedido original:
+ * 55-65%, se mantiene el mismo criterio que en rondas anteriores).
  */
-/** Separación entre CENTROS de ambos ojos, en × HERO_RADIUS (juntos, carita del concept; un pelín más anchos al engordar la vela a radio 0.85). */
-const CANDLE_EYE_SEPARATION = 0.28;
+/** Separación entre CENTROS de ambos ojos, en × HERO_RADIUS (juntos, carita del concept; misma proporción que ronda 6 respecto al nuevo diámetro del cilindro, radio local 1 en vez de 0.85). */
+const CANDLE_EYE_SEPARATION = 0.33;
 const CANDLE_EYE_X = (HERO_RADIUS * CANDLE_EYE_SEPARATION) / 2;
-const CANDLE_EYE_Y = HERO_RADIUS * 0.12;
-/** Radio local del cilindro (0.85, vela rechoncha de ronda 6) × visualRadius: los ojos se posan JUSTO dentro de la cara frontal, no muy por delante de ella. */
-const CANDLE_EYE_Z = HERO_RADIUS * 0.82;
-/** Tamaño de cada ojo: un pelín mayor que antes (0.065/0.1/0.04) para seguir leyéndose como carita ahora que están más juntos. */
+const CANDLE_EYE_Y = HERO_RADIUS * 0.68;
+/** Radio local del cilindro (1, ronda 7) × visualRadius, al 90%: los ojos se posan JUSTO dentro de la cara frontal, no muy por delante de ella. */
+const CANDLE_EYE_Z = HERO_RADIUS * 0.9;
+/** Tamaño de cada ojo (sin cambios de proporción respecto a HERO_RADIUS: se achica junto con el resto de la vela al reducirse HERO_RADIUS en ronda 7). */
 const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.075, HERO_RADIUS * 0.115, HERO_RADIUS * 0.05];
 
 /**
@@ -225,7 +216,16 @@ const WAX_TRAIL_SIZE_FACTOR = 1.15;
  */
 const FLAME_PULSE_FREQ_A = 3.1;
 const FLAME_PULSE_FREQ_B = 5.7;
-const FLAME_HEIGHT_FACTOR = 1.55;
+/**
+ * Altura de la llama (× visualRadius, offset LOCAL dentro de `candleGroup`,
+ * que a su vez cae siempre en 1.00·visualRadius absoluto — ver comentario de
+ * `CANDLE_EYE_Y` arriba): reajustada a la vela alta de ronda 7 para que la
+ * BASE de la llama (su centro menos su propio semi-alto, `FLAME_BASE_SCALE ·
+ * 1.8 / 2` = 0.45·visualRadius) quede justo sobre la boca del cilindro (techo
+ * en 2.8·visualRadius, ver comentario de `CANDLE_EYE_Y`): centro deseado =
+ * 2.8 + 0.45 = 3.25 ⇒ offset local = 3.25 − 1.00 = 2.25.
+ */
+const FLAME_HEIGHT_FACTOR = 2.25;
 const FLAME_BASE_SCALE = 0.5;
 /** Amplitud del pulso de tamaño de la llama: ±15%, pedido explícito de playtest. */
 const FLAME_PULSE_AMPLITUDE = 0.15;
@@ -272,18 +272,20 @@ const SPIKE_DIRECTIONS = buildSpikeDirections();
  * Héroe-vela (dark>=1, punto 5 de playtest): los 12 pinchos del Erizo de
  * Acero se posicionan con `SPIKE_DIRECTIONS` (puntos sobre la ESFERA
  * unitaria, radio 1) porque en `dark=0` `bodyRef` es literalmente esa esfera
- * — al cambiar su geometría a `heroCandleGeometry` (cilindro chato, radio
- * 0.42 / alto 1.1, ver assets.ts) esos mismos puntos quedarían muy lejos de
- * la nueva superficie (sobre todo el ecuador, a radio 1 contra un cilindro de
- * radio 0.42) y "flotarían" fuera del cuerpo. Reproyección barata: escala
- * cada dirección unitaria por el radio/semialto reales del cilindro en vez de
- * recalcular geometría de contacto exacta — aproximado pero "razonable"
- * (mismo criterio que pide el playtest), sin tocar la orientación (el
- * quaternion de abajo sigue usando la dirección ORIGINAL sin escalar, así los
- * pinchos siguen apuntando hacia fuera).
+ * — al cambiar su geometría a `heroCandleGeometry` (cilindro fino y alto de
+ * ronda 7, radio local 1 / alto local 2.8, ver assets.ts) el ecuador de la
+ * esfera unitaria seguiría cayendo justo en la superficie del cilindro (el
+ * radio local coincide, 1 = 1) pero los polos (y=±1) quedarían muy por
+ * encima/debajo del cilindro real (semialto local 1.4) y "flotarían" fuera
+ * del cuerpo. Reproyección barata: escala cada dirección unitaria por el
+ * radio/semialto reales del cilindro en vez de recalcular geometría de
+ * contacto exacta — aproximado pero "razonable" (mismo criterio que pide el
+ * playtest), sin tocar la orientación (el quaternion de abajo sigue usando
+ * la dirección ORIGINAL sin escalar, así los pinchos siguen apuntando hacia
+ * fuera).
  */
-const CANDLE_SPIKE_SURFACE_XZ = 0.85;
-const CANDLE_SPIKE_SURFACE_Y = 0.55;
+const CANDLE_SPIKE_SURFACE_XZ = 1;
+const CANDLE_SPIKE_SURFACE_Y = 1.4;
 
 export function HeroView({ session }: { session: GameSession }) {
   const silhouettes = useDarkStore((s) => s.dark >= 1);
@@ -659,8 +661,10 @@ export function HeroView({ session }: { session: GameSession }) {
         geometry={unitCircle}
         material={blobShadowMaterial}
         rotation-x={-Math.PI / 2}
-        // Silueta: sombra blob al radio real del cilindro (0.85 desde la
-        // ronda 6 de playtest; con el fino de 0.42 sobresalía como apéndice).
+        // Silueta: sombra blob al radio real del cilindro. Ronda 7: el radio
+        // local de `heroCandleGeometry` vuelve a 1 (como la esfera clásica),
+        // así que el multiplicador ×1.0 de siempre ya coincide exactamente
+        // con el nuevo radio visual — no hace falta tocarlo.
         scale={HERO_RADIUS * (silhouettes ? 1.0 : 1.25)}
       />
     </>

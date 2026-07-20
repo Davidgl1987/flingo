@@ -815,25 +815,33 @@ export const HERO_WAX_COLOR = '#e8ddc8';
 /**
  * Cuerpo del héroe-vela (punto 5 de playtest, rama `estilo-oscuro`): en
  * dark>=1 `HeroView.tsx` sustituye la esfera unitaria (`unitSphere`, radio 1)
- * por este cilindro CHATO ("vela, no torre") en el mismo mesh compartido
- * (`bodyRef`) — misma convención "unit-X, se escala por mesh" que el resto de
- * geometrías de este fichero: `HeroView.tsx` sigue aplicando exactamente el
- * mismo `visualRadius` de squash/stretch/caída-al-foso que ya usaba con la
- * esfera, sin tocar esa lógica. Radio/alto elegidos DIRECTAMENTE en las
- * unidades que pide el playtest (no relativos a otro "1" abstracto): al
- * escalar por `visualRadius` (igual que la esfera) da un cuerpo visiblemente
- * más bajo/ancho que la bola clásica — los pinchos del Erizo de Acero
- * reproyectan su posición a esta misma proporción en `HeroView.tsx` para no
- * quedar flotando fuera de la superficie (ver comentario allí).
+ * por este cilindro ESTRECHO Y ALTO ("vela, no torre... pero tampoco rueda")
+ * en el mismo mesh compartido (`bodyRef`) — misma convención "unit-X, se
+ * escala por mesh" que el resto de geometrías de este fichero: `HeroView.tsx`
+ * sigue aplicando exactamente el mismo `visualRadius` de squash/stretch/
+ * caída-al-foso que ya usaba con la esfera, sin tocar esa lógica. Radio local
+ * = 1 (igual que la esfera: la silueta visible coincide con la hitbox real,
+ * ver `HERO_RADIUS`) y alto local = 2.8 (más del doble del radio) para la
+ * esbeltez pedida en ronda 7 — los pinchos del Erizo de Acero reproyectan su
+ * posición a esta misma proporción en `HeroView.tsx` para no quedar flotando
+ * fuera de la superficie (ver comentario allí).
  */
 /*
- * Radio 0.85 (playtest ronda 6, "la hitbox habría que ajustarla"): el
- * cilindro fino (0.42) dejaba el cuerpo visible a ~42% del diámetro de
- * COLISIÓN real (HERO_RADIUS, la sim no cambia) y los golpes parecían
- * injustos. Con 0.85 la vela es rechoncha como el concept y su silueta queda
- * solo un pelín por dentro de la hitbox (generosa a favor del jugador).
+ * Historial: radio 0.42 (fina) → 0.85 en playtest ronda 6 ("la hitbox
+ * habría que ajustarla", el cilindro fino dejaba el cuerpo visible a ~42%
+ * del diámetro de colisión y los golpes parecían injustos) → de vuelta a
+ * fina en ronda 7 (2026-07-20, David: "la vela no me gusta así rechoncha...
+ * has cambiado el modelo y no la hitbox, te pedí lo contrario"). Esta vez la
+ * finura NO deja la hitbox de fuera: `HERO_RADIUS` (`hero/constants.ts`) baja
+ * un ~37% junto con este cambio, así que radio local 1.0 (= la hitbox real,
+ * como la esfera clásica de radio local 1) ES la silueta visible, sin
+ * generosidad ni penalización — y el alto local sube a 2.8 (más del doble
+ * del alto anterior) para conseguir la esbeltez pedida sin tocar el radio.
+ * Todos los offsets dependientes (ojos, pinchos, llama, pivote de
+ * inclinación) se recalculan en `HeroView.tsx` a partir de estos dos
+ * números — ver comentario allí.
  */
-export const heroCandleGeometry = new THREE.CylinderGeometry(0.85, 0.85, 1.1, 20);
+export const heroCandleGeometry = new THREE.CylinderGeometry(1.0, 1.0, 2.8, 20);
 
 /**
  * Cirios de sala de jefe (punto 2b de playtest, `BossCandlesView.tsx`, solo
