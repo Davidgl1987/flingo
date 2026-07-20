@@ -95,7 +95,7 @@ export const glowHaloTexture = createGlowHaloTexture();
  * cuerpo del héroe, su estela y el indicador de puntería cambian al mismo
  * color que su arma seleccionada — mismo lenguaje visual ya usado por
  * WeaponBar (`weapon-btn-<mode>`) y por los proyectiles (arrowMaterial /
- * spellMaterial más abajo). Único punto de verdad para no divergir del CSS.
+ * spellBoltMaterial más abajo). Único punto de verdad para no divergir del CSS.
  */
 /**
  * Intercambio de colores cuerpo↔flecha (feedback de playtest, rama
@@ -225,19 +225,10 @@ export const bossPhaseFlashMaterial = new THREE.MeshBasicMaterial({ color: '#fff
 export const guardianBodyMaterial = new THREE.MeshLambertMaterial({ color: '#5b6270' });
 /** Hombros/cuernos: tono más oscuro, silueta "pesada" reconocible. */
 export const guardianHornMaterial = new THREE.MeshLambertMaterial({ color: '#3c4048' });
-/** Vetas del cuerpo pétreo: tono cálido tenue (ámbar apagado), sugiere el "canto" que le da nombre. */
-export const guardianVeinMaterial = new THREE.MeshBasicMaterial({ color: '#d9a531' });
 /** Brillo/vibración del telegraph (GDD §15.2 "brilla y vibra"): sustituye al cuerpo entero mientras avisa. */
 export const guardianTelegraphGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffb84d' });
 /** Estrellitas del aturdimiento (estado INCONFUNDIBLE, entregable 3): doradas, orbitan sobre la cabeza. */
 export const guardianStunStarMaterial = new THREE.MeshBasicMaterial({ color: '#fff2c9' });
-/** Partícula de polvo de la carga: se emite como evento (burstTable.ts); geometría reutilizada de unitSphere. */
-export const guardianDustMaterial = new THREE.MeshBasicMaterial({
-  color: '#8d8367',
-  transparent: true,
-  opacity: 0.6,
-  depthWrite: false,
-});
 /** Cuerno/hombro del Guardián: cono corto y ancho (más "roca tallada" que púa afilada). */
 export const guardianHornGeometry = new THREE.ConeGeometry(0.32, 0.55, 6);
 /** Estrellita del aturdimiento: tetraedro minúsculo, barato, orbitando. */
@@ -465,7 +456,6 @@ export const smallWedgeGeometry = new THREE.BoxGeometry(1, 1, 1);
 export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#54c7ff' });
 /** Asta de la flecha (detrás del cono dominante): tono más oscuro, silueta de flecha reconocible. */
 export const arrowTipMaterial = new THREE.MeshLambertMaterial({ color: '#1f6fa1' });
-export const spellMaterial = new THREE.MeshLambertMaterial({ color: '#d8b4fe' });
 /** Zigzag eléctrico del hechizo (ronda 3, punto 11: sin núcleo, solo rayo): violeta más saturado/luminoso que el cuerpo. */
 export const spellBoltMaterial = new THREE.MeshBasicMaterial({
   color: '#c084fc',
@@ -852,7 +842,6 @@ export const heroCandleGeometry = new THREE.CylinderGeometry(1.0, 1.0, 2.8, 20);
  * escena vía Lambert, a diferencia de la llama) para no competir visualmente
  * con el héroe como fuente de luz principal.
  */
-export const bossCandleWaxGeometry = new THREE.CylinderGeometry(0.25, 0.28, 1.4, 12);
 export const bossCandleWaxMaterial = new THREE.MeshLambertMaterial({ color: '#d8cdb4' });
 /** Llama del cirio de jefe: autoiluminada (Basic), mismo cálido que `CandleLightView`/`candleFlameMaterial`. */
 export const bossCandleFlameMaterial = new THREE.MeshBasicMaterial({ color: '#ffb469' });
