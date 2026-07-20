@@ -9,6 +9,7 @@ import { createEffectsState, type EffectsState } from '@/game/features/effects/e
 import { ParticlePool } from '@/game/features/effects/particles';
 import { ShockwavePool } from '@/game/features/effects/shockwave';
 import { TrailPool } from '@/game/features/effects/trail';
+import { WaxPool } from '@/game/features/effects/wax';
 import { BOSS_DIFFICULTY_ORDER } from '@/game/features/bosses/registry';
 import { initBossEnemies } from '@/game/features/bosses/lifecycle';
 import { generateDungeon } from '@/game/features/dungeon/dungeon';
@@ -22,6 +23,18 @@ import type { BossId, RoomData, World } from '@/game/world/types';
 export interface EffectsSession {
   particles: ParticlePool;
   trail: TrailPool;
+  /**
+   * Capa de cera persistente (rama `estilo-oscuro`, playtest ronda 7, ver
+   * wax.ts): a diferencia de `trail`, sobrevive a los cambios de SALA dentro
+   * de la misma mazmorra (nunca se recrea aquí) pero se limpia explícitamente
+   * en `restartSession`/`advanceToNextDungeon` (más abajo) — mismo criterio
+   * que `trauma`/`hitStopRemaining` en `state`, no el de `particles`/`trail`
+   * (esos sí sobreviven íntegros a un reinicio, son geometría pura sin
+   * estado de sala; la cera en cambio SÍ debe cerrarse con la run/mazmorra,
+   * petición explícita: "un rastro de todos los movimientos que ha hecho"
+   * solo tiene sentido dentro de la mazmorra actual).
+   */
+  wax: WaxPool;
   shockwaves: ShockwavePool;
   state: EffectsState;
 }
@@ -30,6 +43,7 @@ function createEffectsSession(): EffectsSession {
   return {
     particles: new ParticlePool(),
     trail: new TrailPool(),
+    wax: new WaxPool(),
     shockwaves: new ShockwavePool(),
     state: createEffectsState(),
   };
@@ -274,6 +288,9 @@ export function restartSession(session: GameSession): void {
   // partículas/estela sí se conservan (son geometría pura, sin estado de sala).
   session.effects.state.trauma = 0;
   session.effects.state.hitStopRemaining = 0;
+  // Cera (ver comentario de `EffectsSession.wax` arriba): reinicio de run =
+  // mazmorra nueva, el rastro de la anterior no debe seguir pintado encima.
+  session.effects.wax.clear();
 }
 
 /**
@@ -356,6 +373,10 @@ export function advanceToNextDungeon(session: GameSession): void {
   session.shopStock = rollShopStock(world.hero, world.rng);
   session.effects.state.trauma = 0;
   session.effects.state.hitStopRemaining = 0;
+  // Cera (ver comentario de `EffectsSession.wax` arriba): mazmorra nueva, no
+  // se arrastra el rastro de la anterior (sí se conserva al cambiar de SALA
+  // dentro de la MISMA mazmorra: aquí no se toca `wax` en ningún otro punto).
+  session.effects.wax.clear();
 }
 
 /**

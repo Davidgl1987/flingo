@@ -41,7 +41,7 @@ import type { Projectile } from '@/game/world/types';
 import { getUpgradeLevel } from '@/game/session/upgrades';
 import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileGlowHaloMaterialForTag, enemyProjectileMaterial, enemyProjectileMaterialForTag, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCircle, unitCone, unitSphere, WEAPON_COLOR } from '@/game/render/assets';
 import { useDarkStore } from '@/game/render/dark-store';
-import { TRAIL_EMIT_INTERVAL } from '@/game/features/effects/trail';
+import { PROJECTILE_WAX_EMIT_DISTANCE } from '@/game/features/effects/wax';
 import { arrowWidthScaleForLevel } from './upgrade-visuals';
 
 /**
@@ -102,16 +102,19 @@ const PROJECTILE_VISUAL_SCALE = 0.8;
 
 /**
  * Estela de proyectiles del héroe (playtest 2026-07-20, David: "cuando
- * dispares con proyectiles, deja cera de ese color"), SOLO dark>=1: flecha y
- * hechizo depositan gotitas en el MISMO pool `session.effects.trail` que ya
- * usa `HeroView.tsx` para el rastro de cera, con idéntica cadencia
- * (`TRAIL_EMIT_INTERVAL`) — pero color del arma (`WEAPON_COLOR`), no de cera,
- * y vida por defecto del pool (`TRAIL_LIFE`, no la más larga de la cera: son
- * chispas de un proyectil rápido, no goterones que gotean del cuerpo).
- * Emitido aquí (render, useFrame de `ProjectileSlot`, mismo sitio donde ya
- * se itera cada proyectil por frame) y NUNCA en la sim (combat.ts stepea
- * física/daño, no efectos). Gateado a dark>=1: en clásico (dark=0) el look
- * es EXACTAMENTE el de siempre, sin ensuciarlo con chispas nuevas.
+ * dispares con proyectiles, deja cera de ese color"), SOLO dark>=1 — REDISEÑO
+ * (mismo playtest, punto de la cera persistente): ya NO usa
+ * `session.effects.trail` (vida corta, se desvanece); flecha y hechizo
+ * depositan en la capa de cera persistente (`session.effects.wax`,
+ * `features/effects/wax.ts`, MISMO pool que usa `HeroView.tsx`), con color
+ * del arma activa (`WEAPON_COLOR`, no el color de cera del héroe) y cadencia
+ * por DISTANCIA recorrida (`PROJECTILE_WAX_EMIT_DISTANCE`, no por tiempo —
+ * un proyectil rápido con cadencia por tiempo dejaría puntos muy espaciados
+ * en el suelo, mientras que uno lento los apelmazaría). Emitido aquí (render,
+ * useFrame de `ProjectileSlot`, mismo sitio donde ya se itera cada proyectil
+ * por frame) y NUNCA en la sim (combat.ts stepea física/daño, no efectos).
+ * Gateado a dark>=1: en clásico (dark=0) el look es EXACTAMENTE el de
+ * siempre, sin ensuciarlo con chispas nuevas.
  */
 const PROJECTILE_TRAIL_SIZE_FACTOR = 0.55;
 
@@ -257,9 +260,11 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
   const enemyBodyRef = useRef<Mesh>(null);
   const enemyHaloRef = useRef<Mesh>(null);
   const lastKind = useRef<ProjectileKind | null>(null);
-  // Estela de cera del proyectil (ver PROJECTILE_TRAIL_SIZE_FACTOR arriba):
-  // acumulador propio por slot, mismo patrón que `trailAccumulator` en
-  // HeroView.tsx.
+  // Cera del proyectil (ver PROJECTILE_TRAIL_SIZE_FACTOR arriba): acumulador
+  // propio por slot, de DISTANCIA recorrida (no tiempo — cada slot se
+  // recicla entre disparos, así que empezar en 0 tras un `kind` nuevo es
+  // correcto: como mucho retrasa el primer punto de ese disparo unos
+  // milímetros, nunca arrastra distancia del proyectil anterior).
   const trailAccumulator = useRef(0);
 
   useFrame((_, delta) => {
@@ -283,18 +288,19 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
 
     if (lastKind.current !== p.kind) lastKind.current = p.kind;
 
-    // Estela de color del arma (solo dark>=1, solo proyectiles del héroe):
-    // ver cabecera del fichero (PROJECTILE_TRAIL_SIZE_FACTOR).
+    // Cera de color del arma (solo dark>=1, solo proyectiles del héroe): ver
+    // cabecera del fichero (PROJECTILE_TRAIL_SIZE_FACTOR). Cadencia por
+    // DISTANCIA recorrida (`speed * delta`, ya calculado arriba), no por
+    // tiempo — mismo criterio que la cera del héroe en HeroView.tsx.
     if (silhouettes && p.owner === 'hero' && (p.kind === 'arrow' || p.kind === 'spell')) {
-      trailAccumulator.current += delta;
-      while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
-        trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
+      trailAccumulator.current += speed * delta;
+      while (trailAccumulator.current >= PROJECTILE_WAX_EMIT_DISTANCE) {
+        trailAccumulator.current -= PROJECTILE_WAX_EMIT_DISTANCE;
         const color = WEAPON_COLOR[p.kind];
-        session.effects.trail.emit(
+        session.effects.wax.emit(
           p.position.x,
           p.position.y,
           p.radius * PROJECTILE_TRAIL_SIZE_FACTOR,
-          undefined,
           color.r,
           color.g,
           color.b,

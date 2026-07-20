@@ -24,6 +24,7 @@ import { Color, Quaternion, Vector3, type Group, type Mesh } from 'three';
 import { HERO_RADIUS } from './constants';
 import { PIT_FALL_DURATION } from '@/game/features/hazards/constants';
 import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '@/game/features/effects/trail';
+import { HERO_WAX_EMIT_DISTANCE } from '@/game/features/effects/wax';
 import { getUpgradeLevel } from '@/game/session/upgrades';
 import type { GameSession } from '@/game/session/session';
 import type { WeaponMode } from '@/game/world/types';
@@ -172,31 +173,31 @@ const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.075, HERO_RA
 
 /**
  * Rastro de CERA (playtest ronda 5, punto 4: "haz que la vela deje un
- * rastro de cera al moverse", SOLO dark>=1): en vez del color del arma
- * activa, la estela se emite en el mismo tono pálido que el propio cuerpo
- * de la vela (`HERO_WAX_COLOR`, `render/assets.ts`) y con vida algo más
- * larga que la estela clásica (`TRAIL_LIFE` = 0.35 s, `features/effects/
- * trail.ts`) para que se sienta como goterones que se enfrían despacio, no
- * como chispas de impacto. Menos invasivo: TrailPool.emit no cambia de
- * firma, solo el color/vida que le pasa HeroView según `silhouettes`; el
- * APLASTADO contra el suelo (aplicado a TODOS los puntos activos cuando
- * dark>=1, ya que en silueta nunca se emiten esferitas de color de arma) lo
- * decide `TrailView.tsx` leyendo el mismo store. En clásico (dark=0) el
- * emit de más abajo sigue exactamente igual que siempre (color de arma,
- * `TRAIL_LIFE` por defecto).
- *
- * Legibilidad (playtest 2026-07-20, David: "el rastro de cera no se ve" —
- * cera pálida sobre un suelo que la propia vela ya ilumina, bajo contraste):
- * goterones más grandes (`WAX_TRAIL_SIZE_FACTOR`, antes compartía el mismo
- * 0.8×HERO_RADIUS que el clásico) y vida más larga (0.9 s, antes 0.55 s) —
- * SOLO afecta a dark>=1; el emit clásico de más abajo no cambia. La opacidad
- * del material (más alta en silueta) vive en `TrailView.tsx`, que ya lee
- * este mismo store para bifurcar por modo.
+ * rastro de cera al moverse", SOLO dark>=1) — REDISEÑO (playtest ronda 7,
+ * David: "la cera no se hace pequeña, como mucho que desaparezca poco a
+ * poco, pero tampoco debería... hay que dejar un rastro de TODOS los
+ * movimientos que ha hecho"): ya NO usa `session.effects.trail` (estela de
+ * vida corta, cadencia por TIEMPO, solo mientras el héroe va rápido — eso
+ * sigue existiendo pero solo para el clásico dark=0, más abajo). La cera
+ * ahora vive en su propia capa persistente (`session.effects.wax`,
+ * `features/effects/wax.ts`): puntos FIJOS que nunca se encogen ni
+ * desaparecen (se reciclan solo cuando el buffer, ~2000 puntos, se llena),
+ * depositados por DISTANCIA recorrida (no por tiempo ni umbral de
+ * velocidad — ver bloque de más abajo) para que el rastro cubra
+ * uniformemente cualquier movimiento, no solo los sprints.
  */
 const WAX_TRAIL_COLOR = new Color(HERO_WAX_COLOR);
-const WAX_TRAIL_LIFE = 0.9;
 /** Tamaño del goterón de cera (× HERO_RADIUS): más grande que el punto clásico (0.8) para que se lea sobre el suelo iluminado por la propia vela. */
 const WAX_TRAIL_SIZE_FACTOR = 1.15;
+/**
+ * Salto de posición (u) en un solo frame por encima del cual se considera un
+ * TELEPORT (caída al foso y reaparición, cambio de sala) y no un
+ * desplazamiento real del héroe: evita que la cera dibuje una fila fantasma
+ * conectando el punto de antes de caer con el de reaparecer. Muy por encima
+ * de cualquier paso real a framerate normal (velocidad máxima del héroe muy
+ * por debajo de esto × 60fps).
+ */
+const WAX_TELEPORT_GUARD = 3;
 
 /**
  * Héroe = vela (rama `estilo-oscuro`, solo dark>=1): la llama/ojos viven en
@@ -300,6 +301,14 @@ export function HeroView({ session }: { session: GameSession }) {
   const prevSpeed = useRef(0);
   const squashUntil = useRef(0);
   const trailAccumulator = useRef(0);
+  // Cera persistente (ver WAX_TRAIL_COLOR arriba): acumulador de DISTANCIA
+  // recorrida (no tiempo) + última posición conocida para calcularla frame a
+  // frame; waxPrevX/Z se resincronizan SIEMPRE (incluso cuando no se acumula,
+  // ver useFrame) para que un hueco (sala nueva, caída) nunca compute un
+  // salto grande de una vez.
+  const waxAccumulator = useRef(0);
+  const waxPrevX = useRef(0);
+  const waxPrevZ = useRef(0);
   // Arma del frame anterior: detecta el CAMBIO para disparar el burst de
   // partículas una sola vez (no cada frame mientras se mantiene el modo).
   const prevWeaponMode = useRef<WeaponMode | null>(null);
@@ -431,30 +440,45 @@ export function HeroView({ session }: { session: GameSession }) {
     }
     prevSpeed.current = speed;
 
-    // Estela mientras va rápido (cadencia fija; el pool es circular, nunca crece).
-    if (speed > TRAIL_SPEED_THRESHOLD && world.phase === 'playing') {
-      trailAccumulator.current += delta;
-      while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
-        trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
-        if (silhouettes) {
-          // Rastro de cera (ver WAX_TRAIL_COLOR arriba): color/vida fijos,
-          // independientes del arma activa.
-          session.effects.trail.emit(
+    // Estela CLÁSICA (dark=0 ÚNICAMENTE, GDD §12): cadencia fija por TIEMPO,
+    // solo mientras va rápido — comportamiento intacto, sin cambios. En
+    // dark>=1 el héroe ya no toca este pool (ver bloque de cera más abajo).
+    if (!silhouettes) {
+      if (speed > TRAIL_SPEED_THRESHOLD && world.phase === 'playing') {
+        trailAccumulator.current += delta;
+        while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
+          trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
+          session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
+        }
+      } else {
+        trailAccumulator.current = 0;
+      }
+    }
+
+    // Capa de CERA persistente (dark>=1, ver WAX_TRAIL_COLOR arriba): emisión
+    // por DISTANCIA recorrida, SIN umbral de velocidad — "un rastro de todos
+    // los movimientos que ha hecho", no solo de los sprints.
+    if (silhouettes && world.phase === 'playing') {
+      const stepDist = Math.hypot(x - waxPrevX.current, z - waxPrevZ.current);
+      if (stepDist < WAX_TELEPORT_GUARD) {
+        waxAccumulator.current += stepDist;
+        while (waxAccumulator.current >= HERO_WAX_EMIT_DISTANCE) {
+          waxAccumulator.current -= HERO_WAX_EMIT_DISTANCE;
+          session.effects.wax.emit(
             x,
             z,
             HERO_RADIUS * WAX_TRAIL_SIZE_FACTOR,
-            WAX_TRAIL_LIFE,
             WAX_TRAIL_COLOR.r,
             WAX_TRAIL_COLOR.g,
             WAX_TRAIL_COLOR.b,
           );
-        } else {
-          session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
         }
       }
     } else {
-      trailAccumulator.current = 0;
+      waxAccumulator.current = 0;
     }
+    waxPrevX.current = x;
+    waxPrevZ.current = z;
 
     // Parpadeo de i-frames: alterna visibilidad a frecuencia fija.
     const invulnerable = world.time < hero.invulnerableUntil;

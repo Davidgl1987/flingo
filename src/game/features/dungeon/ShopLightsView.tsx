@@ -86,7 +86,7 @@ export function ShopLightsView({ session }: { session: GameSession }) {
     <>
       <ShopkeeperLight x={layout.x} z={layout.z} />
       {layout.torches.map((p, i) => (
-        <WallTorch key={i} x={p.x} z={p.z} index={i} />
+        <WallTorch key={i} x={p.x} z={p.z} index={i} dirX={p.dirX} dirZ={p.dirZ} />
       ))}
     </>
   );

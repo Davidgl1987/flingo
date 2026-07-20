@@ -187,7 +187,15 @@ const ENEMY_LIGHT_COLOR: Record<EnemyKind, string> = {
 const ENEMY_LIGHT_HEIGHT = 0.5;
 /** Jefe (punto 2a de playtest: "que el propio jefe emita [más] luz"): antes 4/3.5, ahora bastante más luminoso — las velas de sala (BossCandlesView) completan el resto. */
 const ENEMY_LIGHT_INTENSITY_BOSS = 14;
-const ENEMY_LIGHT_DISTANCE_BOSS = 6;
+/**
+ * Distancia acotada 6→5 (playtest de David, luces que atraviesan paredes):
+ * la pointLight propia del jefe se queda SIN sombra a propósito (su arena es
+ * una sala entera para él solo — si sangra levemente a la sala vecina apenas
+ * se nota, y una sombra cúbica ×6 pasadas por jefe sí sería cara). Bajar el
+ * alcance es el ajuste barato que sí reduce cuánto se cuela por los muros
+ * sin pagar el coste de sombra.
+ */
+const ENEMY_LIGHT_DISTANCE_BOSS = 5;
 /**
  * La luz del jefe vive POR ENCIMA de su cuerpo (radio de render de jefe ~1),
  * no dentro: a la altura genérica (0.5) quedaba embebida en la esfera y ni el
@@ -202,7 +210,9 @@ const ENEMY_LIGHT_DECAY = 2;
  * de cada arquetipo (0.3-0.4, bastante más abajo que la vieja "bombilla" a
  * 0.5). Parámetros de linterna DÉBIL (los spots concentran, lucen menos que
  * una point a igual intensidad): alcance corto, cono estrecho, penumbra
- * suave, sin sombra (coste; solo la vela del héroe bloquea luz).
+ * suave. CON sombra desde playtest de David ("hay luces que parece que
+ * traspasan las paredes"): mapa pequeño, ver `ENEMY_LANTERN_SHADOW_MAP_SIZE`
+ * más abajo (antes SIN sombra — solo la vela del héroe bloqueaba luz).
  *
  * Punto 6 de playtest ronda 4 ("apuntan hacia donde miran, y un poco abajo
  * para que dejen el rastro de luz"): el punto-objetivo (target) de la
@@ -222,6 +232,29 @@ const ENEMY_LANTERN_DISTANCE = 4;
 const ENEMY_LANTERN_ANGLE = 0.55;
 const ENEMY_LANTERN_PENUMBRA = 0.7;
 const ENEMY_LANTERN_DECAY = 2;
+/**
+ * Sombra de la linterna (playtest de David: "no sé por qué hay luces que
+ * parece que traspasan las paredes... la poción no debería verse" — la
+ * iluminaba el cono de la linterna A TRAVÉS de un muro): mapa PEQUEÑO (una
+ * spotLight es 1 sola pasada de sombra, no las 6 de una pointLight cúbica —
+ * asumible por enemigo vivo). near/far ajustados al alcance corto real de la
+ * linterna (`ENEMY_LANTERN_DISTANCE`=4, con margen).
+ *
+ * Trade-off de recompilación de shaders (mismo problema ya resuelto para el
+ * RECUENTO de luces con `lightsGroupRef`, ver comentario arriba): three.js
+ * recompila los shaders que dependen del Nº de luces CON SOMBRA cada vez que
+ * ese número cambia. Al morir un enemigo se apaga `intensity=0` Y
+ * `castShadow=false` A LA VEZ (useFrame de abajo) — eso SÍ dispara una
+ * recompilación (una única vez, en el frame de la muerte, aceptable). Lo que
+ * NO se hace es dejar `castShadow=true` con intensidad 0: three.js seguiría
+ * rellenando el shadow map de esa luz cada frame para un enemigo muerto que
+ * no aporta nada, coste puro sin beneficio. Al (re)aparecer enemigos con la
+ * sala (montaje), `castShadow` nace en `true` vía JSX (el propio group de
+ * luces solo se monta cuando `silhouettes`, es decir dark>=1).
+ */
+const ENEMY_LANTERN_SHADOW_MAP_SIZE = 256;
+const ENEMY_LANTERN_SHADOW_NEAR = 0.1;
+const ENEMY_LANTERN_SHADOW_FAR = 4.5;
 /** Relleno MUY tenue (mismo color que la linterna) para que el cuerpo no quede negro del todo fuera del cono. */
 const ENEMY_FILL_LIGHT_INTENSITY = 0.8;
 const ENEMY_FILL_LIGHT_DISTANCE = 1.5;
@@ -469,7 +502,13 @@ function EnemyMesh({
     // Recuento de luces estable (ver comentario de `lightsGroupRef`): se
     // apagan con intensity=0, el group que las contiene sigue montado y
     // visible pase lo que pase.
-    if (lanternRef.current) lanternRef.current.intensity = alive ? ENEMY_LANTERN_INTENSITY : 0;
+    if (lanternRef.current) {
+      lanternRef.current.intensity = alive ? ENEMY_LANTERN_INTENSITY : 0;
+      // castShadow se apaga A LA VEZ que la intensidad (ver comentario de
+      // ENEMY_LANTERN_SHADOW_MAP_SIZE arriba): nunca sombra activa con
+      // intensidad 0.
+      lanternRef.current.castShadow = alive;
+    }
     if (fillLightRef.current) fillLightRef.current.intensity = alive ? ENEMY_FILL_LIGHT_INTENSITY : 0;
     if (bossLightRef.current) bossLightRef.current.intensity = alive ? ENEMY_LIGHT_INTENSITY_BOSS : 0;
     if (!alive) return;
@@ -1055,11 +1094,14 @@ function EnemyMesh({
         arriba) — se apagan con intensity=0 al morir el enemigo, en vez de
         `visible=false`. Mirrorea la POSICIÓN de `group` cada frame (nunca su
         rotación: los ángulos de abajo ya se calculan en espacio de mundo).
-        SIN sombra (coste, y no la pide David: solo la vela debe bloquear
-        luz). No-boss: linterna de ojos (spotLight débil, dirección
-        calculada en useFrame) + relleno point MUY tenue para que el cuerpo
-        no quede negro del todo. Boss: conserva su pointLight de siempre, más
-        luminosa (punto 2a) — las velas de sala (BossCandlesView) hacen el
+        No-boss: linterna de ojos (spotLight débil, dirección calculada en
+        useFrame, CON sombra de mapa pequeño — ver ENEMY_LANTERN_SHADOW_MAP_SIZE)
+        + relleno point MUY tenue SIN sombra (alcance mínimo, no le da tiempo
+        a cruzar un muro de forma visible) para que el cuerpo no quede negro
+        del todo. Boss: conserva su pointLight de siempre, más luminosa
+        (punto 2a) y SIN sombra (su arena es una sala entera, ver
+        ENEMY_LIGHT_DISTANCE_BOSS más arriba) — las velas de sala
+        (BossCandlesView) hacen el
         resto. */}
     <group ref={lightsGroupRef}>
       {silhouettes && kind !== 'boss' && (
@@ -1073,6 +1115,14 @@ function EnemyMesh({
             penumbra={ENEMY_LANTERN_PENUMBRA}
             decay={ENEMY_LANTERN_DECAY}
             position={[0, ENEMY_LANTERN_HEIGHT, 0]}
+            // Sombra (ver ENEMY_LANTERN_SHADOW_MAP_SIZE arriba): mapa de spot
+            // pequeño, 1 sola pasada extra por enemigo vivo — nace en `true`
+            // porque este group de luces solo se monta con dark>=1; el
+            // useFrame de arriba la apaga junto con la intensidad al morir.
+            castShadow
+            shadow-mapSize={[ENEMY_LANTERN_SHADOW_MAP_SIZE, ENEMY_LANTERN_SHADOW_MAP_SIZE]}
+            shadow-camera-near={ENEMY_LANTERN_SHADOW_NEAR}
+            shadow-camera-far={ENEMY_LANTERN_SHADOW_FAR}
           />
           <object3D ref={lanternTargetRef} position={[0, -ENEMY_RADIUS_RENDER, ENEMY_LANTERN_TARGET_DISTANCE]} />
           <pointLight

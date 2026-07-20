@@ -26,6 +26,7 @@ import { CandleLightView } from '@/game/features/hero/CandleLightView';
 import { ParticleView } from '@/game/features/effects/ParticleView';
 import { ShockwaveView } from '@/game/features/effects/ShockwaveView';
 import { TrailView } from '@/game/features/effects/TrailView';
+import { WaxView } from '@/game/features/effects/WaxView';
 import { forceBossPhase } from '@/game/features/bosses/lifecycle';
 import { QueenColumnsView, QueenTethersView } from '@/game/features/bosses/queen/QueenColumnsView';
 import { BossCandlesView } from '@/game/features/dungeon/BossCandlesView';
@@ -241,6 +242,11 @@ export function GameRoot({
         {/* Effects (GDD §12): partículas, estela y ondas expansivas, todos pools preasignados. */}
         <ParticleView pool={session.effects.particles} />
         <TrailView pool={session.effects.trail} />
+        {/* Capa de cera persistente (solo dark 1-2, playtest ronda 7): rastro
+            de TODOS los movimientos del héroe/sus proyectiles, sin
+            desvanecido — ver wax.ts. Gateada como CandleLightView/
+            BossCandlesView: en dark=0 ni se monta. */}
+        {darkMode >= 1 && <WaxView pool={session.effects.wax} />}
         <ShockwaveView pool={session.effects.shockwaves} />
         <AimIndicatorView session={session} />
         <CameraRig session={session} />

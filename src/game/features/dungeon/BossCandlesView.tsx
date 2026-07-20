@@ -45,7 +45,7 @@ export function BossCandlesView({ session }: { session: GameSession }) {
   return (
     <>
       {positions.map((p, i) => (
-        <WallTorch key={i} x={p.x} z={p.z} index={i} />
+        <WallTorch key={i} x={p.x} z={p.z} index={i} dirX={p.dirX} dirZ={p.dirZ} />
       ))}
     </>
   );
