@@ -19,12 +19,11 @@ import {
   shooterEyeChargeMaterial,
   shooterEyeMaterial,
   shooterTelegraphMaterial,
-  shooterTubeGlowMaterial,
-  shooterTubeRestMaterial,
   smallDotGeometry,
   unitCircle,
   unitCylinder,
 } from '@/game/render/assets';
+import { shooterTubeGlowMaterial, shooterTubeRestMaterial } from '@/game/render/assets-dark';
 import { useDarkStore } from '@/game/render/dark-store';
 
 export function ShooterMesh({

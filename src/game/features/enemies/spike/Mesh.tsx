@@ -32,12 +32,8 @@ import type { RefObject } from 'react';
 import type { Group } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
-import {
-  smallDotGeometry,
-  spikeConeMaterial,
-  spikeEyeGlowMaterial,
-  unitSpike,
-} from '@/game/render/assets';
+import { smallDotGeometry, spikeConeMaterial, unitSpike } from '@/game/render/assets';
+import { spikeEyeGlowMaterial } from '@/game/render/assets-dark';
 import { useDarkStore } from '@/game/render/dark-store';
 
 /**

@@ -34,7 +34,8 @@ import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
 import type { Mesh, Object3D, SpotLight } from 'three';
 import type { AABB } from '@/engine/geometry';
-import { bossCandleFlameMaterial, bossCandleWaxMaterial, unitCone, wallTorchWaxGeometry } from '@/game/render/assets';
+import { unitCone } from '@/game/render/assets';
+import { bossCandleFlameMaterial, bossCandleWaxMaterial, wallTorchWaxGeometry } from '@/game/render/assets-dark';
 
 /**
  * Desplazamiento HACIA FUERA del interior jugable: la antorcha se planta

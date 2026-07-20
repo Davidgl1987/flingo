@@ -15,14 +15,8 @@ import type { RefObject } from 'react';
 import type { Group } from 'three';
 import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
-import {
-  dummyEyeGlowMaterial,
-  dummySkirtMaterial,
-  eyePupilMaterial,
-  eyeWhiteMaterial,
-  smallDotGeometry,
-  unitCone,
-} from '@/game/render/assets';
+import { eyePupilMaterial, eyeWhiteMaterial, smallDotGeometry, unitCone } from '@/game/render/assets';
+import { dummyEyeGlowMaterial, dummySkirtMaterial } from '@/game/render/assets-dark';
 import { useDarkStore } from '@/game/render/dark-store';
 
 export function DummyMesh({

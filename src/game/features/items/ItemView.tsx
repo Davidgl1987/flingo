@@ -24,15 +24,12 @@ import type { GameSession } from '@/game/session/session';
 import type { Item } from '@/game/world/types';
 import {
   coinGeometry,
-  coinGlowHaloMaterial,
   coinMaterial,
   coinRimMaterial,
-  keyGlowHaloMaterial,
   keyMaterial,
   potionBodyGeometry,
   potionCapGeometry,
   potionCapMaterial,
-  potionGlowHaloMaterial,
   potionMaterial,
   potionNeckGeometry,
   shopkeeperHeadMaterial,
@@ -42,6 +39,7 @@ import {
   unitCone,
   unitSphere,
 } from '@/game/render/assets';
+import { coinGlowHaloMaterial, keyGlowHaloMaterial, potionGlowHaloMaterial } from '@/game/render/assets-dark';
 import { useDarkStore } from '@/game/render/dark-store';
 
 const ITEM_HEIGHT: Record<Item['kind'], number> = { coin: 0.3, potion: 0.32, key: 0.3, shopkeeper: 0 };

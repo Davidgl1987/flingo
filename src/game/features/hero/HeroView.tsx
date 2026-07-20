@@ -32,10 +32,6 @@ import type { WeaponMode } from '@/game/world/types';
 import {
   aimDotMaterial,
   blobShadowMaterial,
-  candleEyeMaterial,
-  candleFlameMaterial,
-  HERO_WAX_COLOR,
-  heroCandleGeometry,
   heroMaterial,
   heroShieldMaterial,
   heroSpikeGeometry,
@@ -46,6 +42,12 @@ import {
   unitSphere,
   WEAPON_COLOR,
 } from '@/game/render/assets';
+import {
+  candleEyeMaterial,
+  candleFlameMaterial,
+  HERO_WAX_COLOR,
+  heroCandleGeometry,
+} from '@/game/render/assets-dark';
 import { useDarkStore } from '@/game/render/dark-store';
 import { boulderScaleFactor, cometStretchFactor, shieldBubbleOpacity, spikeCountForLevel } from './upgrade-visuals';
 

@@ -20,8 +20,6 @@ import { QUEEN_COLUMN_ID_PREFIX } from '@/game/features/bosses/queen/constants';
 import { DOOR_GATE_ID_PREFIX } from '@/game/features/dungeon/dungeon-world';
 import type { Obstacle, World } from '@/game/world/types';
 import {
-  doorGlowHaloMaterial,
-  doorKeyGlowHaloMaterial,
   doorKeyMaterial,
   doorMaterial,
   floorMaterial,
@@ -31,6 +29,7 @@ import {
   unitPlane,
   wallMaterial,
 } from './assets';
+import { doorGlowHaloMaterial, doorKeyGlowHaloMaterial } from './assets-dark';
 import { useDarkStore } from './dark-store';
 
 const WALL_HEIGHT = 0.9;

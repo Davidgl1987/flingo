@@ -31,7 +31,8 @@ import {
 import type { GameSession } from '@/game/session/session';
 import { pushEvent } from '@/engine/events';
 import { barrelInAir, type HazardSpawn } from '@/game/world/types';
-import { barrelHoopMaterial, barrelMaterial, blobShadowMaterial, boostMaterial, mudMaterial, pitGlowMaterial, pitMaterial, scorchMaterial, spikesMaterial, spikesNeedleMaterial, unitCircle, unitCylinder, unitPlane, unitSpikeNeedle } from '@/game/render/assets';
+import { barrelHoopMaterial, barrelMaterial, blobShadowMaterial, boostMaterial, mudMaterial, pitMaterial, scorchMaterial, spikesMaterial, spikesNeedleMaterial, unitCircle, unitCylinder, unitPlane, unitSpikeNeedle } from '@/game/render/assets';
+import { pitGlowMaterial } from '@/game/render/assets-dark';
 import { useDarkStore } from '@/game/render/dark-store';
 
 const HAZARD_QUAD_Y = 0.03;

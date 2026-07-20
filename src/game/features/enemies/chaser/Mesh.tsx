@@ -11,12 +11,12 @@ import type { GameSession } from '@/game/session/session';
 import type { Enemy } from '@/game/world/types';
 import {
   chaserBrowMaterial,
-  chaserEyeGlowMaterial,
   eyePupilMaterial,
   eyeWhiteMaterial,
   smallDotGeometry,
   smallWedgeGeometry,
 } from '@/game/render/assets';
+import { chaserEyeGlowMaterial } from '@/game/render/assets-dark';
 import { useDarkStore } from '@/game/render/dark-store';
 
 /**
