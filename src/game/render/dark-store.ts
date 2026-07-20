@@ -5,8 +5,9 @@
  * sin recargar la página.
  *
  * Los parámetros de URL (`?dark=`, `?glow=`, ver debug-params.ts) siguen
- * siendo el valor INICIAL — mismo default de siempre (dark=1, todos los
- * grupos activos) — pero a partir de ahí este store manda: `assets.ts` se
+ * siendo el valor INICIAL — default: dark=1 y NINGÚN grupo de glow activo
+ * (preferencia de David, playtest ronda 7) — pero a partir de ahí este store
+ * manda: `assets.ts` se
  * suscribe fuera de React para reaplicar `applyDarkMaterials` en cada cambio,
  * y los componentes de render leen selectores de aquí en vez de constantes
  * fijas de carga de módulo.

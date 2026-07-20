@@ -86,13 +86,16 @@ export type GlowGroup = (typeof GLOW_GROUP_NAMES)[number];
 /**
  * Grupos de elementos de jugabilidad con brillo propio (`emissive`) activo
  * vía `?glow=fosos,hazards,items,puertas` (experimento estético, solo tiene
- * efecto en dark 1-2 — ver assets.ts). Sin el parámetro: TODOS activos
- * (default). `?glow=` vacío o `?glow=none`: ninguno. Nombres desconocidos en
- * la lista se ignoran en vez de romper el parseo.
+ * efecto en dark 1-2 — ver assets.ts). Sin el parámetro: NINGUNO activo
+ * (default desde playtest ronda 7: "me gusta más la configuración con todos
+ * los checks apagados" — antes el default era todos). `?glow=all`: todos.
+ * `?glow=` vacío o `?glow=none`: ninguno. Nombres desconocidos en la lista
+ * se ignoran en vez de romper el parseo.
  */
 export function readGlowGroups(): Set<GlowGroup> {
   const raw = new URLSearchParams(window.location.search).get('glow');
-  if (raw === null) return new Set(GLOW_GROUP_NAMES);
+  if (raw === null) return new Set();
+  if (raw.toLowerCase() === 'all') return new Set(GLOW_GROUP_NAMES);
   if (raw === '' || raw.toLowerCase() === 'none') return new Set();
   const result = new Set<GlowGroup>();
   for (const entry of raw.split(',')) {
