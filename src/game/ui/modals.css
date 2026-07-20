@@ -198,35 +198,6 @@ details.pause-accordion .pause-legend {
   accent-color: #54c7ff;
 }
 
-/* Checkboxes de grupos de brillo (`?glow=`, sección "Estilo oscuro" del menú
-   de pausa): grid compacto de 2 columnas, deshabilitados en gris cuando
-   dark=0 (mismo criterio visual que .upgrade-card:disabled). */
-.pause-glow-checkboxes {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 16px;
-  font-size: 13px;
-}
-
-.pause-glow-checkbox label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pause-glow-checkbox input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
-  accent-color: #54c7ff;
-}
-
-.pause-glow-checkbox:has(input:disabled) {
-  opacity: 0.45;
-}
-
 .pause-empty {
   margin: 0;
   font-size: 13px;

@@ -22,28 +22,11 @@ import {
   cameraSettings,
   setCameraDistanceScale,
 } from '@/game/render/cameraSettings';
-import { useDarkStore } from '@/game/render/dark-store';
-import type { GlowGroup } from '@/game/render/debug-params';
 import { resumeGame, type GameSession } from '@/game/session/session';
 import { getUpgradeLevel, UPGRADE_POOL } from '@/game/session/upgrades';
 import { useUiStore } from '@/game/session/store';
 import { UpgradeIcon, UpgradeLevelPips } from './UpgradeIcon';
 import './modals.css';
-
-/** Etiqueta legible de cada nivel de `?dark=`/`useDarkStore.dark` (slider de la sección "Estilo oscuro"). */
-const DARK_LEVEL_LABEL: Record<0 | 1 | 2, string> = {
-  0: 'Clásico',
-  1: 'Penumbra',
-  2: 'Oscuridad',
-};
-
-/** Grupos de `?glow=`/`useDarkStore.glow` con su etiqueta para los checkboxes de la sección. */
-const GLOW_GROUP_CHECKBOXES: { key: GlowGroup; label: string }[] = [
-  { key: 'fosos', label: 'Fosos' },
-  { key: 'hazards', label: 'Hazards' },
-  { key: 'items', label: 'Objetos' },
-  { key: 'puertas', label: 'Puertas' },
-];
 
 const ENEMY_LEGEND: { label: string; color: string }[] = [
   { label: 'Dummy — básico', color: '#ff5964' },
@@ -63,15 +46,6 @@ const HAZARD_LEGEND: { label: string; color: string }[] = [
 
 export function PauseModal({ session, onRestart }: { session: GameSession; onRestart: () => void }) {
   const phase = useUiStore((s) => s.phase);
-  // Estilo oscuro (experimento, rama estilo-oscuro): controles en vivo de
-  // `dark`/`glow` sin recargar, pedidos explícitamente por David — leídos del
-  // store (dark-store.ts), nunca de un valor de carga de módulo, así que
-  // reaccionan al instante en toda la escena (assets.ts se suscribe fuera de
-  // React, GameRoot/los componentes de render usan selectores del mismo store).
-  const dark = useDarkStore((s) => s.dark);
-  const glow = useDarkStore((s) => s.glow);
-  const setDark = useDarkStore((s) => s.setDark);
-  const setGlow = useDarkStore((s) => s.setGlow);
   // Leídas directamente de la sim (no del store zustand): las mejoras no
   // cambian cada frame, pero tampoco justifican duplicar estado — este modal
   // solo se muestra en 'paused', así que basta con leer al abrir.
@@ -92,15 +66,6 @@ export function PauseModal({ session, onRestart }: { session: GameSession; onRes
     const value = Number.parseFloat(e.target.value);
     setCameraDistanceScale(value);
     setDistanceScale(cameraSettings.distanceScale);
-  };
-
-  const handleDarkChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = Number.parseInt(e.target.value, 10) as 0 | 1 | 2;
-    setDark(value);
-  };
-
-  const handleGlowToggle = (grupo: GlowGroup) => (e: ChangeEvent<HTMLInputElement>) => {
-    setGlow(grupo, e.target.checked);
   };
 
   return (
@@ -145,38 +110,6 @@ export function PauseModal({ session, onRestart }: { session: GameSession; onRes
               aria-label="Distancia de cámara"
             />
           </label>
-        </section>
-
-        <section className="pause-section">
-          <h3 className="pause-section-title">Estilo oscuro (experimento)</h3>
-          <label className="pause-camera-slider">
-            <span>Penumbra: {DARK_LEVEL_LABEL[dark]}</span>
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={1}
-              value={dark}
-              onChange={handleDarkChange}
-              aria-label="Nivel de penumbra"
-            />
-          </label>
-          <ul className="pause-glow-checkboxes">
-            {GLOW_GROUP_CHECKBOXES.map(({ key, label }) => (
-              <li key={key} className="pause-glow-checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={glow[key]}
-                    disabled={dark === 0}
-                    onChange={handleGlowToggle(key)}
-                    aria-label={`Brillo de ${label.toLowerCase()}`}
-                  />
-                  {label}
-                </label>
-              </li>
-            ))}
-          </ul>
         </section>
 
         <section className="pause-section">

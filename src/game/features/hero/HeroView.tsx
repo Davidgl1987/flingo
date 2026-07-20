@@ -182,7 +182,8 @@ const CANDLE_EYE_Y = HERO_RADIUS * 0.68;
 /** Radio local del cilindro (1, ronda 7) × visualRadius/HERO_RADIUS, al 102%: JUSTO fuera de la superficie real (100%), nunca embebidos dentro del sólido (ver BUG de arriba). */
 const CANDLE_EYE_Z = HERO_RADIUS * 1.02;
 /** Tamaño de cada ojo (sin cambios de proporción respecto a HERO_RADIUS: se achica junto con el resto de la vela al reducirse HERO_RADIUS en ronda 7). */
-const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.075, HERO_RADIUS * 0.115, HERO_RADIUS * 0.05];
+/** Un punto más grandes (playtest ronda 9: "los ojos de la vela los haría un poco más grandes"). */
+const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.105, HERO_RADIUS * 0.16, HERO_RADIUS * 0.06];
 
 /**
  * Orientación de la mirada (playtest ronda 8, punto 3b: "deben mirar hacia
@@ -219,7 +220,13 @@ const EYE_FACE_SPEED_THRESHOLD = 0.5;
  * velocidad — ver bloque de más abajo) para que el rastro cubra
  * uniformemente cualquier movimiento, no solo los sprints.
  */
-const WAX_TRAIL_COLOR = new Color(HERO_WAX_COLOR);
+/**
+ * La cera del rastro es notablemente más OSCURA que la del cuerpo (playtest
+ * ronda 9: "la cera, incluso si se puede, la oscurecería un poco más"): cera
+ * pisada/derretida sobre piedra, que se intuye bajo la luz sin competir con
+ * el suelo iluminado.
+ */
+const WAX_TRAIL_COLOR = new Color(HERO_WAX_COLOR).multiplyScalar(0.55);
 /** Tamaño del goterón de cera (× HERO_RADIUS): más grande que el punto clásico (0.8) para que se lea sobre el suelo iluminado por la propia vela. */
 const WAX_TRAIL_SIZE_FACTOR = 1.15;
 /**
