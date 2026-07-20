@@ -21,6 +21,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import { Color, Quaternion, Vector3, type Group, type Mesh } from 'three';
+import { dampAngleTowards } from '@/engine/geometry';
 import { HERO_RADIUS } from './constants';
 import { PIT_FALL_DURATION } from '@/game/features/hazards/constants';
 import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '@/game/features/effects/trail';
@@ -160,16 +161,48 @@ const CANDLE_HALF_HEIGHT = 1.4;
  * 1.00/2.8 ≈ 36% de la altura — bastante por debajo de donde deben ir los
  * ojos. `CANDLE_EYE_Y` = 0.68·HERO_RADIUS los sube a 1.68·visualRadius
  * absolutos ⇒ 1.68/2.8 = 60% de la altura del cilindro (pedido original:
- * 55-65%, se mantiene el mismo criterio que en rondas anteriores).
+ * 55-65%, se mantiene el mismo criterio que en rondas anteriores). Esta Y ya
+ * estaba bien: se verificó con la aritmética de arriba y no se toca.
+ *
+ * BUG encontrado en playtest ronda 8 ("los ojos han desaparecido"): la Z de
+ * antes (0.9·HERO_RADIUS) los dejaba DENTRO del cilindro. El radio ABSOLUTO
+ * real de la superficie del cuerpo (ver `body.scale.set(scaleXZ, ...)` en
+ * useFrame) es `scaleXZ` ≈ `visualRadius` (radio LOCAL 1 del cilindro ×
+ * `visualRadius`) — y `visualRadius` ≈ `HERO_RADIUS` a nivel base de
+ * Firmeza. Con Z = 0.9·HERO_RADIUS ≈ 0.9·visualRadius, los ojos quedaban al
+ * 90% del radio real (100% = superficie): EMBEBIDOS un 10% dentro del sólido,
+ * ocultos por el propio cuerpo en el z-test de profundidad (de ahí que "no se
+ * vean" en vez de solo "se vean mal"). Fix: sacarlos justo fuera de la
+ * superficie, al 102% del radio.
  */
 /** Separación entre CENTROS de ambos ojos, en × HERO_RADIUS (juntos, carita del concept; misma proporción que ronda 6 respecto al nuevo diámetro del cilindro, radio local 1 en vez de 0.85). */
 const CANDLE_EYE_SEPARATION = 0.33;
 const CANDLE_EYE_X = (HERO_RADIUS * CANDLE_EYE_SEPARATION) / 2;
 const CANDLE_EYE_Y = HERO_RADIUS * 0.68;
-/** Radio local del cilindro (1, ronda 7) × visualRadius, al 90%: los ojos se posan JUSTO dentro de la cara frontal, no muy por delante de ella. */
-const CANDLE_EYE_Z = HERO_RADIUS * 0.9;
+/** Radio local del cilindro (1, ronda 7) × visualRadius/HERO_RADIUS, al 102%: JUSTO fuera de la superficie real (100%), nunca embebidos dentro del sólido (ver BUG de arriba). */
+const CANDLE_EYE_Z = HERO_RADIUS * 1.02;
 /** Tamaño de cada ojo (sin cambios de proporción respecto a HERO_RADIUS: se achica junto con el resto de la vela al reducirse HERO_RADIUS en ronda 7). */
 const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.075, HERO_RADIUS * 0.115, HERO_RADIUS * 0.05];
+
+/**
+ * Orientación de la mirada (playtest ronda 8, punto 3b: "deben mirar hacia
+ * donde se está apuntando, o hacia donde se está moviendo"): los ojos viven
+ * en un `<group>` propio (`eyeGroupRef`, hijo de `candleGroup`) que rota
+ * SOLO en Y — como `candleGroup` nunca aplica yaw propio (solo traslada), el
+ * ángulo LOCAL de este grupo coincide con el ángulo de MUNDO, sin necesidad
+ * de restarle la rotación de ningún ancestro (a diferencia de
+ * `chaser/Mesh.tsx`, cuyo grupo padre sí yawea). Los ojos cuelgan de este
+ * pivote a radio fijo `CANDLE_EYE_Z`, así que rotarlo los pasea alrededor del
+ * cilindro sin recalcular su posición cada frame (mismo resultado que la
+ * proyección seno/coseno del Chaser, más simple porque aquí basta un solo
+ * eje). Prioridad de objetivo: apuntando > moviéndose > último ángulo válido
+ * (parado, se conserva sin más). Suavizado con `dampAngleTowards`
+ * (`src/engine/geometry.ts`) por el arco más corto, mismo criterio que ya usa
+ * `chaserFaceAngle` en `chaser/Mesh.tsx`.
+ */
+const EYE_FACE_LERP_STIFFNESS = 10;
+/** Por debajo de esta velocidad (u/s) no se considera "moviéndose" a efectos de la mirada (evita que un jitter mínimo reoriente la cara). */
+const EYE_FACE_SPEED_THRESHOLD = 0.5;
 
 /**
  * Rastro de CERA (playtest ronda 5, punto 4: "haz que la vela deje un
@@ -222,12 +255,18 @@ const FLAME_PULSE_FREQ_B = 5.7;
  * que a su vez cae siempre en 1.00·visualRadius absoluto — ver comentario de
  * `CANDLE_EYE_Y` arriba): reajustada a la vela alta de ronda 7 para que la
  * BASE de la llama (su centro menos su propio semi-alto, `FLAME_BASE_SCALE ·
- * 1.8 / 2` = 0.45·visualRadius) quede justo sobre la boca del cilindro (techo
- * en 2.8·visualRadius, ver comentario de `CANDLE_EYE_Y`): centro deseado =
- * 2.8 + 0.45 = 3.25 ⇒ offset local = 3.25 − 1.00 = 2.25.
+ * 1.8 / 2`) quede justo sobre la boca del cilindro (techo en 2.8·visualRadius,
+ * ver comentario de `CANDLE_EYE_Y`).
+ *
+ * Ronda 8 (playtest, "la llama hazla un poco más grande"): `FLAME_BASE_SCALE`
+ * sube de 0.5 a 0.7 (+40%, dentro del 35-45% pedido). Recalculado
+ * `FLAME_HEIGHT_FACTOR` en consecuencia para que la base siga asentada en la
+ * boca del cilindro (si no, la llama más grande se hundiría visualmente
+ * dentro de la vela): semi-alto = 0.7 · 1.8 / 2 = 0.63·visualRadius ⇒ centro
+ * deseado = 2.8 + 0.63 = 3.43 ⇒ offset local = 3.43 − 1.00 = 2.43.
  */
-const FLAME_HEIGHT_FACTOR = 2.25;
-const FLAME_BASE_SCALE = 0.5;
+const FLAME_HEIGHT_FACTOR = 2.43;
+const FLAME_BASE_SCALE = 0.7;
 /** Amplitud del pulso de tamaño de la llama: ±15%, pedido explícito de playtest. */
 const FLAME_PULSE_AMPLITUDE = 0.15;
 
@@ -298,6 +337,12 @@ export function HeroView({ session }: { session: GameSession }) {
   // Héroe = vela (dark>=1, ver comentario de FLAME_PULSE_FREQ_A más arriba).
   const candleGroupRef = useRef<Group>(null);
   const flameRef = useRef<Mesh>(null);
+  // Mirada de los ojos (playtest ronda 8, punto 3b): grupo que rota en Y
+  // (ver EYE_FACE_LERP_STIFFNESS arriba) + último ángulo válido conservado
+  // mientras el héroe está parado (mismo patrón que chaserFaceAngle en
+  // chaser/Mesh.tsx).
+  const eyeGroupRef = useRef<Group>(null);
+  const candleFaceAngle = useRef(0);
   const prevSpeed = useRef(0);
   const squashUntil = useRef(0);
   const trailAccumulator = useRef(0);
@@ -638,6 +683,27 @@ export function HeroView({ session }: { session: GameSession }) {
         const flameScale = visualRadius * FLAME_BASE_SCALE * pulse;
         flame.scale.set(flameScale, flameScale * 1.8, flameScale);
       }
+
+      // Mirada de los ojos (punto 3b de playtest ronda 8): apuntando > en
+      // movimiento > último ángulo válido (parado, ver comentario de
+      // EYE_FACE_LERP_STIFFNESS arriba). Reutiliza `speed`/`aim` ya
+      // calculados en este mismo useFrame.
+      const aimForEyes = session.aim;
+      let targetFaceAngle: number | null = null;
+      if (world.heroAiming && aimForEyes.force > 0) {
+        targetFaceAngle = Math.atan2(aimForEyes.dirX, aimForEyes.dirY);
+      } else if (speed > EYE_FACE_SPEED_THRESHOLD) {
+        targetFaceAngle = Math.atan2(hero.velocity.x, hero.velocity.y);
+      }
+      if (targetFaceAngle !== null) {
+        candleFaceAngle.current = dampAngleTowards(
+          candleFaceAngle.current,
+          targetFaceAngle,
+          EYE_FACE_LERP_STIFFNESS,
+          delta,
+        );
+      }
+      if (eyeGroupRef.current) eyeGroupRef.current.rotation.y = candleFaceAngle.current;
     }
   });
 
@@ -664,19 +730,26 @@ export function HeroView({ session }: { session: GameSession }) {
           <group ref={candleGroupRef}>
             {/* Llama (MUTABLE, ver useFrame): cono estrecho, autoiluminado. */}
             <mesh ref={flameRef} geometry={unitCone} material={candleFlameMaterial} />
-            {/* Carita de vela: dos ojos negros ovalados simples (concept art), juntos y a ~61% de la altura del cilindro, en la cara frontal (playtest ronda 5, punto 2 — ver cuenta de alturas en CANDLE_EYE_Y arriba). */}
-            <mesh
-              geometry={smallDotGeometry}
-              material={candleEyeMaterial}
-              position={[-CANDLE_EYE_X, CANDLE_EYE_Y, CANDLE_EYE_Z]}
-              scale={CANDLE_EYE_SCALE}
-            />
-            <mesh
-              geometry={smallDotGeometry}
-              material={candleEyeMaterial}
-              position={[CANDLE_EYE_X, CANDLE_EYE_Y, CANDLE_EYE_Z]}
-              scale={CANDLE_EYE_SCALE}
-            />
+            {/* Carita de vela: dos ojos negros ovalados simples (concept art),
+                juntos y a ~60% de la altura del cilindro (CANDLE_EYE_Y), justo
+                fuera de la superficie (CANDLE_EYE_Z, ver BUG en su comentario).
+                Cuelgan de un group que rota en Y (MUTABLE, ver useFrame /
+                candleFaceAngle) para mirar hacia el apuntado/movimiento, en
+                vez de quedar fijos mirando siempre a +Z. */}
+            <group ref={eyeGroupRef} position={[0, CANDLE_EYE_Y, 0]}>
+              <mesh
+                geometry={smallDotGeometry}
+                material={candleEyeMaterial}
+                position={[-CANDLE_EYE_X, 0, CANDLE_EYE_Z]}
+                scale={CANDLE_EYE_SCALE}
+              />
+              <mesh
+                geometry={smallDotGeometry}
+                material={candleEyeMaterial}
+                position={[CANDLE_EYE_X, 0, CANDLE_EYE_Z]}
+                scale={CANDLE_EYE_SCALE}
+              />
+            </group>
           </group>
         )}
       </group>

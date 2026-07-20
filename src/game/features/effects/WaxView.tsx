@@ -21,7 +21,16 @@ import * as THREE from 'three';
 import { unitCircle } from '@/game/render/assets';
 import type { WaxPool } from './wax';
 
-const waxMaterial = new THREE.MeshBasicMaterial({
+/**
+ * Lambert (no Basic/autoiluminado, playtest ronda 8: "la cera se ve hasta sin
+ * luz, debe afectarle [la luz] de manera que si no está iluminada no se
+ * vea"): sin emissive, así que un disco de cera SOLO se lee donde de verdad
+ * llega luz (vela/linternas/antorchas) — en zona oscura se funde con la
+ * penumbra ambiental (~0.22, apenas se intuye: correcto, no un bug). Sigue
+ * soportando color por instancia (instanceColor funciona igual con Lambert,
+ * three.js lo aplica en el chunk de color con independencia del material).
+ */
+const waxMaterial = new THREE.MeshLambertMaterial({
   transparent: true,
   opacity: 0.6,
   depthWrite: false,
@@ -96,5 +105,15 @@ export function WaxView({ pool }: { pool: WaxPool }) {
     }
   });
 
-  return <instancedMesh ref={meshRef} args={[unitCircle, waxMaterial, pool.capacity]} frustumCulled={false} />;
+  // receiveShadow: con material Lambert de arriba, la sombra de un muro/roca
+  // también debe oscurecer la cera que hay debajo (mismo criterio que el
+  // suelo de RoomView.tsx).
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[unitCircle, waxMaterial, pool.capacity]}
+      frustumCulled={false}
+      receiveShadow
+    />
+  );
 }

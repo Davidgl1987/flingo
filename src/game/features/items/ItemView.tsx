@@ -68,45 +68,89 @@ const ITEM_GLOW_RADIUS: Partial<Record<Item['kind'], number>> = {
   potion: 1.0,
 };
 
-function CoinShape() {
+function CoinShape({ receiveShadow }: { receiveShadow: boolean }) {
   return (
     <>
       {/* Cara de la moneda: cilindro plano, dorado. */}
-      <mesh geometry={coinGeometry} material={coinMaterial} scale={[COIN_RADIUS * 2, 1, COIN_RADIUS * 2]} />
+      <mesh
+        geometry={coinGeometry}
+        material={coinMaterial}
+        scale={[COIN_RADIUS * 2, 1, COIN_RADIUS * 2]}
+        receiveShadow={receiveShadow}
+      />
       {/* Canto más oscuro (mismo cilindro, radio ligeramente menor y opaco por dentro): da volumen al girar. */}
       <mesh
         geometry={coinGeometry}
         material={coinRimMaterial}
         scale={[COIN_RADIUS * 1.94, 1.02, COIN_RADIUS * 1.94]}
+        receiveShadow={receiveShadow}
       />
     </>
   );
 }
 
 /** Tendero placeholder (docs/plans/ECONOMY_PLAN.md F4): túnica cónica + cabeza esférica, estático (sin bob/giro). */
-function ShopkeeperShape() {
+function ShopkeeperShape({ receiveShadow }: { receiveShadow: boolean }) {
   return (
     <group>
-      <mesh geometry={unitCone} material={shopkeeperRobeMaterial} scale={[0.7, 1.4, 0.7]} position={[0, 0.5, 0]} />
-      <mesh geometry={unitSphere} material={shopkeeperHeadMaterial} scale={0.32} position={[0, 1.35, 0]} />
+      <mesh
+        geometry={unitCone}
+        material={shopkeeperRobeMaterial}
+        scale={[0.7, 1.4, 0.7]}
+        position={[0, 0.5, 0]}
+        receiveShadow={receiveShadow}
+      />
+      <mesh
+        geometry={unitSphere}
+        material={shopkeeperHeadMaterial}
+        scale={0.32}
+        position={[0, 1.35, 0]}
+        receiveShadow={receiveShadow}
+      />
     </group>
   );
 }
 
-function PotionShape() {
+function PotionShape({ receiveShadow }: { receiveShadow: boolean }) {
   return (
     <group scale={POTION_SCALE}>
       {/* Cuerpo bulboso. */}
-      <mesh geometry={potionBodyGeometry} material={potionMaterial} scale={[0.85, 1, 0.85]} />
+      <mesh
+        geometry={potionBodyGeometry}
+        material={potionMaterial}
+        scale={[0.85, 1, 0.85]}
+        receiveShadow={receiveShadow}
+      />
       {/* Cuello fino sobre el cuerpo. */}
-      <mesh geometry={potionNeckGeometry} material={potionMaterial} position={[0, 0.95, 0]} scale={[1, 0.7, 1]} />
+      <mesh
+        geometry={potionNeckGeometry}
+        material={potionMaterial}
+        position={[0, 0.95, 0]}
+        scale={[1, 0.7, 1]}
+        receiveShadow={receiveShadow}
+      />
       {/* Tapón/corcho en la boca. */}
-      <mesh geometry={potionCapGeometry} material={potionCapMaterial} position={[0, 1.42, 0]} scale={[1, 0.4, 1]} />
+      <mesh
+        geometry={potionCapGeometry}
+        material={potionCapMaterial}
+        position={[0, 1.42, 0]}
+        scale={[1, 0.4, 1]}
+        receiveShadow={receiveShadow}
+      />
     </group>
   );
 }
 
 function ItemMesh({ session, itemId }: { session: GameSession; itemId: string }) {
+  // Causa REAL de la fuga de luz (playtest ronda 8, punto 4: "la poción está
+  // iluminada por el lado más cercano a la vela, como si no hubiera muro"):
+  // NINGÚN item llevaba `receiveShadow` (a diferencia de suelos/muros de
+  // RoomView.tsx, que sí lo tenían bien puesto) — un mesh sin `receiveShadow`
+  // ignora el shadow map por completo y se pinta siempre con luz directa
+  // plena, exista o no un muro/portón entre él y la vela. Con esto arreglado,
+  // el muro/portón que SÍ castea sombra (ver RoomView.tsx) por fin oscurece
+  // la poción cuando corresponde.
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const glowItemsEnabled = useDarkStore((s) => s.dark >= 1 && s.glow.items);
   const groupRef = useRef<Group>(null);
   // Halo de brillo: NO es hijo del group de arriba (que gira/rebota con el
@@ -151,10 +195,12 @@ function ItemMesh({ session, itemId }: { session: GameSession; itemId: string })
   return (
     <>
       <group ref={groupRef}>
-        {kind === 'coin' && <CoinShape />}
-        {kind === 'potion' && <PotionShape />}
-        {kind === 'key' && <mesh geometry={unitBox} material={keyMaterial} scale={0.22} />}
-        {kind === 'shopkeeper' && <ShopkeeperShape />}
+        {kind === 'coin' && <CoinShape receiveShadow={silhouettes} />}
+        {kind === 'potion' && <PotionShape receiveShadow={silhouettes} />}
+        {kind === 'key' && (
+          <mesh geometry={unitBox} material={keyMaterial} scale={0.22} receiveShadow={silhouettes} />
+        )}
+        {kind === 'shopkeeper' && <ShopkeeperShape receiveShadow={silhouettes} />}
       </group>
       {glowItemsEnabled && glowMaterial && (
         <mesh

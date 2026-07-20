@@ -104,6 +104,7 @@ function InstancedBoxes({
 
 /** Portones de puerta cerrados: pocos (≤ nº de conexiones), mallas normales reconstruidas al abrir puertas. */
 function DoorGates({ world }: { world: World }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
   const glowPuertas = useDarkStore((s) => s.dark >= 1 && s.glow.puertas);
   const [version, setVersion] = useState(world.wallVersion);
 
@@ -128,6 +129,18 @@ function DoorGates({ world }: { world: World }) {
               material={isKeyGate ? doorKeyMaterial : doorMaterial}
               position={[cx, GATE_HEIGHT / 2, cz]}
               scale={[maxX - minX, GATE_HEIGHT, maxY - minY]}
+              // Causa REAL de la fuga de luz (playtest ronda 8, punto 4: "la
+              // poción está iluminada... como si no hubiera muro"): un portón
+              // CERRADO es, a efectos visuales, un muro de separación —
+              // bloquea el paso igual que un muro de InstancedBoxes — pero a
+              // diferencia de esos (que sí llevan castShadow/receiveShadow
+              // condicionados a `silhouettes`, ver InstancedBoxes arriba) esta
+              // malla nunca los tuvo: la luz de la vela lo atravesaba sin
+              // proyectar sombra. InstancedBoxes/floors ya estaban bien —
+              // este portón, renderizado FUERA de InstancedBoxes, era el
+              // hueco real.
+              castShadow={silhouettes}
+              receiveShadow={silhouettes}
             />
             {/* Halo de luz falsa (grupo "puertas" de ?glow=, punto 2 de
                 playtest, SOLO dark>=1): la puerta "emite" sobre el suelo del
