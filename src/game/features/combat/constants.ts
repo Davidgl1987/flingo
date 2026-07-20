@@ -68,5 +68,5 @@ export const ENEMY_KNOCKBACK_SPEED = 2.4;
 export const ENEMY_KNOCKBACK_OFFSET = 0.18;
 /** Duración del flash blanco al ser golpeado (s). */
 export const ENEMY_HIT_FLASH_DURATION = 0.15;
-/** Spike: producto escalar mínimo entre la normal de contacto y su cara peligrosa para considerarlo frontal. */
+/** Spike: producto escalar mínimo (en valor absoluto) entre la dirección del contacto y `facing` para considerarlo por la cara peligrosa (el arco trasero, opuesto al ojo — ver `isSpikeContactDangerous`, combat.ts). */
 export const SPIKE_DANGEROUS_DOT_THRESHOLD = 0.25;

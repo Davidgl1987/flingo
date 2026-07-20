@@ -13,6 +13,13 @@
  * NUNCA se emiten esferitas de color de arma, todos los puntos activos son
  * cera) y se aplica a TODOS los puntos activos por igual cuando dark>=1.
  * En clásico (dark=0) el render es EXACTAMENTE el de siempre.
+ *
+ * Legibilidad (playtest 2026-07-20, David: "el rastro de cera no se ve"):
+ * el material es ÚNICO para todo el pool (no hay uno por punto), así que la
+ * opacidad no puede variar punto a punto — se sube un poco en silueta
+ * (mismo `silhouettes` que ya bifurca posición/escala aquí abajo) para que
+ * la cera se lea tanto dentro como fuera del halo de la vela sin tocar el
+ * 0.5 clásico.
  */
 
 import { useFrame } from '@react-three/fiber';
@@ -32,6 +39,10 @@ const trailMaterial = new THREE.MeshBasicMaterial({
 const WAX_DROP_GROUND_Y = 0.03;
 /** Aplastamiento vertical del goterón: escala Y mínima, se lee como disco/gota, no como bola. */
 const WAX_DROP_FLATTEN = 0.12;
+/** Opacidad del material en silueta (dark>=1): más alta que el 0.5 clásico para que la cera pálida destaque sobre un suelo ya iluminado por la vela. */
+const WAX_DROP_OPACITY = 0.6;
+/** Opacidad clásica (dark=0): sin cambios respecto a siempre. */
+const CLASSIC_TRAIL_OPACITY = 0.5;
 
 export function TrailView({ pool }: { pool: TrailPool }) {
   const silhouettes = useDarkStore((s) => s.dark >= 1);
@@ -41,6 +52,7 @@ export function TrailView({ pool }: { pool: TrailPool }) {
   useFrame(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
+    trailMaterial.opacity = silhouettes ? WAX_DROP_OPACITY : CLASSIC_TRAIL_OPACITY;
     const { obj, color } = scratch;
     for (let i = 0; i < pool.capacity; i++) {
       if (pool.active[i]) {

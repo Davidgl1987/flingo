@@ -10,6 +10,22 @@
  * (reutiliza `eyePupilMaterial`, ya suficientemente oscuro) — el brillo
  * interior violeta pálido vive en el `emissive` de `trailMaterial`
  * (assets.ts), no aquí.
+ *
+ * Ojos visibles (playtest 2026-07-20, David: "al trail le faltan ojos, quizá
+ * los has puesto arriba"): el `group` padre (`../EnemyViews.tsx`) ya orienta
+ * su eje +Z local hacia la dirección de movimiento (`orientationYaw`, mismo
+ * criterio que la linterna de ojos: "dummy/trail no giran nada extra"), así
+ * que los ojos ya vivían en el frente — el problema real era la ALTURA:
+ * apenas por encima del ecuador (0.05×radio) quedaban casi al mismo nivel
+ * que el centro de la gota, demasiado bajos para que la cámara cenital
+ * (~40° desde el sur) los alcance salvo que la Lacrimera avance justo hacia
+ * ella. Fix: se suben claramente hacia la mitad superior del cuerpo
+ * (`TRAIL_EYE_HEIGHT_FACTOR`, por debajo de la base del cono/lágrima en
+ * 0.85×radio para no solaparse) — más "levantados" hacia la cámara sea cual
+ * sea el rumbo de patrulla. (Nota: NO se usa una rotación del grupo para
+ * esto — los dos ojos viven simétricos sobre el eje X local del propio
+ * `eyeGroup`, así que rotarlo en X los dejaría invariantes; solo la
+ * POSICIÓN del pivote los sube.)
  */
 
 import { useFrame } from '@react-three/fiber';
@@ -36,6 +52,10 @@ import { useDarkStore } from '@/game/render/dark-store';
 const TRAIL_BODY_RADIUS = 0.4;
 /** Nº de gotas de baba del Trail. */
 const TRAIL_DRIP_COUNT = 2;
+/** Altura de los ojos (× TRAIL_BODY_RADIUS), medida desde el centro del cuerpo: por debajo de la base del cono/lágrima (0.85×radio) pero claramente en la mitad superior, no en el ecuador. */
+const TRAIL_EYE_HEIGHT_FACTOR = 0.38;
+/** Adelanto de los ojos (× TRAIL_BODY_RADIUS) hacia el frente (dirección de movimiento, +Z local del `group` padre). */
+const TRAIL_EYE_FORWARD_FACTOR = 0.68;
 
 export function TrailMesh({
   session,
@@ -77,7 +97,11 @@ export function TrailMesh({
       }
       const eyeGroup = eyeGroupRef.current;
       if (eyeGroup) {
-        eyeGroup.position.set(0, TRAIL_BODY_RADIUS * 0.05 * squash, TRAIL_BODY_RADIUS * 0.78 * widen);
+        eyeGroup.position.set(
+          0,
+          TRAIL_BODY_RADIUS * TRAIL_EYE_HEIGHT_FACTOR * squash,
+          TRAIL_BODY_RADIUS * TRAIL_EYE_FORWARD_FACTOR * widen,
+        );
       }
     }
     for (let i = 0; i < TRAIL_DRIP_COUNT; i++) {
@@ -116,7 +140,8 @@ export function TrailMesh({
               oscurecido/translúcido en assets.ts) para que tono y opacidad
               coincidan exactamente. */}
           <mesh ref={teardropRef} geometry={unitCone} material={trailMaterial} />
-          {/* Dos ojos oscuros simples. */}
+          {/* Dos ojos oscuros simples; la posición del pivote (dinámica,
+              squash) se fija en useFrame. */}
           <group ref={eyeGroupRef}>
             <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[-0.1, 0, 0]} scale={0.045} />
             <mesh geometry={smallDotGeometry} material={eyePupilMaterial} position={[0.1, 0, 0]} scale={0.045} />

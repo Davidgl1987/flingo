@@ -241,7 +241,18 @@ function stepHeroProjectileCollisions(world: World, p: Projectile, events: Event
     const rr = enemy.radius + p.radius;
     if (dx * dx + dy * dy > rr * rr) continue;
 
-    applyDamageToEnemy(world, enemy, p.damage, p.velocity.x, p.velocity.y, events, false, p.kind === 'arrow' ? 'arrow' : 'spell');
+    // Spike (GDD §7.3, mecánica invertida 2026-07-20): "solo se le podrá
+    // hacer daño por delante" también aplica a proyectiles — una flecha u
+    // hechizo que impacta su arco trasero (misma comprobación que el
+    // contacto cuerpo a cuerpo, ver `isSpikeContactDangerous`) no le hace
+    // daño, aunque el proyectil se consume igual (pierce/deactivate
+    // normales) para no complicar la física de vuelo.
+    const spikeImmune =
+      enemy.kind === 'spike' &&
+      isSpikeContactDangerous(p.position.x, p.position.y, enemy.position.x, enemy.position.y, enemy.facing.x, enemy.facing.y);
+    if (!spikeImmune) {
+      applyDamageToEnemy(world, enemy, p.damage, p.velocity.x, p.velocity.y, events, false, p.kind === 'arrow' ? 'arrow' : 'spell');
+    }
     p.hitEnemyIds.push(enemy.id);
 
     if (p.kind === 'arrow') {
@@ -501,8 +512,12 @@ export function stepHeroEnemyContacts(
     const distSq = dx * dx + dy * dy;
     if (distSq > rr * rr) continue;
 
-    // Spike (GDD §7.3): tocar la cara de la púa daña al HÉROE aunque llegue
-    // embistiendo; solo flancos/espalda reciben daño con normalidad.
+    // Spike (GDD §7.3, mecánica invertida 2026-07-20 — David: "que si le
+    // atacas por detrás te pinche; solo se le podrá hacer daño por delante"):
+    // tocar su ARCO TRASERO (espalda, opuesto al ojo/`facing`) daña al HÉROE
+    // aunque llegue embistiendo; delante o por los flancos recibe daño con
+    // normalidad (cae al bloque `dmg > 0` de abajo, igual que cualquier otro
+    // enemigo). `isSpikeContactDangerous` ya encapsula el umbral invertido.
     if (
       enemy.kind === 'spike' &&
       isSpikeContactDangerous(
@@ -558,24 +573,30 @@ export function stepHeroEnemyContacts(
 }
 
 /**
- * Spike (GDD §7.3): determina si el contacto es "peligroso" (por la cara de
- * la púa) usando el producto escalar entre la dirección héroe→spike y la
- * normal `facing` del enemigo. Frontal (peligroso) si dot > umbral.
+ * Spike (GDD §7.3, mecánica invertida 2026-07-20 — ver comentario en
+ * `stepHeroEnemyContacts`): determina si un contacto (o un impacto de
+ * proyectil, ver `stepHeroProjectileCollisions`) es "peligroso" — ahora la
+ * cara peligrosa es la ESPALDA (arco trasero, opuesto al ojo/`facing`), no
+ * la púa — usando el producto escalar entre la dirección spike→origen del
+ * contacto y la normal `facing` del enemigo. Trasero (peligroso) si
+ * dot < -umbral; delante y flancos (incluido el propio umbral, dot=0) no lo
+ * son. Mismo umbral angular que antes (`SPIKE_DANGEROUS_DOT_THRESHOLD`),
+ * solo se invierte el signo de la comparación.
  */
 export function isSpikeContactDangerous(
-  heroX: number,
-  heroY: number,
+  originX: number,
+  originY: number,
   spikeX: number,
   spikeY: number,
   facingX: number,
   facingY: number,
 ): boolean {
-  const dx = heroX - spikeX;
-  const dy = heroY - spikeY;
+  const dx = originX - spikeX;
+  const dy = originY - spikeY;
   const len = Math.sqrt(dx * dx + dy * dy);
   if (len < 1e-6) return false;
   const dot = (dx / len) * facingX + (dy / len) * facingY;
-  return dot > SPIKE_DANGEROUS_DOT_THRESHOLD;
+  return dot < -SPIKE_DANGEROUS_DOT_THRESHOLD;
 }
 
 // ── Selección de modo de arma / disparo genérico ──────────────────────────

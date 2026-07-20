@@ -123,7 +123,7 @@ Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos r
 
 ### 7.3 Spike (gris, con púa direccional) — el erizo
 - 3 HP. Solo patrulla (0.95 u/s), nunca persigue.
-- Tiene una **cara peligrosa** (la púa, claramente visible). Chocar contra la púa **te daña a ti** (1); golpearle por los flancos o la espalda le daña a él con normalidad.
+- Tiene una **cara peligrosa**: su **arco trasero** (la espalda, opuesta a la púa/ojo). Chocar contra su espalda **te daña a ti** (1); solo se le puede hacer daño golpeándole **por delante** (el lado de la púa/ojo) — de frente o por los flancos, con embestida, flecha o hechizo; los proyectiles que le llegan por la espalda no le hacen daño (mecánica invertida 2026-07-20, playtest: "que si le atacas por detrás te pinche").
 - Rol: obliga a leer orientación y a tirar con ángulo, no en línea recta.
 
 ### 7.4 Trail (verde) — el babosa
@@ -405,7 +405,7 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 
 **Armas:** cuerpo cd 0.2 s · flecha 10.8 u/s, daño 1, cd 0.5 s, atraviesa 1 · hechizo 8.3 u/s, daño 2, cd 1.0 s, 1 rebote (×0.65) · vida proyectil 2.8 s · retroceso ~1.15 · fuerza→velocidad proyectil 70–120%
 
-**Enemigos:** Dummy 2 HP, patrulla 0.8, caza 1.7, detección 2.35, correa 2.2 · Chaser 3 HP, 2.35 (3.0 si apuntas) · Spike 3 HP, patrulla 0.95, cono peligroso frontal · Trail 3–4 HP, 0.86, rastro cada 0.55 s (radio 0.45, vida 3.2 s) · Shooter 3–4 HP, caza 1.45, ciclo 1 s + 1 s, proyectil 6.6 u/s · knockback al golpe: empuje 2.4 u/s + 0.18 u
+**Enemigos:** Dummy 2 HP, patrulla 0.8, caza 1.7, detección 2.35, correa 2.2 · Chaser 3 HP, 2.35 (3.0 si apuntas) · Spike 3 HP, patrulla 0.95, cono peligroso trasero (solo daña por delante) · Trail 3–4 HP, 0.86, rastro cada 0.55 s (radio 0.45, vida 3.2 s) · Shooter 3–4 HP, caza 1.45, ciclo 1 s + 1 s, proyectil 6.6 u/s · knockback al golpe: empuje 2.4 u/s + 0.18 u
 
 **Hazards:** foso 1 daño, margen de perdón 0.18 u, caída ~1.05 s · pinchos 1 daño + empuje 5.2 u/s · barril daño 3, radio 2.0 · barro ×0.92/tick · boost +8 u/s²
 

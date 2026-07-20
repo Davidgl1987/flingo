@@ -193,9 +193,19 @@ const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.075, HERO_RA
  * decide `TrailView.tsx` leyendo el mismo store. En clásico (dark=0) el
  * emit de más abajo sigue exactamente igual que siempre (color de arma,
  * `TRAIL_LIFE` por defecto).
+ *
+ * Legibilidad (playtest 2026-07-20, David: "el rastro de cera no se ve" —
+ * cera pálida sobre un suelo que la propia vela ya ilumina, bajo contraste):
+ * goterones más grandes (`WAX_TRAIL_SIZE_FACTOR`, antes compartía el mismo
+ * 0.8×HERO_RADIUS que el clásico) y vida más larga (0.9 s, antes 0.55 s) —
+ * SOLO afecta a dark>=1; el emit clásico de más abajo no cambia. La opacidad
+ * del material (más alta en silueta) vive en `TrailView.tsx`, que ya lee
+ * este mismo store para bifurcar por modo.
  */
 const WAX_TRAIL_COLOR = new Color(HERO_WAX_COLOR);
-const WAX_TRAIL_LIFE = 0.55;
+const WAX_TRAIL_LIFE = 0.9;
+/** Tamaño del goterón de cera (× HERO_RADIUS): más grande que el punto clásico (0.8) para que se lea sobre el suelo iluminado por la propia vela. */
+const WAX_TRAIL_SIZE_FACTOR = 1.15;
 
 /**
  * Héroe = vela (rama `estilo-oscuro`, solo dark>=1): la llama/ojos viven en
@@ -427,7 +437,15 @@ export function HeroView({ session }: { session: GameSession }) {
         if (silhouettes) {
           // Rastro de cera (ver WAX_TRAIL_COLOR arriba): color/vida fijos,
           // independientes del arma activa.
-          session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, WAX_TRAIL_LIFE, WAX_TRAIL_COLOR.r, WAX_TRAIL_COLOR.g, WAX_TRAIL_COLOR.b);
+          session.effects.trail.emit(
+            x,
+            z,
+            HERO_RADIUS * WAX_TRAIL_SIZE_FACTOR,
+            WAX_TRAIL_LIFE,
+            WAX_TRAIL_COLOR.r,
+            WAX_TRAIL_COLOR.g,
+            WAX_TRAIL_COLOR.b,
+          );
         } else {
           session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
         }

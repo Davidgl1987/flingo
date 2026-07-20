@@ -41,6 +41,7 @@ import type { Projectile } from '@/game/world/types';
 import { getUpgradeLevel } from '@/game/session/upgrades';
 import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileGlowHaloMaterialForTag, enemyProjectileMaterial, enemyProjectileMaterialForTag, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCircle, unitCone, unitSphere, WEAPON_COLOR } from '@/game/render/assets';
 import { useDarkStore } from '@/game/render/dark-store';
+import { TRAIL_EMIT_INTERVAL } from '@/game/features/effects/trail';
 import { arrowWidthScaleForLevel } from './upgrade-visuals';
 
 /**
@@ -98,6 +99,21 @@ const PROJECTILE_ENEMY_HALO_LOCAL_Y = 0.03 - PROJECTILE_LIGHT_HEIGHT;
  * `kind` en todos los modos (dark 0/1/2).
  */
 const PROJECTILE_VISUAL_SCALE = 0.8;
+
+/**
+ * Estela de proyectiles del héroe (playtest 2026-07-20, David: "cuando
+ * dispares con proyectiles, deja cera de ese color"), SOLO dark>=1: flecha y
+ * hechizo depositan gotitas en el MISMO pool `session.effects.trail` que ya
+ * usa `HeroView.tsx` para el rastro de cera, con idéntica cadencia
+ * (`TRAIL_EMIT_INTERVAL`) — pero color del arma (`WEAPON_COLOR`), no de cera,
+ * y vida por defecto del pool (`TRAIL_LIFE`, no la más larga de la cera: son
+ * chispas de un proyectil rápido, no goterones que gotean del cuerpo).
+ * Emitido aquí (render, useFrame de `ProjectileSlot`, mismo sitio donde ya
+ * se itera cada proyectil por frame) y NUNCA en la sim (combat.ts stepea
+ * física/daño, no efectos). Gateado a dark>=1: en clásico (dark=0) el look
+ * es EXACTAMENTE el de siempre, sin ensuciarlo con chispas nuevas.
+ */
+const PROJECTILE_TRAIL_SIZE_FACTOR = 0.55;
 
 type ProjectileKind = Projectile['kind'];
 
@@ -241,13 +257,18 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
   const enemyBodyRef = useRef<Mesh>(null);
   const enemyHaloRef = useRef<Mesh>(null);
   const lastKind = useRef<ProjectileKind | null>(null);
+  // Estela de cera del proyectil (ver PROJECTILE_TRAIL_SIZE_FACTOR arriba):
+  // acumulador propio por slot, mismo patrón que `trailAccumulator` en
+  // HeroView.tsx.
+  const trailAccumulator = useRef(0);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const p = session.world.projectiles[index];
     const group = groupRef.current;
     if (!group) return;
     if (!p.active) {
       group.visible = false;
+      trailAccumulator.current = 0;
       return;
     }
     group.visible = true;
@@ -261,6 +282,27 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
     }
 
     if (lastKind.current !== p.kind) lastKind.current = p.kind;
+
+    // Estela de color del arma (solo dark>=1, solo proyectiles del héroe):
+    // ver cabecera del fichero (PROJECTILE_TRAIL_SIZE_FACTOR).
+    if (silhouettes && p.owner === 'hero' && (p.kind === 'arrow' || p.kind === 'spell')) {
+      trailAccumulator.current += delta;
+      while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
+        trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
+        const color = WEAPON_COLOR[p.kind];
+        session.effects.trail.emit(
+          p.position.x,
+          p.position.y,
+          p.radius * PROJECTILE_TRAIL_SIZE_FACTOR,
+          undefined,
+          color.r,
+          color.g,
+          color.b,
+        );
+      }
+    } else {
+      trailAccumulator.current = 0;
+    }
 
     const arrowGroup = arrowGroupRef.current;
     if (arrowGroup) {

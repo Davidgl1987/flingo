@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ARROW_PIERCE_COUNT, CONTACT_DAMAGE_COOLDOWN, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FAN_ANGLE_STEP, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_WALL_BOUNCES } from './constants';
+import { ARROW_DAMAGE, ARROW_PIERCE_COUNT, CONTACT_DAMAGE_COOLDOWN, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FAN_ANGLE_STEP, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_WALL_BOUNCES } from './constants';
 import { MAX_SPEED } from '@/engine/physics';
 import { applyDamageToEnemy, applyDamageToHero, applyKnockbackToHero, fireEnemyProjectile, fireProjectile, isSpikeContactDangerous, ramDamage, stepHeroEnemyContacts, stepProjectiles } from './combat';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
@@ -176,44 +176,83 @@ describe('contacto héroe↔enemigo', () => {
   });
 });
 
-describe('Spike: púa direccional en contacto', () => {
-  it('isSpikeContactDangerous distingue frente (dot > 0.25) de flancos/espalda', () => {
-    // Púa apuntando a +y; héroe al sur del spike (lado de la púa) → peligroso.
-    expect(isSpikeContactDangerous(0, 1, 0, 0, 0, 1)).toBe(true);
-    // Héroe detrás (lado opuesto) → no peligroso.
-    expect(isSpikeContactDangerous(0, -1, 0, 0, 0, 1)).toBe(false);
-    // Flanco exacto (dot = 0) → no peligroso.
+describe('Spike: púa direccional en contacto (mecánica invertida 2026-07-20: pincha por detrás, solo se daña por delante)', () => {
+  it('isSpikeContactDangerous distingue espalda (dot < -0.25, peligrosa) de frente/flancos (vulnerables)', () => {
+    // Púa/ojo apuntando a +y; origen del contacto al norte del spike (lado de
+    // la púa, `facing`) → YA NO peligroso (ahora es el lado vulnerable).
+    expect(isSpikeContactDangerous(0, 1, 0, 0, 0, 1)).toBe(false);
+    // Origen al sur (arco trasero, opuesto a `facing`) → peligroso.
+    expect(isSpikeContactDangerous(0, -1, 0, 0, 0, 1)).toBe(true);
+    // Flanco exacto (dot = 0) → no peligroso, igual que antes.
     expect(isSpikeContactDangerous(1, 0, 0, 0, 0, 1)).toBe(false);
   });
 
-  it('embestir de frente contra la púa daña al héroe y no al Spike', () => {
+  it('embestir de frente (lado de la púa/ojo) daña al Spike y no al héroe', () => {
     const world = makeWorld([
       { id: 's1', kind: 'spike', position: { x: 0, y: -0.5 }, facing: { x: 0, y: 1 } },
     ]);
     const events = createEventQueue(16);
     const spike = world.enemies[0];
     const hpBefore = spike.hp;
-    world.hero.velocity.y = -7.5; // embiste hacia el norte, contra la cara de la púa
+    world.hero.velocity.y = -7.5; // embiste hacia el norte, contra la cara de la púa (delante)
 
     stepHeroEnemyContacts(world, world.contactDamageCooldowns, events);
 
-    expect(world.hero.hp).toBe(4); // el héroe recibe 1
-    expect(spike.hp).toBe(hpBefore); // el spike no recibe nada
+    expect(spike.hp).toBe(hpBefore - 3); // ramDamage(7.5) = 3
+    expect(world.hero.hp).toBe(5); // el héroe no recibe daño por delante
   });
 
-  it('embestir por la espalda daña al Spike con normalidad', () => {
+  it('embestir por la espalda (arco trasero) pincha al héroe y no daña al Spike', () => {
     const world = makeWorld([
       { id: 's1', kind: 'spike', position: { x: 0, y: 0.5 }, facing: { x: 0, y: 1 } },
     ]);
     const events = createEventQueue(16);
     const spike = world.enemies[0];
     const hpBefore = spike.hp;
-    world.hero.velocity.y = 7.5; // llega desde el norte (espalda de la púa)
+    world.hero.velocity.y = 7.5; // llega desde el norte, contra el arco trasero (espalda)
 
     stepHeroEnemyContacts(world, world.contactDamageCooldowns, events);
 
-    expect(spike.hp).toBe(hpBefore - 3);
-    expect(world.hero.hp).toBe(5);
+    expect(world.hero.hp).toBe(4); // el héroe recibe 1 al pincharse por detrás
+    expect(spike.hp).toBe(hpBefore); // el spike es inmune por la espalda
+  });
+});
+
+describe('Spike: proyectiles solo dañan por delante (mecánica invertida 2026-07-20)', () => {
+  it('una flecha que impacta por delante (lado de la púa/ojo) daña al Spike con normalidad', () => {
+    const world = makeWorld([
+      { id: 's1', kind: 'spike', position: { x: 0, y: -0.5 }, facing: { x: 0, y: 1 } },
+    ]);
+    const events = createEventQueue(32);
+    const spike = world.enemies[0];
+    const hpBefore = spike.hp;
+
+    expect(fireProjectile(world, 'arrow', 0, -1, 1, events)).toBe(true);
+    const arrow = world.projectiles.find((p) => p.active);
+    expect(arrow).toBeDefined();
+    for (let i = 0; i < 120 && arrow!.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+
+    expect(spike.hp).toBe(hpBefore - ARROW_DAMAGE);
+  });
+
+  it('una flecha que impacta por la espalda (arco trasero) NO daña al Spike (pero se consume igual)', () => {
+    const world = makeWorld([
+      { id: 's1', kind: 'spike', position: { x: 0, y: 0.5 }, facing: { x: 0, y: 1 } },
+    ]);
+    const events = createEventQueue(32);
+    const spike = world.enemies[0];
+    const hpBefore = spike.hp;
+
+    expect(fireProjectile(world, 'arrow', 0, 1, 1, events)).toBe(true);
+    const arrow = world.projectiles.find((p) => p.active);
+    expect(arrow).toBeDefined();
+    for (let i = 0; i < 120 && arrow!.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+
+    expect(spike.hp).toBe(hpBefore); // inmune por la espalda
   });
 });
 
