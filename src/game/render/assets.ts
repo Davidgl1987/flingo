@@ -491,9 +491,9 @@ export const enemyProjectileMaterial = new THREE.MeshLambertMaterial({ color: '#
  * `prismaCoreMaterial`/`prismaWeaponColor` en `EnemyViews.tsx`): sus
  * proyectiles se tiñen del color de su gate activo.
  */
-export const STORM_SPIRAL_PROJECTILE_COLOR = '#b18cff';
-export const STORM_RINGS_PROJECTILE_COLOR = '#7cc7ff';
-export const STORM_BURST_PROJECTILE_COLOR = '#ffb36b';
+const STORM_SPIRAL_PROJECTILE_COLOR = '#b18cff';
+const STORM_RINGS_PROJECTILE_COLOR = '#7cc7ff';
+const STORM_BURST_PROJECTILE_COLOR = '#ffb36b';
 
 const enemyProjectileTintMaterials: Record<string, THREE.MeshLambertMaterial> = {
   ram: new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.body.clone() }),
