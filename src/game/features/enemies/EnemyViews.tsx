@@ -96,61 +96,34 @@ import {
   dummyMaterial,
   enemyHitFlashMaterial,
   guardianBodyMaterial,
-  guardianHornGeometry,
-  guardianHornMaterial,
-  guardianStunStarGeometry,
-  guardianStunStarMaterial,
-  guardianTelegraphGlowMaterial,
   queenBodyMaterial,
-  queenCrownMaterial,
-  queenCrownSpikeGeometry,
   queenGuardianChargeMaterial,
   queenGuardianTelegraphMaterial,
-  queenSummonPulseMaterial,
   prismaCoreMaterial,
-  prismaGemGeometry,
-  prismaGemMaterial,
   shooterMaterial,
   spikeMaterial,
   stormBodyMaterial,
-  stormHaloSegmentGeometry,
-  stormHaloMaterial,
-  stormHaloReloadColor,
-  stormReloadCoreMaterial,
-  STORM_HALO_DIM_COLOR,
-  STORM_HALO_PATTERN_COLOR,
-  STORM_HALO_SEGMENTS,
   trailMaterial,
   unitCircle,
   unitSphere,
-  WEAPON_COLOR,
 } from '@/game/render/assets';
 import { useDarkStore } from '@/game/render/dark-store';
-import {
-  STORM_PATTERN_RINGS,
-  STORM_PATTERN_SPIRAL,
-  STORM_RELOAD_DURATION_BY_PHASE,
-  STORM_STAGE_EXECUTE,
-  STORM_STAGE_IDLE,
-  STORM_STAGE_RELOAD,
-  STORM_STAGE_TELEGRAPH,
-  STORM_TELEGRAPH_DURATION_BY_PHASE,
-} from '@/game/features/bosses/storm/machine-constants';
-import {
-  STORM_BURST_CORRIDORS,
-  STORM_CORRIDOR_SAFETY,
-  STORM_MIN_EMISSION_RADIUS,
-  STORM_SPIRAL_ANGULAR_SPEED,
-  STORM_SPIRAL_ARMS,
-  stormCorridorMinAngle,
-} from '@/game/features/bosses/storm/constants';
-import { stormState } from '@/game/features/bosses/storm/pattern';
-import type { StormState } from '@/game/features/bosses/storm/patterns';
 import { ChaserMesh } from '@/game/features/enemies/chaser/Mesh';
 import { DummyMesh } from '@/game/features/enemies/dummy/Mesh';
 import { ShooterMesh } from '@/game/features/enemies/shooter/Mesh';
 import { SpikeMesh } from '@/game/features/enemies/spike/Mesh';
 import { TrailMesh } from '@/game/features/enemies/trail/Mesh';
+import {
+  applyLanternAim,
+  ENEMY_FILL_LIGHT_INTENSITY,
+  ENEMY_LANTERN_INTENSITY,
+  ENEMY_LIGHT_INTENSITY_BOSS,
+  EnemyLightsRig,
+} from '@/game/features/enemies/EnemyLights';
+import { applyGuardianBossFrame, GuardianBossExtras } from '@/game/features/bosses/guardian/BossView';
+import { applyQueenBossFrame, QueenBossExtras } from '@/game/features/bosses/queen/BossView';
+import { applyPrismaBossFrame, PrismaBossExtras } from '@/game/features/bosses/prisma/BossView';
+import { applyStormBossFrame, StormBossExtras } from '@/game/features/bosses/storm/BossView';
 
 const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
   dummy: dummyMaterial,
@@ -161,103 +134,11 @@ const ENEMY_MATERIAL: Record<EnemyKind, Material> = {
   boss: bossBodyMaterial,
 };
 
-/**
- * Luz MÓVIL de enemigo (rama `estilo-oscuro`; punto 1 de playtest ronda 2 de
- * penumbra: "que lo que dé la luz fueran los ojos, como linternas muy
- * débiles, ahora es como si tuvieran una bombilla" — sustituye la pointLight
- * omnidireccional original por una `spotLight` débil que sale de los ojos,
- * orientada hacia donde MIRA el enemigo, + una pointLight MUY tenue para que
- * el cuerpo no quede negro del todo): mismo color que los ojos/acentos
- * emisivos ya existentes de cada arquetipo (assets.ts), para que la luz se
- * lea como "el brillo de sus ojos alcanza el entorno", no como un añadido
- * aparte. `boss` conserva su pointLight de siempre (sin linterna: punto 2 de
- * playtest le da más luz propia, más abajo) y usa un ámbar genérico (no
- * distingue por bossId: los acentos de cada jefe ya tienen su propio idioma
- * visual, esta luz solo necesita delatar "algo grande se mueve ahí").
- */
-const ENEMY_LIGHT_COLOR: Record<EnemyKind, string> = {
-  dummy: '#ffc169',
-  chaser: '#b18cff',
-  spike: '#ffb36b',
-  trail: '#c9bce8',
-  shooter: '#7cc7ff',
-  boss: '#e0b56a',
-};
-/** Altura LOCAL de la luz del jefe/relleno sobre el centro del cuerpo del enemigo (el `group` ya vive a `bodyRadius` del suelo). */
-const ENEMY_LIGHT_HEIGHT = 0.5;
-/** Jefe (punto 2a de playtest: "que el propio jefe emita [más] luz"): antes 4/3.5, ahora bastante más luminoso — las velas de sala (BossCandlesView) completan el resto. */
-const ENEMY_LIGHT_INTENSITY_BOSS = 14;
-/**
- * Distancia acotada 6→5 (playtest de David, luces que atraviesan paredes):
- * la pointLight propia del jefe se queda SIN sombra a propósito (su arena es
- * una sala entera para él solo — si sangra levemente a la sala vecina apenas
- * se nota, y una sombra cúbica ×6 pasadas por jefe sí sería cara). Bajar el
- * alcance es el ajuste barato que sí reduce cuánto se cuela por los muros
- * sin pagar el coste de sombra.
- */
-const ENEMY_LIGHT_DISTANCE_BOSS = 5;
-/**
- * La luz del jefe vive POR ENCIMA de su cuerpo (radio de render de jefe ~1),
- * no dentro: a la altura genérica (0.5) quedaba embebida en la esfera y ni el
- * propio cuerpo ni el suelo alrededor recibían luz apreciable (verificado en
- * arena ?boss=b1) — el Lambert solo ilumina caras orientadas HACIA la luz.
- */
-const ENEMY_LIGHT_HEIGHT_BOSS = 1.7;
-const ENEMY_LIGHT_DECAY = 2;
-
-/**
- * Linterna de ojos (spotLight, no-boss): altura LOCAL a la que viven los ojos
- * de cada arquetipo (0.3-0.4, bastante más abajo que la vieja "bombilla" a
- * 0.5). Parámetros de linterna DÉBIL (los spots concentran, lucen menos que
- * una point a igual intensidad): alcance corto, cono estrecho, penumbra
- * suave. CON sombra desde playtest de David ("hay luces que parece que
- * traspasan las paredes"): mapa pequeño, ver `ENEMY_LANTERN_SHADOW_MAP_SIZE`
- * más abajo (antes SIN sombra — solo la vela del héroe bloqueaba luz).
- *
- * Punto 6 de playtest ronda 4 ("apuntan hacia donde miran, y un poco abajo
- * para que dejen el rastro de luz"): el punto-objetivo (target) de la
- * spotLight ya NO vive a la misma altura que la luz (eso apuntaba el cono en
- * horizontal, paralelo al suelo, sin proyectar ningún charco) — su altura
- * LOCAL se fija cada frame a `-group.position.y` (ver useFrame), que cancela
- * exactamente la altura a la que `lightsGroupRef` (el padre, que solo
- * TRASLADA, mirroreando `group.position`) vive sobre el suelo, así el target
- * cae siempre en el PLANO DEL SUELO (y=0 de mundo) sea cual sea el radio del
- * enemigo. `ENEMY_LANTERN_TARGET_DISTANCE` (antes 1, alcance corto para no
- * degenerar la dirección) pasa a marcar cuánto por DELANTE cae ese charco.
- */
-const ENEMY_LANTERN_HEIGHT = 0.35;
-const ENEMY_LANTERN_TARGET_DISTANCE = 1.3;
-const ENEMY_LANTERN_INTENSITY = 10;
-const ENEMY_LANTERN_DISTANCE = 4;
-const ENEMY_LANTERN_ANGLE = 0.55;
-const ENEMY_LANTERN_PENUMBRA = 0.7;
-const ENEMY_LANTERN_DECAY = 2;
-/**
- * Sombra de la linterna (playtest de David: "no sé por qué hay luces que
- * parece que traspasan las paredes... la poción no debería verse" — la
- * iluminaba el cono de la linterna A TRAVÉS de un muro): mapa PEQUEÑO (una
- * spotLight es 1 sola pasada de sombra, no las 6 de una pointLight cúbica —
- * asumible por enemigo vivo). near/far ajustados al alcance corto real de la
- * linterna (`ENEMY_LANTERN_DISTANCE`=4, con margen).
- *
- * Trade-off de recompilación de shaders (mismo problema ya resuelto para el
- * RECUENTO de luces con `lightsGroupRef`, ver comentario arriba): three.js
- * recompila los shaders que dependen del Nº de luces CON SOMBRA cada vez que
- * ese número cambia. Al morir un enemigo se apaga `intensity=0` Y
- * `castShadow=false` A LA VEZ (useFrame de abajo) — eso SÍ dispara una
- * recompilación (una única vez, en el frame de la muerte, aceptable). Lo que
- * NO se hace es dejar `castShadow=true` con intensidad 0: three.js seguiría
- * rellenando el shadow map de esa luz cada frame para un enemigo muerto que
- * no aporta nada, coste puro sin beneficio. Al (re)aparecer enemigos con la
- * sala (montaje), `castShadow` nace en `true` vía JSX (el propio group de
- * luces solo se monta cuando `silhouettes`, es decir dark>=1).
- */
-const ENEMY_LANTERN_SHADOW_MAP_SIZE = 256;
-const ENEMY_LANTERN_SHADOW_NEAR = 0.1;
-const ENEMY_LANTERN_SHADOW_FAR = 4.5;
-/** Relleno MUY tenue (mismo color que la linterna) para que el cuerpo no quede negro del todo fuera del cono. */
-const ENEMY_FILL_LIGHT_INTENSITY = 0.8;
-const ENEMY_FILL_LIGHT_DISTANCE = 1.5;
+// Luz MÓVIL de enemigo (rama `estilo-oscuro`, punto 1/2a de playtest): rig de
+// linterna de ojos + relleno (no-boss) y pointLight propia (boss), extraído a
+// `EnemyLights.tsx` (constantes, `applyLanternAim` y el componente de JSX
+// `EnemyLightsRig`) — este componente solo llama a ambos desde el useFrame/
+// JSX de más abajo, en el mismo punto exacto donde vivía el bloque antes.
 
 /**
  * Material "en reposo" del cuerpo (sin flash de golpe/fase/telegraph
@@ -276,13 +157,6 @@ function restingBodyMaterial(kind: EnemyKind, bossId: BossId | undefined): Mater
   // stormReloadCoreMaterial mientras está en RELOAD (ver useFrame de abajo).
   if (kind === 'boss' && bossId === 'storm') return stormBodyMaterial;
   return ENEMY_MATERIAL[kind];
-}
-
-/** El Prisma (GDD §15.4): mapea el gate de arma ('ram'|'arrow'|'spell') al mismo color que `WEAPON_COLOR` del héroe ('ram'→'body'). */
-function prismaWeaponColor(weapon: string): (typeof WEAPON_COLOR)['body'] {
-  if (weapon === 'arrow') return WEAPON_COLOR.arrow;
-  if (weapon === 'spell') return WEAPON_COLOR.spell;
-  return WEAPON_COLOR.body;
 }
 
 /** true si este id de enemigo es una larva de la Reina del Enjambre (GDD §15.3): mini-dummy, escala menor. */
@@ -329,90 +203,9 @@ const ORIENTATION_SPEED_THRESHOLD = 0.2;
  */
 const ORIENTATION_DAMP_LAMBDA = 12;
 
-/** El Prisma (GDD §15.4): velocidad angular del "tartamudeo" de color durante el telegraph de cambio (~10Hz, en rad/s: 2π×10). */
-const PRISMA_COLOR_TELEGRAPH_BLINK_SPEED = 63;
-/** El Prisma, fase 3 (GDD §15.4): ritmo más calmado (~4Hz) al alternar los 2 colores del solape. */
-const PRISMA_OVERLAP_BLINK_SPEED = 25;
-/** Velocidad angular de la órbita visual de las gemas del Prisma. */
-const PRISMA_GEM_ORBIT_SPEED = 1.4;
-
-/**
- * La Tormenta (GDD §15.5): opacidad "plena" del halo por patrón durante
- * telegraph/ejecución (índice = STORM_PATTERN_*) — mismos valores que antes
- * del rediseño post-playtest 2026-07-15 (espiral/anillos algo más discretos
- * que la ráfaga, que es la más súbita). Punto de llegada del fundido desde
- * `STORM_HALO_RELOAD_OPACITY` durante la insinuación de la 2ª mitad de la
- * recarga.
- */
-const STORM_HALO_FULL_OPACITY: readonly [number, number, number] = [0.6, 0.6, 0.65];
-/** Opacidad del halo en la 1ª mitad de la recarga (pose quieta, sin insinuar nada todavía) y arranque del fundido hacia STORM_HALO_FULL_OPACITY. */
-const STORM_HALO_RELOAD_OPACITY = 0.18;
-/** Radio del anillo respecto al cuerpo (constante: la lectura ahora es espacial —qué secciones se iluminan—, no de "respiración" de tamaño). */
-const STORM_HALO_RADIUS_FACTOR = 1.25;
-/** Ángulo (rad) que cubre cada sección del grid FIJO del anillo (`STORM_HALO_SEGMENTS`, assets.ts). */
-const STORM_HALO_SEGMENT_ANGLE = (Math.PI * 2) / STORM_HALO_SEGMENTS;
-/**
- * Semiancho angular (rad) de una sección iluminada de la ESPIRAL: los brazos
- * son rayos puntuales (sin ancho de diseño propio, a diferencia de anillos/
- * ráfaga que sí tienen un hueco/pasillo REAL — ver `stormSegmentLit`), así
- * que este es un ancho de LECTURA (no toca la sim) elegido para que las 4
- * secciones se vean como 4 bloques distintos con hueco de sobra entre ellos
- * (4 · 2 · esto ≈ el 40% del anillo).
- */
-const STORM_HALO_SPIRAL_ARM_HALF_WIDTH = STORM_HALO_SEGMENT_ANGLE * 1.8;
-
-/**
- * Diferencia angular con signo mínima entre dos ángulos, en (−π, π]. Copia
- * local de utilidad de ángulos (mismo criterio que
- * `patterns.test.ts::angularDelta`; no se exporta desde sim porque es
- * puramente de lectura de render, no entra en ninguna garantía de pasillo).
- */
-function stormAngularDelta(a: number, b: number): number {
-  const twoPi = Math.PI * 2;
-  let d = (b - a) % twoPi;
-  if (d < -Math.PI) d += twoPi;
-  if (d > Math.PI) d -= twoPi;
-  return d;
-}
-
-/**
- * true si la sección de grid centrada en `segAngle` (ángulo de MUNDO fijo,
- * ver comentario del bucle en `useFrame` más abajo) cae dentro de una zona
- * con balas del patrón `pattern` en el instante actual — "lo visual promete
- * lo mecánico" (AGENTS.md): los anchos de anillos/ráfaga son los REALES de
- * `stormCorridorMinAngle`/`STORM_CORRIDOR_SAFETY` (los MISMOS que usa
- * `patterns.ts` para abrir el hueco/pasillo de verdad, nunca un número
- * inventado); el de la espiral es de lectura (ver
- * `STORM_HALO_SPIRAL_ARM_HALF_WIDTH`). `spiralAngleNow` ya trae aplicada la
- * velocidad angular REAL de los brazos (`STORM_SPIRAL_ANGULAR_SPEED`, ver
- * el `useFrame`).
- */
-function stormSegmentLit(segAngle: number, pattern: number, state: StormState, spiralAngleNow: number): boolean {
-  if (pattern === STORM_PATTERN_SPIRAL) {
-    const step = (Math.PI * 2) / STORM_SPIRAL_ARMS;
-    for (let k = 0; k < STORM_SPIRAL_ARMS; k++) {
-      const armAngle = spiralAngleNow + k * step;
-      if (Math.abs(stormAngularDelta(segAngle, armAngle)) <= STORM_HALO_SPIRAL_ARM_HALF_WIDTH) return true;
-    }
-    return false;
-  }
-  const gapHalf = (stormCorridorMinAngle(STORM_MIN_EMISSION_RADIUS) * STORM_CORRIDOR_SAFETY) / 2;
-  if (pattern === STORM_PATTERN_RINGS) {
-    // Todo el anillo iluminado MENOS el hueco de diseño real (ver `emitRing`
-    // en patterns.ts): así siempre acaba dejando pasar por ahí.
-    return Math.abs(stormAngularDelta(segAngle, state.ringGapAngle)) > gapHalf;
-  }
-  // Ráfaga (STORM_PATTERN_BURST, único que queda): oscuro en cada uno de los
-  // STORM_BURST_CORRIDORS huecos reales (centrados en burstBaseAngle +
-  // c·sector, ver `fireRadialBurst`), iluminado en el resto (las 3 zonas con
-  // balas).
-  const sector = (Math.PI * 2) / STORM_BURST_CORRIDORS;
-  for (let c = 0; c < STORM_BURST_CORRIDORS; c++) {
-    const gapCenter = state.burstBaseAngle + c * sector;
-    if (Math.abs(stormAngularDelta(segAngle, gapCenter)) <= gapHalf) return false;
-  }
-  return true;
-}
+// El Prisma (GDD §15.4) y La Tormenta (GDD §15.5): constantes/helpers puros
+// de su render específico extraídos junto a `applyPrismaBossFrame`/
+// `applyStormBossFrame` (bosses/prisma/BossView.tsx, bosses/storm/BossView.tsx).
 
 function EnemyMesh({
   session,
@@ -610,55 +403,21 @@ function EnemyMesh({
     group.rotation.y = orientationYaw.current;
 
     // Linterna de ojos (punto 1 de playtest, solo no-boss): dirección LOCAL
-    // del cono de luz según arquetipo — reutiliza la MISMA matemática que ya
-    // usa cada `<kind>/Mesh.tsx` para orientar sus ojos, sin duplicar
-    // constantes: dummy/trail no giran nada extra (el `group` ya apunta en
-    // la dirección de patrulla/velocidad vía `orientationYaw` de arriba, así
-    // que el cono mira "hacia delante" en local); spike usa su `facing` fijo
-    // (misma fórmula que `spikeSecondaryGroupRef` en spike/Mesh.tsx); chaser
-    // y shooter apuntan al héroe (misma fórmula que `chaserFaceRef`/
-    // `shooterEyeGroupRef` en sus respectivos Mesh.tsx), conservando el
-    // último ángulo válido cuando la distancia al héroe degenera a ~0.
+    // del cono de luz según arquetipo, calculada por `applyLanternAim`
+    // (EnemyLights.tsx) — mismo cálculo, mismo punto exacto del frame que
+    // antes de extraerlo (depende de `orientationYaw`/`group.position` de
+    // arriba).
     if (kind !== 'boss') {
-      // Ángulo de MUNDO directo: antes se restaba `group.rotation.y` para
-      // cancelar la rotación del padre (la linterna vivía dentro de
-      // `group`, que rota con la orientación del enemigo). Ahora vive en
-      // `lightsGroupRef`, que solo TRASLADA (nunca rota) — su espacio local
-      // YA es el mundo, así que no hace falta cancelar nada. Mismo ángulo de
-      // mundo final que antes en los 3 casos (spike/chaser-shooter usaban la
-      // resta para compensar exactamente esa rotación; dummy/trail apuntaban
-      // "hacia delante" del cuerpo, que en mundo es `orientationYaw`).
-      if (kind === 'spike') {
-        lanternAngle.current = Math.atan2(enemy.facing.x, enemy.facing.y);
-      } else if (kind === 'chaser' || kind === 'shooter') {
-        const dxHero = world.hero.position.x - enemy.position.x;
-        const dyHero = world.hero.position.y - enemy.position.y;
-        if (Math.hypot(dxHero, dyHero) > 1e-4) {
-          lanternAngle.current = Math.atan2(dxHero, dyHero);
-        }
-      } else {
-        lanternAngle.current = orientationYaw.current ?? 0;
-      }
-      if (lanternTargetRef.current) {
-        // Altura LOCAL = -group.position.y: `lightsGroupRef` (el padre de
-        // este target) mirrorea `group.position` cada frame (más arriba,
-        // `lightsGroupRef.current.position.copy(group.position)`), así que
-        // restar esa misma altura aquí cancela el offset y deja el target en
-        // el plano del suelo real (y=0 de mundo) — el cono apunta hacia
-        // abajo y por delante en vez de en horizontal (punto 6 de playtest
-        // ronda 4).
-        lanternTargetRef.current.position.set(
-          Math.sin(lanternAngle.current) * ENEMY_LANTERN_TARGET_DISTANCE,
-          -group.position.y,
-          Math.cos(lanternAngle.current) * ENEMY_LANTERN_TARGET_DISTANCE,
-        );
-      }
-      // El target de una spotLight es un Object3D aparte que three.js no
-      // añade solo al padre correcto: se fija UNA vez que ambas refs existen
-      // (comparación de identidad, barata) en vez de depender de props JSX.
-      if (lanternRef.current && lanternTargetRef.current && lanternRef.current.target !== lanternTargetRef.current) {
-        lanternRef.current.target = lanternTargetRef.current;
-      }
+      applyLanternAim({
+        kind,
+        enemy,
+        heroPosition: world.hero.position,
+        group,
+        orientationYaw: orientationYaw.current,
+        lanternAngle,
+        lanternTargetRef,
+        lanternRef,
+      });
     }
 
     if (kind === 'boss') {
@@ -701,231 +460,44 @@ function EnemyMesh({
       }
     }
 
+    // Render específico de cada jefe (GDD §15.2-15.5): extraído a
+    // `bosses/<id>/BossView.tsx`, llamado aquí en el mismo orden/punto exacto
+    // que antes de la extracción (los refs siguen viviendo en este
+    // componente — se pasan por parámetro — para no alterar la mutación
+    // dentro del frame).
     if (kind === 'boss' && bossId === 'guardian') {
-      // Vibración + brillo del telegraph (GDD §15.2 "brilla y vibra ~0.8s"):
-      // MÁS intenso que el aro genérico ya dibujado arriba — jitter de
-      // posición del propio cuerpo (no de un anillo aparte) + material ámbar
-      // intercambiado, para que sea inconfundible el aviso de un jefe que va
-      // a embestir en línea recta.
-      const telegraphing = world.time < enemy.bossTelegraphUntil && !flashing;
-      if (telegraphing !== wasGuardianTelegraphing.current) {
-        wasGuardianTelegraphing.current = telegraphing;
-        const body = bodyRef.current;
-        if (body && !flashing) body.material = telegraphing ? guardianTelegraphGlowMaterial : guardianBodyMaterial;
-      }
-      const body = bodyRef.current;
-      if (body) {
-        const jitter = telegraphing ? Math.sin(world.time * 40) * 0.05 : 0;
-        body.position.x = jitter;
-      }
-
-      // Tambaleo del aturdimiento (estado INCONFUNDIBLE, entregable 3):
-      // oscilación de rotación en Z (se "balancea" como grogui) + 3
-      // estrellitas doradas orbitando sobre la cabeza. Nunca se confunde con
-      // el telegraph: distinto eje de movimiento (bamboleo lateral vs jitter
-      // de posición) y color (dorado vs ámbar).
-      if (groupRef.current) {
-        groupRef.current.rotation.z = enemy.bossVulnerable ? Math.sin(world.time * 6) * 0.18 : 0;
-      }
-      if (guardianStunGroupRef.current) {
-        guardianStunGroupRef.current.visible = enemy.bossVulnerable;
-        if (enemy.bossVulnerable) {
-          for (let i = 0; i < guardianStunStarRefs.current.length; i++) {
-            const star = guardianStunStarRefs.current[i];
-            if (!star) continue;
-            const angle = world.time * 3 + (i / guardianStunStarRefs.current.length) * Math.PI * 2;
-            const orbitRadius = bodyRadius * 0.7;
-            star.position.set(Math.cos(angle) * orbitRadius, bodyRadius * 1.3, Math.sin(angle) * orbitRadius);
-            star.rotation.y = angle * 2;
-          }
-        }
-      }
+      applyGuardianBossFrame({
+        enemy,
+        world,
+        flashing,
+        bodyRadius,
+        bodyRef,
+        groupRef,
+        guardianStunGroupRef,
+        guardianStunStarRefs,
+        wasGuardianTelegraphing,
+      });
     }
 
     if (kind === 'boss' && bossId === 'queen') {
-      // Pulso de invocación (GDD §15.3): `enemy.bossTelegraphUntil` se
-      // reutiliza en queenStepPattern como cuenta atrás (no un timestamp)
-      // hasta la próxima oleada de larvas — se RESETEA a QUEEN_WAVE_INTERVAL
-      // justo cuando invoca. Detectar ese salto hacia arriba (en vez de su
-      // decaimiento normal) es la señal de "acaba de invocar", sin necesitar
-      // leer eventos de sim desde el render.
-      if (enemy.bossTelegraphUntil > lastQueenWaveTimer.current + 0.05) {
-        queenSummonPulseUntil.current = world.time + 0.35;
-      }
-      lastQueenWaveTimer.current = enemy.bossTelegraphUntil;
-
-      const pulsing = world.time < queenSummonPulseUntil.current;
-      if (queenSummonPulseRef.current) {
-        queenSummonPulseRef.current.visible = pulsing;
-        if (pulsing) {
-          const t = 1 - Math.max(0, queenSummonPulseUntil.current - world.time) / 0.35;
-          queenSummonPulseRef.current.scale.setScalar(bodyRadius * (1.2 + t * 1.8));
-        }
-      }
+      applyQueenBossFrame({ enemy, world, bodyRadius, queenSummonPulseRef, queenSummonPulseUntil, lastQueenWaveTimer });
     }
 
     if (kind === 'boss' && bossId === 'prisma') {
-      // Núcleo con el color del arma activa (GDD §15.4): MUTA el color del
-      // material compartido en vez de intercambiarlo (ver restingBodyMaterial
-      // + comentario de cabecera). El flash de golpe (arriba) tiene
-      // prioridad: mismo criterio que el Guardián (guardianTelegraphGlow más
-      // abajo), que tampoco compite contra el flash de fase.
-      if (!flashing) {
-        const activeColor = prismaWeaponColor(enemy.bossWeaponGateA);
-        const telegraphingColorChange =
-          enemy.bossTelegraphKind.startsWith('color-change:') && world.time < enemy.bossTelegraphUntil;
-        if (telegraphingColorChange) {
-          // Tartamudeo (GDD §15.4): parpadeo rápido alternando el color
-          // actual y el siguiente (leído del propio `bossTelegraphKind`).
-          const nextWeapon = enemy.bossTelegraphKind.slice('color-change:'.length);
-          const nextColor = prismaWeaponColor(nextWeapon);
-          const blink = Math.sin(world.time * PRISMA_COLOR_TELEGRAPH_BLINK_SPEED) > 0;
-          prismaCoreMaterial.color.copy(blink ? activeColor : nextColor);
-        } else if (enemy.bossWeaponGateB !== '') {
-          // Solape de fase 3 (GDD §15.4): alterna los dos colores activos a
-          // un ritmo más calmado que el tartamudeo del telegraph.
-          const overlapColor = prismaWeaponColor(enemy.bossWeaponGateB);
-          const blink = Math.sin(world.time * PRISMA_OVERLAP_BLINK_SPEED) > 0;
-          prismaCoreMaterial.color.copy(blink ? activeColor : overlapColor);
-        } else {
-          prismaCoreMaterial.color.copy(activeColor);
-        }
-      }
-
-      // Gemas orbitando el núcleo (silueta propia, distinta de cuernos/corona).
-      for (let i = 0; i < prismaGemRefs.current.length; i++) {
-        const gem = prismaGemRefs.current[i];
-        if (!gem) continue;
-        const angle = world.time * PRISMA_GEM_ORBIT_SPEED + (i / prismaGemRefs.current.length) * Math.PI * 2;
-        const orbitRadius = bodyRadius * 1.35;
-        gem.position.set(Math.cos(angle) * orbitRadius, 0, Math.sin(angle) * orbitRadius);
-        gem.rotation.y = angle * 1.5;
-      }
+      applyPrismaBossFrame({ enemy, world, flashing, bodyRadius, prismaGemRefs });
     }
 
     if (kind === 'boss' && bossId === 'storm') {
-      // Anillo de Saturno segmentado (rediseño post-playtest 2026-07-15,
-      // David: "que se iluminara por partes... de la forma en la que van a
-      // salir las bolas"): `enemy.bossCounter` es el patrón de ESTE ciclo —
-      // decidido al entrar en RELOAD (`storm/pattern.ts::stormEnterReload` →
-      // `stormResetPatternState`, que YA arranca el generador), así que ya es
-      // válido —y sus ÁNGULOS REALES ya están en `world.bossState`— durante
-      // IDLE y la 2ª mitad de la recarga, no solo durante TELEGRAPH/EXECUTE.
-      // Aquí solo se decide CUÁNTO se insinúa (`mixT`, 0..1) y si se muestra
-      // el layout real del patrón (`showPatternLayout`) o un anillo uniforme
-      // (verde en recarga 1ª mitad, azul neutro en el brevísimo ambiente sin
-      // patrón decidido tras `onInit`/cambio de fase).
-      const state = stormState(world);
-      const stage = enemy.bossStage;
-      const pattern = enemy.bossCounter;
-      const hasPattern = pattern >= 0 && pattern < STORM_HALO_PATTERN_COLOR.length;
-      const halo = stormHaloRef.current;
-      if (halo) {
-        let showPatternLayout = false;
-        let mixT = 1; // 0 = verde de recarga puro, 1 = color resuelto del patrón puro
-        let spiralAngleNow = 0;
-        let uniformColor = STORM_HALO_PATTERN_COLOR[STORM_PATTERN_SPIRAL]; // ambiente por defecto
-        if (stage === STORM_STAGE_RELOAD) {
-          const reloadDuration = STORM_RELOAD_DURATION_BY_PHASE[enemy.bossPhase - 1];
-          const remaining = Math.max(0, enemy.bossVulnerableUntil - world.time);
-          const reloadFrac = reloadDuration > 0 ? 1 - remaining / reloadDuration : 1; // 0 al abrir, 1 al cerrar
-          if (!hasPattern || reloadFrac < 0.5) {
-            // 1ª mitad: pose de recarga pura, anillo VERDE UNIFORME, para que
-            // el arranque de la insinuación en la 2ª mitad se note como un
-            // "despertar" del aro.
-            uniformColor = stormHaloReloadColor;
-            stormHaloMaterial.opacity = STORM_HALO_RELOAD_OPACITY;
-          } else {
-            // 2ª mitad: insinúa YA el patrón real (secciones reales del
-            // generador, arrancado desde que se decidió en
-            // `stormEnterReload`), mezclado con el verde de recarga (nunca se
-            // despega del todo mientras la ventana siga abierta) a
-            // intensidad creciente hasta el cierre.
-            const hintT = (reloadFrac - 0.5) / 0.5; // 0..1 dentro de la 2ª mitad
-            showPatternLayout = true;
-            mixT = hintT;
-            spiralAngleNow = state.spiralBaseAngle; // estático: stepSpiral aún no corre (EXECUTE no ha empezado)
-            const fullOpacity = STORM_HALO_FULL_OPACITY[pattern];
-            stormHaloMaterial.opacity = STORM_HALO_RELOAD_OPACITY + (fullOpacity - STORM_HALO_RELOAD_OPACITY) * hintT;
-          }
-        } else if (stage === STORM_STAGE_IDLE && hasPattern) {
-          // Brevísimo (0.2-0.35s) pero el patrón YA se decidió en la recarga
-          // anterior: sin parón visual, sigue a intensidad plena hasta que
-          // arranque su propio telegraph.
-          showPatternLayout = true;
-          mixT = 1;
-          spiralAngleNow = state.spiralBaseAngle; // estático, mismo criterio que el hint de recarga
-          stormHaloMaterial.opacity = STORM_HALO_FULL_OPACITY[pattern];
-        } else if ((stage === STORM_STAGE_TELEGRAPH || stage === STORM_STAGE_EXECUTE) && hasPattern) {
-          showPatternLayout = true;
-          mixT = 1;
-          if (pattern === STORM_PATTERN_SPIRAL) {
-            if (stage === STORM_STAGE_TELEGRAPH) {
-              // Durante el telegraph los brazos aún no giran de verdad
-              // (`stepSpiral` no corre hasta EXECUTE): se avanza el ángulo
-              // ANALÍTICAMENTE con la MISMA fórmula que `stepSpiral`
-              // (`spiralBaseAngle += STORM_SPIRAL_ANGULAR_SPEED·dt`) para que
-              // el aro "pueda rotar a la velocidad angular real de los
-              // brazos" desde el propio aviso (petición explícita de David).
-              const telegraphDuration = STORM_TELEGRAPH_DURATION_BY_PHASE[enemy.bossPhase - 1];
-              const remaining = Math.max(0, enemy.bossTelegraphUntil - world.time);
-              const elapsed = telegraphDuration > 0 ? telegraphDuration - remaining : 0;
-              spiralAngleNow = state.spiralBaseAngle + STORM_SPIRAL_ANGULAR_SPEED * elapsed;
-            } else {
-              // EXECUTE: `stepSpiral` ya avanza `state.spiralBaseAngle` de
-              // verdad cada tick — leerlo directamente es exacto.
-              spiralAngleNow = state.spiralBaseAngle;
-            }
-          }
-          stormHaloMaterial.opacity = STORM_HALO_FULL_OPACITY[pattern];
-        } else {
-          // Ambiente (solo el brevísimo primer IDLE tras `onInit`/cambio de
-          // fase, con `bossCounter` todavía sin decidir, `-1`): anillo azul
-          // neutro uniforme — NUNCA verde aquí, para no prometer una ventana
-          // de vulnerabilidad que no está abierta.
-          stormHaloMaterial.opacity = 0.4;
-        }
-
-        // Bucle de secciones (cero allocs: `obj`/`color` de
-        // `stormHaloScratch`, reutilizados). `segAngle` es un ángulo de
-        // MUNDO fijo del grid (0..2π), el MISMO sistema de ángulos que las
-        // balas reales (dx=cosθ, dy=sinθ, `patterns.ts::emitBulletAtAngle`).
-        // `groupRef` (el padre) ya lleva `rotation.y = orientationYaw.current`
-        // (yaw de orientación por velocidad, ver más arriba: La Tormenta
-        // deriva sin parar y SÍ gira) — para que la sección caiga en el
-        // ángulo de MUNDO `segAngle` pese a esa rotación del padre, su
-        // rotación LOCAL debe CANCELARLA: `stormHaloSegmentGeometry`
-        // (assets.ts) ya deja el centro de su arco en el ángulo local 0, así
-        // que colocarlo en el ángulo de mundo `segAngle` con un padre rotado
-        // Ω exige `rotation.y = -segAngle - Ω` (rotaciones Y componen por
-        // suma: Ry(Ω)·Ry(local) = Ry(Ω+local); se comprueba con Ω=0,
-        // segAngle=0 → local=0 → sección en (1,0,0), que es justo donde cae
-        // dx=cos0=1, dy=sin0=0 tras `group.position.set(x,h,y)` — sim.x↔render.x, sim.y↔render.z).
-        const { obj, color } = stormHaloScratch;
-        const parentYaw = orientationYaw.current ?? 0;
-        const segmentScale = bodyRadius * STORM_HALO_RADIUS_FACTOR;
-        for (let i = 0; i < STORM_HALO_SEGMENTS; i++) {
-          const segAngle = i * STORM_HALO_SEGMENT_ANGLE;
-          if (showPatternLayout) {
-            const lit = stormSegmentLit(segAngle, pattern, state, spiralAngleNow);
-            color.copy(stormHaloReloadColor).lerp(lit ? STORM_HALO_PATTERN_COLOR[pattern] : STORM_HALO_DIM_COLOR, mixT);
-          } else {
-            color.copy(uniformColor);
-          }
-          obj.position.set(0, 0, 0);
-          obj.rotation.set(0, -segAngle - parentYaw, 0);
-          obj.scale.setScalar(segmentScale);
-          obj.updateMatrix();
-          halo.setMatrixAt(i, obj.matrix);
-          halo.setColorAt(i, color);
-        }
-        halo.instanceMatrix.needsUpdate = true;
-        if (halo.instanceColor) halo.instanceColor.needsUpdate = true;
-      }
-      const body = bodyRef.current;
-      if (body && !flashing) {
-        body.material = stage === STORM_STAGE_RELOAD ? stormReloadCoreMaterial : stormBodyMaterial;
-      }
+      applyStormBossFrame({
+        enemy,
+        world,
+        bodyRadius,
+        flashing,
+        orientationYaw: orientationYaw.current,
+        bodyRef,
+        stormHaloRef,
+        stormHaloScratch,
+      });
     }
   });
 
@@ -978,174 +550,33 @@ function EnemyMesh({
         </>
       )}
 
+      {/* Composición propia de cada jefe (silueta + adornos animados): vive
+          junto a su dueño en `features/bosses/<jefe>/BossView.tsx`, igual que
+          su patrón/constantes — aquí solo se monta el que toque. El useFrame
+          de arriba delega en su `apply<Jefe>BossFrame` hermano. */}
       {kind === 'boss' && bossId === 'guardian' && (
-        <>
-          {/* Cuerpo grande y pesado con "hombros"/cuernos (GDD §15.2): 2 conos
-              cortos y anchos anclados a los lados de la esfera pétrea,
-              orientados hacia fuera — silueta reconocible de embestida antes
-              de que empiece a moverse. Escala fija en local (ya vive dentro
-              del `group` que escala con `enemy.radius` vía bodyRef arriba). */}
-          <mesh
-            geometry={guardianHornGeometry}
-            material={guardianHornMaterial}
-            position={[-0.45, 0.15, 0.15]}
-            rotation-z={Math.PI / 2.4}
-            rotation-y={-0.4}
-          />
-          <mesh
-            geometry={guardianHornGeometry}
-            material={guardianHornMaterial}
-            position={[0.45, 0.15, 0.15]}
-            rotation-z={-Math.PI / 2.4}
-            rotation-y={0.4}
-          />
-
-          {/* Estado aturdido INCONFUNDIBLE (entregable 3): 3 estrellitas
-              doradas orbitando sobre la cabeza mientras `bossVulnerable`;
-              posición real recalculada en useFrame (órbita). */}
-          <group ref={guardianStunGroupRef} visible={false}>
-            {[0, 1, 2].map((i) => (
-              <mesh
-                key={i}
-                ref={(el) => {
-                  guardianStunStarRefs.current[i] = el;
-                }}
-                geometry={guardianStunStarGeometry}
-                material={guardianStunStarMaterial}
-                scale={0.1}
-              />
-            ))}
-          </group>
-        </>
+        <GuardianBossExtras guardianStunGroupRef={guardianStunGroupRef} guardianStunStarRefs={guardianStunStarRefs} />
       )}
-
-      {kind === 'boss' && bossId === 'queen' && (
-        <>
-          {/* Corona: 5 púas finas en abanico sobre la cabeza (silueta de
-              "reina de enjambre", distinta del Guardián) — estática en local,
-              ya vive dentro del `group` que escala con `enemy.radius`. */}
-          {[0, 1, 2, 3, 4].map((i) => {
-            const angle = (i - 2) * 0.5;
-            return (
-              <mesh
-                key={i}
-                geometry={queenCrownSpikeGeometry}
-                material={queenCrownMaterial}
-                position={[Math.sin(angle) * 0.32, 0.55, Math.cos(angle) * 0.32]}
-                rotation-x={-0.25}
-                rotation-z={angle * 0.4}
-              />
-            );
-          })}
-
-          {/* Pulso de invocación (GDD §15.3): anillo que se expande
-              brevemente bajo los pies cada vez que suelta una oleada de
-              larvas; posición/escala reales en useFrame. */}
-          <mesh
-            ref={queenSummonPulseRef}
-            geometry={unitCircle}
-            material={queenSummonPulseMaterial}
-            rotation-x={-Math.PI / 2}
-            position={[0, -0.38, 0]}
-            visible={false}
-          />
-        </>
-      )}
-
-      {kind === 'boss' && bossId === 'prisma' && (
-        <>
-          {/* Silueta propia (GDD §15.4): 3 gemas pequeñas orbitando el núcleo
-              (distinta de cuernos/corona) — posición real recalculada en
-              useFrame (órbita continua, siempre visible). */}
-          {[0, 1, 2].map((i) => (
-            <mesh
-              key={i}
-              ref={(el) => {
-                prismaGemRefs.current[i] = el;
-              }}
-              geometry={prismaGemGeometry}
-              material={prismaGemMaterial}
-            />
-          ))}
-        </>
-      )}
-
-      {kind === 'boss' && bossId === 'storm' && (
-        <>
-          {/* Anillo de Saturno segmentado alrededor del cuerpo (GDD §15.5,
-              rediseño post-playtest 2026-07-15): silueta propia de "ojo de
-              la tormenta", distinta de cuernos/corona/gemas — SIEMPRE plano/
-              horizontal (nunca rota tras montarse: la geometría de cada
-              sección ya nace pre-rotada flat, ver `stormHaloSegmentGeometry`
-              en assets.ts); qué sección se ilumina se decide mutando el color
-              por instancia cada frame en useFrame. */}
-          <instancedMesh
-            ref={stormHaloRef}
-            args={[stormHaloSegmentGeometry, stormHaloMaterial, STORM_HALO_SEGMENTS]}
-            frustumCulled={false}
-          />
-        </>
-      )}
+      {kind === 'boss' && bossId === 'queen' && <QueenBossExtras queenSummonPulseRef={queenSummonPulseRef} />}
+      {kind === 'boss' && bossId === 'prisma' && <PrismaBossExtras prismaGemRefs={prismaGemRefs} />}
+      {kind === 'boss' && bossId === 'storm' && <StormBossExtras stormHaloRef={stormHaloRef} />}
     </group>
 
-    {/* Luces móviles (punto 1/2a de playtest, SOLO dark>=1): group HERMANO
-        de `groupRef`, NUNCA oculto (recuento de luces = recompilación de
-        shaders en three.js, ver comentario extenso junto a `lightsGroupRef`
-        arriba) — se apagan con intensity=0 al morir el enemigo, en vez de
-        `visible=false`. Mirrorea la POSICIÓN de `group` cada frame (nunca su
-        rotación: los ángulos de abajo ya se calculan en espacio de mundo).
-        No-boss: linterna de ojos (spotLight débil, dirección calculada en
-        useFrame, CON sombra de mapa pequeño — ver ENEMY_LANTERN_SHADOW_MAP_SIZE)
-        + relleno point MUY tenue SIN sombra (alcance mínimo, no le da tiempo
-        a cruzar un muro de forma visible) para que el cuerpo no quede negro
-        del todo. Boss: conserva su pointLight de siempre, más luminosa
-        (punto 2a) y SIN sombra (su arena es una sala entera, ver
-        ENEMY_LIGHT_DISTANCE_BOSS más arriba) — las velas de sala
-        (BossCandlesView) hacen el
-        resto. */}
-    <group ref={lightsGroupRef}>
-      {silhouettes && kind !== 'boss' && (
-        <>
-          <spotLight
-            ref={lanternRef}
-            color={ENEMY_LIGHT_COLOR[kind]}
-            intensity={ENEMY_LANTERN_INTENSITY}
-            distance={ENEMY_LANTERN_DISTANCE}
-            angle={ENEMY_LANTERN_ANGLE}
-            penumbra={ENEMY_LANTERN_PENUMBRA}
-            decay={ENEMY_LANTERN_DECAY}
-            position={[0, ENEMY_LANTERN_HEIGHT, 0]}
-            // Sombra (ver ENEMY_LANTERN_SHADOW_MAP_SIZE arriba): mapa de spot
-            // pequeño, 1 sola pasada extra por enemigo vivo — nace en `true`
-            // porque este group de luces solo se monta con dark>=1; el
-            // useFrame de arriba la apaga junto con la intensidad al morir.
-            castShadow
-            shadow-mapSize={[ENEMY_LANTERN_SHADOW_MAP_SIZE, ENEMY_LANTERN_SHADOW_MAP_SIZE]}
-            shadow-camera-near={ENEMY_LANTERN_SHADOW_NEAR}
-            shadow-camera-far={ENEMY_LANTERN_SHADOW_FAR}
-          />
-          <object3D ref={lanternTargetRef} position={[0, -ENEMY_RADIUS_RENDER, ENEMY_LANTERN_TARGET_DISTANCE]} />
-          <pointLight
-            ref={fillLightRef}
-            color={ENEMY_LIGHT_COLOR[kind]}
-            intensity={ENEMY_FILL_LIGHT_INTENSITY}
-            distance={ENEMY_FILL_LIGHT_DISTANCE}
-            decay={ENEMY_LIGHT_DECAY}
-            position={[0, ENEMY_LIGHT_HEIGHT, 0]}
-          />
-        </>
-      )}
-      {silhouettes && kind === 'boss' && (
-        <pointLight
-          ref={bossLightRef}
-          color={ENEMY_LIGHT_COLOR.boss}
-          intensity={ENEMY_LIGHT_INTENSITY_BOSS}
-          distance={ENEMY_LIGHT_DISTANCE_BOSS}
-          decay={ENEMY_LIGHT_DECAY}
-          position={[0, ENEMY_LIGHT_HEIGHT_BOSS, 0]}
-        />
-      )}
-    </group>
+    {/* Luces móviles (punto 1/2a de playtest, SOLO dark>=1): rig completo
+        (constantes + JSX) extraído a `EnemyLightsRig` (EnemyLights.tsx) —
+        group HERMANO de `groupRef`, NUNCA oculto (recuento de luces =
+        recompilación de shaders en three.js, ver comentario extenso junto a
+        `lightsGroupRef` allí), se apaga con intensity=0 al morir el enemigo
+        en vez de `visible=false`. */}
+    <EnemyLightsRig
+      kind={kind}
+      silhouettes={silhouettes}
+      lightsGroupRef={lightsGroupRef}
+      lanternRef={lanternRef}
+      lanternTargetRef={lanternTargetRef}
+      fillLightRef={fillLightRef}
+      bossLightRef={bossLightRef}
+    />
     </>
   );
 }
