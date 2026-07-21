@@ -225,6 +225,7 @@ function EnemyMesh({
   // sesión), controla el montaje de la linterna de ojos (EnemyLightsRig) y
   // si esta/la vela pueden proyectar sombra.
   const enemyLanternEnabled = useQualityStore((s) => s.budget.enemyLanternEnabled);
+  const enemyFillLightEnabled = useQualityStore((s) => s.budget.enemyFillLightEnabled);
   const shadowsEnabled = useQualityStore((s) => s.budget.shadowsEnabled);
   const bodyRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
@@ -582,6 +583,7 @@ function EnemyMesh({
       kind={kind}
       silhouettes={silhouettes}
       enemyLanternEnabled={enemyLanternEnabled}
+      enemyFillLightEnabled={enemyFillLightEnabled}
       shadowsEnabled={shadowsEnabled}
       lightsGroupRef={lightsGroupRef}
       lanternRef={lanternRef}

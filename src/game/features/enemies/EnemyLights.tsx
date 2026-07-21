@@ -218,6 +218,7 @@ export function EnemyLightsRig({
   kind,
   silhouettes,
   enemyLanternEnabled,
+  enemyFillLightEnabled,
   shadowsEnabled,
   lightsGroupRef,
   lanternRef,
@@ -228,6 +229,7 @@ export function EnemyLightsRig({
   kind: EnemyKind;
   silhouettes: boolean;
   enemyLanternEnabled: boolean;
+  enemyFillLightEnabled: boolean;
   shadowsEnabled: boolean;
   lightsGroupRef: RefObject<Group | null>;
   lanternRef: RefObject<SpotLight | null>;
@@ -262,7 +264,7 @@ export function EnemyLightsRig({
           <object3D ref={lanternTargetRef} position={[0, -ENEMY_RADIUS_RENDER, ENEMY_LANTERN_TARGET_DISTANCE]} />
         </>
       )}
-      {silhouettes && kind !== 'boss' && (
+      {silhouettes && kind !== 'boss' && enemyFillLightEnabled && (
         <pointLight
           ref={fillLightRef}
           color={ENEMY_LIGHT_COLOR[kind]}

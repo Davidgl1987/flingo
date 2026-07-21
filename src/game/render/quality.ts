@@ -53,10 +53,30 @@ export interface QualityBudget {
   profile: QualityProfile;
   /** Vela del héroe (CandleLightView) y linterna de enemigo (EnemyLights): `castShadow`. */
   shadowsEnabled: boolean;
-  /** Linterna de ojos (spotLight) por enemigo no-jefe; el relleno point (barato, sin sombra) se conserva siempre. */
+  /** Linterna de ojos (spotLight) por enemigo no-jefe. */
   enemyLanternEnabled: boolean;
+  /**
+   * Relleno point por enemigo no-jefe. Se apaga en perfil bajo por RECUENTO,
+   * no por coste individual: `EnemyViews` monta un componente por enemigo de
+   * TODA la mazmorra (no solo los de la sala visible), así que su luz de
+   * relleno se cuenta ×11 en una mazmorra típica — medido en preview: 24
+   * luces montadas a la vez incluso ya sin sombras. Los ojos emisivos
+   * (`MeshBasicMaterial`, no dependen de luz) siguen delatando al enemigo en
+   * la oscuridad, que es justo la estética pedida ("los enemigos emiten poca
+   * luz, los ojos y poco más").
+   */
+  enemyFillLightEnabled: boolean;
   /** Tamaño FIJO del pool de luces de proyectil (ProjectileView.tsx) durante toda la sesión. */
   projectileLightPoolSize: number;
+  /**
+   * Luz de las antorchas de muro. Mismo motivo de recuento que el relleno de
+   * enemigo: las antorchas de la sala de jefe y de la tienda se montan desde
+   * GameRoot para toda la mazmorra, no solo al entrar en esas salas (8
+   * spotLights permanentes medidas en preview). La geometría de la antorcha y
+   * su llama (Basic) se conservan: se siguen viendo, solo dejan de proyectar
+   * resplandor propio.
+   */
+  wallTorchLightEnabled: boolean;
   /** Antorchas de muro también en los puntos medios de los muros largos (además de las 4 esquinas fijas). */
   wallTorchMidpoints: boolean;
 }
@@ -66,22 +86,33 @@ const BUDGET_ALTO: QualityBudget = {
   profile: 'alto',
   shadowsEnabled: true,
   enemyLanternEnabled: true,
+  enemyFillLightEnabled: true,
   projectileLightPoolSize: 6,
+  wallTorchLightEnabled: true,
   wallTorchMidpoints: true,
 };
 
 /**
  * Perfil 'bajo' (GPU limitada): apaga las DOS fuentes de shadow map (vela +
- * linternas de enemigo → 0 sombras en toda la escena) y recorta luces no
- * esenciales. El relleno de enemigo (pointLight, sin sombra, barata) se
- * conserva siempre: sin él, el cuerpo del enemigo quedaría negro del todo
- * fuera del alcance de la vela.
+ * linternas de enemigo → 0 sombras en toda la escena) y deja el recuento
+ * TOTAL de luces en un puñado. Medido en preview con `?quality=bajo` antes de
+ * este recorte: quitar solo las sombras dejaba aún 24 luces montadas (11
+ * rellenos de enemigo + 8 antorchas de jefe/tienda + vela + pool), porque
+ * esos componentes se montan para toda la mazmorra, no solo para la sala
+ * visible. 24 luces sin sombra siguen siendo mucho para una GPU de gama baja
+ * (uniforms del shader Lambert + coste de fill rate por fragmento), así que
+ * el perfil bajo conserva solo lo imprescindible para que la escena se LEA:
+ * la vela del héroe (fuente principal), la luz propia del jefe y un pool
+ * mínimo de proyectiles ⇒ ~5-6 luces en total, con margen de sobra sobre
+ * cualquier límite móvil real.
  */
 const BUDGET_BAJO: QualityBudget = {
   profile: 'bajo',
   shadowsEnabled: false,
   enemyLanternEnabled: false,
+  enemyFillLightEnabled: false,
   projectileLightPoolSize: 2,
+  wallTorchLightEnabled: false,
   wallTorchMidpoints: false,
 };
 
