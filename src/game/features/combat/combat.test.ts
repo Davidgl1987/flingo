@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ARROW_PIERCE_COUNT, CONTACT_DAMAGE_COOLDOWN, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FAN_ANGLE_STEP, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_WALL_BOUNCES } from './constants';
+import { ARROW_DAMAGE, ARROW_PIERCE_COUNT, CONTACT_DAMAGE_COOLDOWN, ENEMY_KNOCKBACK_SPEED, HERO_IFRAME_DURATION, PROJECTILE_FAN_ANGLE_STEP, RAM_SPEED_THRESHOLD, SHIELD_IFRAME_DURATION, SPELL_WALL_BOUNCES } from './constants';
 import { MAX_SPEED } from '@/engine/physics';
 import { applyDamageToEnemy, applyDamageToHero, applyKnockbackToHero, fireEnemyProjectile, fireProjectile, isSpikeContactDangerous, ramDamage, stepHeroEnemyContacts, stepProjectiles } from './combat';
 import { createEventQueue, drainEvents, type GameEvent } from '@/engine/events';
@@ -176,44 +176,83 @@ describe('contacto héroe↔enemigo', () => {
   });
 });
 
-describe('Spike: púa direccional en contacto', () => {
-  it('isSpikeContactDangerous distingue frente (dot > 0.25) de flancos/espalda', () => {
-    // Púa apuntando a +y; héroe al sur del spike (lado de la púa) → peligroso.
-    expect(isSpikeContactDangerous(0, 1, 0, 0, 0, 1)).toBe(true);
-    // Héroe detrás (lado opuesto) → no peligroso.
-    expect(isSpikeContactDangerous(0, -1, 0, 0, 0, 1)).toBe(false);
-    // Flanco exacto (dot = 0) → no peligroso.
+describe('Spike: púa direccional en contacto (mecánica invertida 2026-07-20: pincha por detrás, solo se daña por delante)', () => {
+  it('isSpikeContactDangerous distingue espalda (dot < -0.25, peligrosa) de frente/flancos (vulnerables)', () => {
+    // Púa/ojo apuntando a +y; origen del contacto al norte del spike (lado de
+    // la púa, `facing`) → YA NO peligroso (ahora es el lado vulnerable).
+    expect(isSpikeContactDangerous(0, 1, 0, 0, 0, 1)).toBe(false);
+    // Origen al sur (arco trasero, opuesto a `facing`) → peligroso.
+    expect(isSpikeContactDangerous(0, -1, 0, 0, 0, 1)).toBe(true);
+    // Flanco exacto (dot = 0) → no peligroso, igual que antes.
     expect(isSpikeContactDangerous(1, 0, 0, 0, 0, 1)).toBe(false);
   });
 
-  it('embestir de frente contra la púa daña al héroe y no al Spike', () => {
+  it('embestir de frente (lado de la púa/ojo) daña al Spike y no al héroe', () => {
     const world = makeWorld([
       { id: 's1', kind: 'spike', position: { x: 0, y: -0.5 }, facing: { x: 0, y: 1 } },
     ]);
     const events = createEventQueue(16);
     const spike = world.enemies[0];
     const hpBefore = spike.hp;
-    world.hero.velocity.y = -7.5; // embiste hacia el norte, contra la cara de la púa
+    world.hero.velocity.y = -7.5; // embiste hacia el norte, contra la cara de la púa (delante)
 
     stepHeroEnemyContacts(world, world.contactDamageCooldowns, events);
 
-    expect(world.hero.hp).toBe(4); // el héroe recibe 1
-    expect(spike.hp).toBe(hpBefore); // el spike no recibe nada
+    expect(spike.hp).toBe(hpBefore - 3); // ramDamage(7.5) = 3
+    expect(world.hero.hp).toBe(5); // el héroe no recibe daño por delante
   });
 
-  it('embestir por la espalda daña al Spike con normalidad', () => {
+  it('embestir por la espalda (arco trasero) pincha al héroe y no daña al Spike', () => {
     const world = makeWorld([
       { id: 's1', kind: 'spike', position: { x: 0, y: 0.5 }, facing: { x: 0, y: 1 } },
     ]);
     const events = createEventQueue(16);
     const spike = world.enemies[0];
     const hpBefore = spike.hp;
-    world.hero.velocity.y = 7.5; // llega desde el norte (espalda de la púa)
+    world.hero.velocity.y = 7.5; // llega desde el norte, contra el arco trasero (espalda)
 
     stepHeroEnemyContacts(world, world.contactDamageCooldowns, events);
 
-    expect(spike.hp).toBe(hpBefore - 3);
-    expect(world.hero.hp).toBe(5);
+    expect(world.hero.hp).toBe(4); // el héroe recibe 1 al pincharse por detrás
+    expect(spike.hp).toBe(hpBefore); // el spike es inmune por la espalda
+  });
+});
+
+describe('Spike: proyectiles solo dañan por delante (mecánica invertida 2026-07-20)', () => {
+  it('una flecha que impacta por delante (lado de la púa/ojo) daña al Spike con normalidad', () => {
+    const world = makeWorld([
+      { id: 's1', kind: 'spike', position: { x: 0, y: -0.5 }, facing: { x: 0, y: 1 } },
+    ]);
+    const events = createEventQueue(32);
+    const spike = world.enemies[0];
+    const hpBefore = spike.hp;
+
+    expect(fireProjectile(world, 'arrow', 0, -1, 1, events)).toBe(true);
+    const arrow = world.projectiles.find((p) => p.active);
+    expect(arrow).toBeDefined();
+    for (let i = 0; i < 120 && arrow!.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+
+    expect(spike.hp).toBe(hpBefore - ARROW_DAMAGE);
+  });
+
+  it('una flecha que impacta por la espalda (arco trasero) NO daña al Spike (pero se consume igual)', () => {
+    const world = makeWorld([
+      { id: 's1', kind: 'spike', position: { x: 0, y: 0.5 }, facing: { x: 0, y: 1 } },
+    ]);
+    const events = createEventQueue(32);
+    const spike = world.enemies[0];
+    const hpBefore = spike.hp;
+
+    expect(fireProjectile(world, 'arrow', 0, 1, 1, events)).toBe(true);
+    const arrow = world.projectiles.find((p) => p.active);
+    expect(arrow).toBeDefined();
+    for (let i = 0; i < 120 && arrow!.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+
+    expect(spike.hp).toBe(hpBefore); // inmune por la espalda
   });
 });
 
@@ -267,11 +306,52 @@ describe('hechizo: rebote en pared', () => {
     expect(Math.abs(spell!.velocity.x)).toBeLessThan(speedBefore); // pierde fuerza
     expect(spell!.ttl).toBeLessThan(ttlBefore - 0.3); // vida acortada por el rebote
 
-    // Segundo choque contra la pared oeste: desaparece.
+    // Playtest 2026-07-16: el primer rebote ya emite 'projectile-wall' (arma =
+    // hechizo), no solo el 'wall-bounce' genérico.
+    const firstBounceTypes: string[] = [];
+    const firstBounceLabels: string[] = [];
+    drainEvents(events, (e: GameEvent) => {
+      firstBounceTypes.push(e.type);
+      if (e.type === 'projectile-wall') firstBounceLabels.push(e.label);
+    });
+    expect(firstBounceTypes).toContain('projectile-wall');
+    expect(firstBounceLabels).toContain('spell');
+
+    // Segundo choque contra la pared oeste: desaparece, y también emite
+    // 'projectile-wall' (antes este último impacto no tenía NINGÚN feedback).
     for (let i = 0; i < 600 && spell!.active; i++) {
       stepProjectiles(world, FIXED_DT, events);
     }
     expect(spell!.active).toBe(false);
+    const secondBounceTypes: string[] = [];
+    drainEvents(events, (e: GameEvent) => secondBounceTypes.push(e.type));
+    expect(secondBounceTypes).toContain('projectile-wall');
+  });
+});
+
+describe('flecha: impacto contra muro (playtest 2026-07-16)', () => {
+  it('al chocar con la pared se apaga y emite projectile-wall con label "arrow"', () => {
+    const world = createWorld(makeRoom({ width: 10, height: 10 }));
+    const events = createEventQueue(64);
+
+    expect(fireProjectile(world, 'arrow', 1, 0, 1, events)).toBe(true);
+    const arrow = world.projectiles.find((p) => p.active);
+    expect(arrow).toBeDefined();
+    drainEvents(events, () => {}); // descarta el evento 'launch' del disparo
+
+    for (let i = 0; i < 300 && arrow!.active; i++) {
+      stepProjectiles(world, FIXED_DT, events);
+    }
+    expect(arrow!.active).toBe(false); // la flecha nunca rebota, se apaga contra la pared
+
+    const types: string[] = [];
+    const labels: string[] = [];
+    drainEvents(events, (e: GameEvent) => {
+      types.push(e.type);
+      if (e.type === 'projectile-wall') labels.push(e.label);
+    });
+    expect(types).toContain('projectile-wall');
+    expect(labels).toEqual(['arrow']);
   });
 });
 
@@ -493,12 +573,12 @@ describe('El Prisma (GDD §15.4, Fase B3): gate de color en applyDamageToEnemy',
     expect(types).not.toContain('boss-immune-hit');
   });
 
-  it('solape de fase 3 (bossWeaponGateB): cualquiera de los dos colores hace daño DOBLE', () => {
+  it('solape de fase 3 (bossWeaponGateB): cualquiera de los dos colores hace daño NORMAL (el ×2 se retiró en playtest 2026-07-17: "siempre con el daño normal")', () => {
     const world = makeBossWorld();
     const events = createEventQueue(16);
     const boss = world.enemies[0];
     // HP amplio (el placeholder de createEnemy es 1): applyDamageToEnemy
-    // corta en seco si hp<=0, y este test encadena dos golpes de 10.
+    // corta en seco si hp<=0, y este test encadena dos golpes.
     boss.hp = 100;
     boss.maxHp = 100;
     boss.bossWeaponGateA = 'spell';
@@ -507,11 +587,11 @@ describe('El Prisma (GDD §15.4, Fase B3): gate de color en applyDamageToEnemy',
 
     const hpBefore = boss.hp;
     applyDamageToEnemy(world, boss, 5, 1, 0, events, false, 'arrow');
-    expect(boss.hp).toBe(hpBefore - 10); // ×2, acierta por el gate B
+    expect(boss.hp).toBe(hpBefore - 5); // daño normal, acierta por el gate B
 
     const hpBefore2 = boss.hp;
     applyDamageToEnemy(world, boss, 5, 1, 0, events, false, 'spell');
-    expect(boss.hp).toBe(hpBefore2 - 10); // ×2, acierta por el gate A
+    expect(boss.hp).toBe(hpBefore2 - 5); // daño normal, acierta por el gate A
   });
 
   it('sin gate activo (bossWeaponGateA === ""): comportamiento normal de cualquier otro jefe/enemigo', () => {

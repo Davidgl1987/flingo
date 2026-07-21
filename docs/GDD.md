@@ -123,7 +123,7 @@ Cinco arquetipos, cada uno con silueta y color propios e inconfundibles. Todos r
 
 ### 7.3 Spike (gris, con púa direccional) — el erizo
 - 3 HP. Solo patrulla (0.95 u/s), nunca persigue.
-- Tiene una **cara peligrosa** (la púa, claramente visible). Chocar contra la púa **te daña a ti** (1); golpearle por los flancos o la espalda le daña a él con normalidad.
+- Tiene una **cara peligrosa**: su **arco trasero** (la espalda, opuesta a la púa/ojo). Chocar contra su espalda **te daña a ti** (1); solo se le puede hacer daño golpeándole **por delante** (el lado de la púa/ojo) — de frente o por los flancos, con embestida, flecha o hechizo; los proyectiles que le llegan por la espalda no le hacen daño (mecánica invertida 2026-07-20, playtest: "que si le atacas por detrás te pinche").
 - Rol: obliga a leer orientación y a tirar con ángulo, no en línea recta.
 
 ### 7.4 Trail (verde) — el babosa
@@ -357,24 +357,25 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 - **Arena:** sala mediana y simétrica, un par de rocas para rebotes. Sin hazards ruidosos: el foco es el propio jefe y su color.
 - **Núcleo con escudo elemental rotatorio:** en cada momento el Prisma tiene UN color activo — azul, amarillo o violeta — y **solo es vulnerable al arma de ese color**; las otras dos rebotan sin efecto (con feedback visual claro de "inmune"). Exactamente un arma correcta en cada instante: la señal es nítida y de verdad obliga a rotar las tres.
 - **Rotación telegrafiada:** cada modo dura unos segundos; ~1.5 s antes del cambio, el núcleo brilla y "tartamudea" hacia el color siguiente — da tiempo a anticipar y cambiar de arma antes de que llegue.
-- **Ataques temáticos por modo** (densidad moderada — el reto de este jefe es el cambio de arma, no el esquive masivo):
+- **Ataques temáticos por modo** (densidad moderada — el reto de este jefe es el cambio de arma, no el esquive masivo). Sus proyectiles (Viento/Sombra) salen teñidos del color de su gate activo, mismo mapeo arma↔color que el propio héroe:
   - **Piedra (azul):** se vuelve pesado y hace embestidas cortas hacia el héroe. Se responde con la embestida propia (cuerpo contra cuerpo).
-  - **Viento (amarillo):** se mueve rápido y dispara ráfagas cortas de dardos. Se responde a flechazos manteniendo la distancia.
-  - **Sombra (violeta):** lanza arcos lentos que rebotan en las paredes. Se responde con el hechizo, usando también sus rebotes.
+  - **Viento (amarillo):** se mueve rápido y dispara ráfagas cortas de dardos, teñidos de amarillo. Se responde a flechazos manteniendo la distancia.
+  - **Sombra (violeta):** lanza arcos lentos que rebotan en las paredes, teñidos de violeta. Se responde con el hechizo, usando también sus rebotes.
 - **Fase 2 (66 %):** la rotación se acelera y los ataques se densifican ligeramente.
 - **Fase 3 (33 %):** breves solapes de dos colores a la vez — ventana de riesgo/recompensa: si aciertas el arma correcta durante el solape, golpe doble.
-- **Ventana de vulnerabilidad:** al final de cada ataque el núcleo queda expuesto un instante (igual que el resto de jefes); combinada con el color correcto es donde cae el daño grande.
-- **Lectura para el jugador:** "mira su color, cambia de arma, castiga el hueco" — el jefe que examina el arsenal completo.
+- **Sin ventana de vulnerabilidad** *(actualizado tras playtest de David 2026-07-17: "quita la ventana de vulnerabilidad, haz que sólo le afecten los ataques de su color, pero siempre con el daño normal"; antes, además del color correcto, había que esperar al instante de exposición al final de cada ataque para el daño grande — igual que el resto de jefes)*: el Prisma es dañable SIEMPRE, en cualquier punto de su ciclo, con el ÚNICO filtro del color activo — arma correcta = daño normal completo en el acto, arma incorrecta = 0. Es el único jefe sin fase "apenas daña"/"daño completo"; su reto sigue siendo puramente de puntería de color, no de timing de ventana.
+- **Lectura para el jugador:** "mira su color, cambia de arma, golpea cuando quieras" — el jefe que examina el arsenal completo.
 
 ### 15.5 La Tormenta — el jefe de esquive puro (bullet hell)
 
 *El único jefe donde no hay puzzle de daño: cualquier arma le hace daño siempre. El examen es sobrevivir a sus patrones.*
 
 - **Arena:** sala circular/octogonal completamente despejada — los patrones son la arquitectura; cualquier obstáculo los volvería injustos.
-- **Comportamiento base:** flota lentamente cerca del centro encadenando patrones de proyectiles densos pero legibles, cada uno anunciado con tiempo de sobra (~1 s en fase 1, ~0.8 s en fases 2-3; subido tras playtest 2026-07-15, antes ~0.6-0.7 s). Rediseño del telegraph tras playtest 2026-07-15 (David: "el anillo giraba pero se veía vertical, mal"): el aro que rodea al jefe es SIEMPRE un anillo horizontal (plano del suelo, estilo anillo de Saturno, nunca inclinado) compuesto de secciones que se iluminan exactamente por donde va a disparar el patrón que viene — lo visual promete lo mecánico al pie de la letra — ya insinuando el patrón desde la segunda mitad de la recarga anterior, no solo durante el propio aviso:
-  - **Espiral giratoria:** brazos de balas que rotan; se sobrevive encontrando el hueco y girando con él. El aro ilumina 4 secciones (una por brazo).
-  - **Anillos concéntricos:** ondas que se expanden desde su posición; se teje entre los huecos de cada anillo. El aro ilumina TODO el anillo menos el hueco de diseño del primer anillo — así siempre acaba dejando pasar por ahí.
-  - **Ráfaga radial:** explosión lenta y densa en todas direcciones; se esquiva leyendo los pasillos entre balas. El aro ilumina las 3 zonas con balas y apaga los 3 pasillos.
+- **Comportamiento base:** flota lentamente cerca del centro encadenando patrones de proyectiles densos pero legibles, cada uno anunciado con tiempo de sobra (~1 s en fase 1, ~0.8 s en fases 2-3; subido tras playtest 2026-07-15, antes ~0.6-0.7 s). Rediseño del telegraph tras playtest 2026-07-15 (David: "el anillo giraba pero se veía vertical, mal"): el aro que rodea al jefe es SIEMPRE un anillo horizontal (plano del suelo, estilo anillo de Saturno, nunca inclinado) compuesto de secciones que se iluminan exactamente por donde va a disparar el patrón que viene — lo visual promete lo mecánico al pie de la letra — ya insinuando el patrón desde la segunda mitad de la recarga anterior, no solo durante el propio aviso. Cada bala lleva su propio halo de luz falsa (mismo truco barato que las monedas/llaves/pociones) y un color fijo POR PATRÓN *(añadido tras playtest de David 2026-07-17: "me gustaría que cada bola tuviera su luz. Además, pon en cada ataque los proyectiles de un color")*:
+  - **Espiral giratoria** (violeta): brazos de balas que rotan; se sobrevive encontrando el hueco y girando con él. El aro ilumina 4 secciones (una por brazo).
+  - **Anillos concéntricos** (azul hielo): ondas que se expanden desde su posición; se teje entre los huecos de cada anillo. El aro ilumina TODO el anillo menos el hueco de diseño del primer anillo — así siempre acaba dejando pasar por ahí.
+  - **Ráfaga radial** (ámbar): explosión lenta y densa en todas direcciones; se esquiva leyendo los pasillos entre balas. El aro ilumina las 3 zonas con balas y apaga los 3 pasillos.
+  - Densidad de balas bajada ~20-25 % en los tres patrones en la misma tanda *(David: "si tienes que lanzar menos proyectiles puedes hacerlo")*: con luz y color propios cada bala se lee mejor, así que menos balas mantienen la misma sensación de "muro" sin perder legibilidad — los pasillos garantizados (huecos, nº de brazos/pasillos) no se tocan, solo cuánto se rellena el resto.
 - **Recarga = ventana de vulnerabilidad completa:** tras cada patrón, se detiene a recargar ~1.8 s (subido desde ~1.2 s tras playtest 2026-07-15: "demasiado difícil, más ventana de daño") con un aviso visual claro (aro verde uniforme) — ahí entra el daño COMPLETO de cualquier arma. Tuning post-playtest 2026-07-15 (David: "que los ataques siempre hagan daño, pero hagan más daño cuando esté con la luz verde"): FUERA de la ventana también se le puede dañar, pero solo un 20 % del golpe (mismo criterio que Guardián/Prisma) — la embestida en la ventana sigue siendo lo que más rinde, pero ya no hace falta esperar a la recarga para que un golpe cuente.
 - **Fase 2 (66 %):** los patrones se densifican y la recarga se acorta.
 - **Fase 3 (33 %):** combina dos patrones seguidos sin pausa (espiral → anillos) antes de recargar; la ventana es la misma pero llegar vivo a ella cuesta más. Tuning post-playtest 2026-07-15 (David: "en la fase 3, cuando concatenas ataques diferentes, haz que la ventana donde no se lancen bolas esté lo más cerca posible del jugador"): el anillo ENCADENADO (el segundo patrón de la cadena) abre su hueco apuntando al ángulo real del héroe respecto al jefe en ese instante, en vez de sortearlo al azar como el resto de patrones — el primer patrón del ciclo sigue siendo aleatorio.
@@ -387,7 +388,7 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 |---|---|---|---|---|
 | Guardián de Canto | 40 | 1 → 2 (empuje de carga; bajado de 2→3 tras playtest 2026-07-06) | ~1.4 s tras chocar (~2.2 s si arrolla un barril) | carga cada ~2.5 s, encadenada en fase 2; barril perimetral cada ~8 s |
 | Reina del Enjambre | 55 | sin ataque directo fuerte; larvas 1 daño de contacto | *(actualizado, rediseño 2026-07-10: vida en 8 columnas)* 15 % del daño del arma en todo momento; al romper una columna, aturdida 1.4 s (daño completo); rotas las 8, vulnerable permanente | oleada cada ~3 s, rastro continuo, guardianas de columna embisten cada ~2.5 s |
-| El Prisma | 45 | 1–2 según modo | fin de cada ataque + color correcto | modo cada ~6 s (→ ~4 s en fase 3), solapes en fase 3 |
+| El Prisma | 45 | 1–2 según modo | ninguna: dañable siempre, solo filtra el color correcto *(sin ventana desde 2026-07-17)* | modo cada ~6 s (→ ~4 s en fase 3), solapes en fase 3 |
 | La Tormenta | 40 | 1 por bala | recarga ~1.8 s tras cada patrón (subida de ~1.2 s tras playtest 2026-07-15); daño completo ahí, 20 % fuera de ventana (tuning 2026-07-15, antes 0 = inmune) | patrón cada ~4.8 s de media (~3.2 s ráfaga, ~5.6 s espiral/anillos); balas ≤ 3.9 u/s (bajado de 4.5 tras playtest 2026-07-15, "sigue siendo demasiado difícil quizá") |
 
 *Vida alta comparada con los enemigos normales (Dummy 2, Chaser 3) a propósito: un jefe debe aguantar varias coreografías completas, no morir en el primer aturdimiento. Estos números son el punto de partida para implementar y ajustar jugando — igual que el resto de la tabla de tuning del apéndice.*
@@ -404,7 +405,7 @@ Herramienta imprescindible del proyecto: las salas del juego se fabrican aquí.
 
 **Armas:** cuerpo cd 0.2 s · flecha 10.8 u/s, daño 1, cd 0.5 s, atraviesa 1 · hechizo 8.3 u/s, daño 2, cd 1.0 s, 1 rebote (×0.65) · vida proyectil 2.8 s · retroceso ~1.15 · fuerza→velocidad proyectil 70–120%
 
-**Enemigos:** Dummy 2 HP, patrulla 0.8, caza 1.7, detección 2.35, correa 2.2 · Chaser 3 HP, 2.35 (3.0 si apuntas) · Spike 3 HP, patrulla 0.95, cono peligroso frontal · Trail 3–4 HP, 0.86, rastro cada 0.55 s (radio 0.45, vida 3.2 s) · Shooter 3–4 HP, caza 1.45, ciclo 1 s + 1 s, proyectil 6.6 u/s · knockback al golpe: empuje 2.4 u/s + 0.18 u
+**Enemigos:** Dummy 2 HP, patrulla 0.8, caza 1.7, detección 2.35, correa 2.2 · Chaser 3 HP, 2.35 (3.0 si apuntas) · Spike 3 HP, patrulla 0.95, cono peligroso trasero (solo daña por delante) · Trail 3–4 HP, 0.86, rastro cada 0.55 s (radio 0.45, vida 3.2 s) · Shooter 3–4 HP, caza 1.45, ciclo 1 s + 1 s, proyectil 6.6 u/s · knockback al golpe: empuje 2.4 u/s + 0.18 u
 
 **Hazards:** foso 1 daño, margen de perdón 0.18 u, caída ~1.05 s · pinchos 1 daño + empuje 5.2 u/s · barril daño 3, radio 2.0 · barro ×0.92/tick · boost +8 u/s²
 

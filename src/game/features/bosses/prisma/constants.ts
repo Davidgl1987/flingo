@@ -7,13 +7,16 @@ export const PRISMA_RADIUS = 0.56;
 /** Techo de daño de un golpe del Prisma al héroe, por fase (GDD §15.1 punto 6). */
 export const PRISMA_HIT_DAMAGE_CAP_FRACTION: [number, number, number] = [0.6, 0.65, 0.7];
 /**
- * Fracción del daño del ARMA que recibe el Prisma mientras NO está en su
- * ventana de vulnerabilidad (mismo criterio "apenas hace daño, pero se nota
- * si mejoras el arma" que el Guardián, GUARDIAN_DAMAGE_OUTSIDE_WINDOW). Nótese
- * que esto se aplica DESPUÉS de pasar el gate de color: un arma del color
- * equivocado ya se descarta entera antes de llegar aquí (ver combat.ts).
+ * Factor NEUTRO (1 = sin escalado): el Prisma ya no tiene ventana de
+ * vulnerabilidad (tuning post-playtest 2026-07-17, David: "quita la ventana
+ * de vulnerabilidad... pero siempre con el daño normal") — `bossVulnerable`
+ * queda fijado a `true` de forma permanente (`prisma/pattern.ts::prismaOnInit`),
+ * así que la rama de `applyDamageToEnemy` que multiplica por este factor
+ * nunca se ejecuta para el Prisma. Se mantiene en 1 (en vez de borrar el
+ * campo) por defensividad, exactamente como pide el playtest: "que ningún
+ * otro escalado interfiera" si algo tocara `bossVulnerable` en el futuro.
  */
-export const PRISMA_DAMAGE_OUTSIDE_WINDOW = 0.2;
+export const PRISMA_DAMAGE_OUTSIDE_WINDOW = 1;
 
 /** Daño de un golpe/impacto del Prisma al héroe, por fase (GDD §15.6: "1 → 2 según modo"). */
 export const PRISMA_HIT_DAMAGE_PHASE1 = 1;
@@ -43,8 +46,6 @@ export const PRISMA_COLOR_TELEGRAPH_LEAD = 1.5;
  */
 export const PRISMA_PHASE3_OVERLAP_DURATION = 1.5;
 
-/** Ventana de vulnerabilidad al final de cada ataque (GDD §15.6: "fin de cada ataque"). */
-export const PRISMA_VULNERABLE_WINDOW = 1.0;
 /** Fase 2+ (GDD §15.4: "los ataques se densifican ligeramente"): multiplica la cadencia de ataque. */
 export const PRISMA_PHASE2_CADENCE_MULTIPLIER = 0.8;
 

@@ -4,6 +4,13 @@
  * desvanecido). Color por instancia (punto 1 de playtest ronda 3): sigue el
  * color del arma activa del héroe en el momento de depositarse (TrailPool ya
  * guarda r/g/b por punto), mismo lenguaje visual que heroMaterial.
+ *
+ * SOLO dark=0 (rama `estilo-oscuro`, playtest ronda 7): la cera de dark>=1
+ * (antes emitida aquí con vida/desvanecido, y con esferitas de color de arma
+ * para los proyectiles) tiene ahora su propia capa persistente sin
+ * desvanecido (`session.effects.wax`, `WaxView.tsx`) — `HeroView.tsx` y
+ * `ProjectileView.tsx` ya no emiten a este pool en dark>=1, así que este
+ * componente vuelve a ser exactamente el de siempre, sin bifurcar por modo.
  */
 
 import { useFrame } from '@react-three/fiber';
@@ -29,8 +36,9 @@ export function TrailView({ pool }: { pool: TrailPool }) {
     for (let i = 0; i < pool.capacity; i++) {
       if (pool.active[i]) {
         const t = pool.life[i] / pool.maxLife[i];
+        const scale = pool.size[i] * t;
         obj.position.set(pool.x[i], 0.25, pool.z[i]);
-        obj.scale.setScalar(pool.size[i] * t);
+        obj.scale.setScalar(scale);
         color.setRGB(pool.r[i], pool.g[i], pool.b[i]);
       } else {
         obj.position.set(0, -1000, 0);

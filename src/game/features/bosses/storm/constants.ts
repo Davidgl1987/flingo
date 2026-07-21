@@ -58,9 +58,11 @@ export const STORM_RADIUS = 0.95;
 /**
  * Radio mínimo desde el centro del jefe al que puede nacer una bala (req. 2:
  * "ninguna bala a bocajarro"). Debe superar cuerpo del jefe + cuerpo del héroe
- * con margen: 0.95 + 0.38 = 1.33 → 1.6 deja 0.27 u de aire. TODAS las olas de
- * los tres patrones emiten exactamente a este radio, así que es el radio de
- * referencia (el más estrecho en unidades lineales) para el pasillo.
+ * con margen: 0.95 + HERO_RADIUS (0.24 desde ronda 7 de playtest de la vela)
+ * = 1.19 → 1.6 deja 0.41 u de aire (más holgado aún que antes de reducir
+ * HERO_RADIUS). TODAS las olas de los tres patrones emiten exactamente a este
+ * radio, así que es el radio de referencia (el más estrecho en unidades
+ * lineales) para el pasillo.
  */
 export const STORM_MIN_EMISSION_RADIUS = 1.6;
 
@@ -85,8 +87,8 @@ export const STORM_ARENA_CORNER_RADIUS = 8.6;
 
 // ── Pasillo garantizado (regla de honestidad §15.5) ─────────────────────────
 
-/** Diámetro del cuerpo del héroe (GDD apéndice: radio 0.38). El pasillo debe superarlo. */
-export const STORM_HERO_DIAMETER = HERO_RADIUS * 2; // 0.76
+/** Diámetro del cuerpo del héroe (`HERO_RADIUS`, `hero/constants.ts` — 0.24 desde ronda 7 de playtest). El pasillo debe superarlo. */
+export const STORM_HERO_DIAMETER = HERO_RADIUS * 2; // 0.48
 /**
  * Margen generoso del pasillo por encima del diámetro del héroe (req. 1). Las
  * balas son lentas y "esquivables en todo momento con movimiento normal"
@@ -102,7 +104,7 @@ export const STORM_CORRIDOR_MARGIN = 0.85;
 /**
  * Ancho LINEAL mínimo de aire libre del pasillo (entre los BORDES de las balas
  * que lo flanquean), en unidades de mundo: diámetro del héroe + margen.
- * 0.76 + 0.85 = 1.61 u.
+ * 0.48 + 0.85 = 1.33 u.
  */
 export const STORM_CORRIDOR_MIN_WIDTH = STORM_HERO_DIAMETER + STORM_CORRIDOR_MARGIN;
 /**
@@ -149,9 +151,15 @@ export const STORM_SPIRAL_ANGULAR_SPEED = 0.45;
  * 2026-07-15 (David: "sigue siendo demasiado difícil quizá"): densidad de
  * fase 1 más floja, dentro del ~10-15% pedido — solo fase 1 (índice 0), fase
  * 2/3 se quedan igual de densas a propósito (ahí el jugador ya domina el
- * patrón y la presión extra es la que distingue esas fases).
+ * patrón y la presión extra es la que distingue esas fases). Subido de nuevo
+ * un 33% (÷0.75) en LAS 3 FASES tras playtest 2026-07-17 (David: "si tienes
+ * que lanzar menos proyectiles puedes hacerlo" — cada bala ahora lleva luz y
+ * color propios, así que menos balas se leen mejor sin perder intensidad
+ * percibida): ~25% menos olas en la misma `STORM_SPIRAL_DURATION`, sin tocar
+ * `STORM_SPIRAL_ARMS` ni la velocidad angular (el pasillo 2π/N y su
+ * alcanzabilidad no dependen del intervalo, solo de cuántos brazos hay).
  */
-export const STORM_SPIRAL_EMIT_INTERVAL: readonly [number, number, number] = [0.18, 0.12, 0.12];
+export const STORM_SPIRAL_EMIT_INTERVAL: readonly [number, number, number] = [0.24, 0.16, 0.16];
 /** Duración de emisión de la espiral antes de darse por terminada (s), por fase. */
 export const STORM_SPIRAL_DURATION: readonly [number, number, number] = [2.4, 2.4, 2.4];
 
@@ -177,8 +185,15 @@ export const STORM_RING_INTERVAL: readonly [number, number, number] = [0.6, 0.45
  * separación efectiva es ≤ ésta.
  */
 export const STORM_RING_BULLET_SPACING: readonly [number, number, number] = [0.46, 0.3, 0.3];
-/** Nº de anillos por patrón antes de darse por terminado, por fase. */
-export const STORM_RING_COUNT: readonly [number, number, number] = [5, 6, 6];
+/**
+ * Nº de anillos por patrón antes de darse por terminado, por fase. Bajado de
+ * [5,6,6] tras playtest 2026-07-17 (David: "si tienes que lanzar menos
+ * proyectiles puedes hacerlo" — ~20-25% menos anillos con la luz+color por
+ * bala ya puestos, cada anillo se lee mejor con menos balas): la ANCHURA del
+ * hueco (`emitRing`) no depende de este número, solo cuántos anillos
+ * completos se disparan antes de recargar.
+ */
+export const STORM_RING_COUNT: readonly [number, number, number] = [4, 5, 5];
 
 // ── Ráfaga radial (GDD §15.5: "deja pasillos angulares completos") ──────────
 
@@ -193,11 +208,15 @@ export const STORM_RING_COUNT: readonly [number, number, number] = [5, 6, 6];
 export const STORM_BURST_CORRIDORS = 3;
 /**
  * Separación angular objetivo entre balas contiguas de la ráfaga (rad), por
- * fase. Más apretada que en los anillos (0.24/0.18): la ráfaga es una sola ola
- * densa y no tiene presión de pool (ver presupuesto), así que se permite un
- * muro más tupido entre pasillos.
+ * fase. Más apretada que en los anillos (antes de este tuning): la ráfaga es
+ * una sola ola densa y no tiene presión de pool (ver presupuesto), así que se
+ * permite un muro más tupido entre pasillos. Subida un 33% (÷0.75) tras
+ * playtest 2026-07-17 (David: "si tienes que lanzar menos proyectiles puedes
+ * hacerlo"): ~25% menos balas por muro sin tocar `STORM_BURST_CORRIDORS` ni
+ * el ancho de los huecos (`stormCorridorMinAngle`), que son los que
+ * garantizan el pasillo.
  */
-export const STORM_BURST_BULLET_SPACING: readonly [number, number, number] = [0.24, 0.18, 0.18];
+export const STORM_BURST_BULLET_SPACING: readonly [number, number, number] = [0.32, 0.24, 0.24];
 
 // ── Presupuesto de pool ─────────────────────────────────────────────────────
 

@@ -17,6 +17,7 @@ import { drainEvents, type GameEvent } from '@/engine/events';
 import { stepWorld } from '@/game/world/step';
 import type { GamePhase } from '@/game/world/types';
 import { useUiStore } from '@/game/session/store';
+import { WEAPON_COLOR } from '@/game/render/assets';
 
 /** Tope de tiempo de frame acumulable (evita la espiral de la muerte en tabs suspendidas). */
 const MAX_FRAME_TIME = 0.25;
@@ -90,7 +91,18 @@ export function useGameLoop(session: GameSession): void {
     session.effects.shockwaves.update(cappedDelta);
 
     drainEvents(session.events, (event) => {
-      reactToEvent(event, session.effects.particles, effects, session.effects.shockwaves);
+      // Color del arma activa en el momento del evento (audit playtest: el
+      // burst de 'launch' cubre lanzamiento corporal Y disparo de flecha/
+      // hechizo — sin esto quedaba fijo al azul viejo del cuerpo tras el
+      // swap de colores, ver reactToEvent.ts).
+      reactToEvent(
+        event,
+        session.effects.particles,
+        effects,
+        session.effects.shockwaves,
+        Math.random,
+        `#${WEAPON_COLOR[world.hero.weaponMode].getHexString()}`,
+      );
 
       if (event.type === 'room-entered') {
         useUiStore.getState().showNotice(event.label);

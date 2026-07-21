@@ -39,6 +39,7 @@ export function createProjectilePool(): Projectile[] {
       bouncesLeft: 0,
       pierceLeft: 0,
       hitEnemyIds: [],
+      colorTag: '',
     });
   }
   return pool;

@@ -66,6 +66,48 @@ export function readGodMode(): boolean {
 }
 
 /**
+ * Nivel de penumbra de la sala vía `?dark=0|1|2` (experimento estético, rama
+ * `estilo-oscuro`): 0 = luz actual EXACTA (paridad con `main`, sin vela ni
+ * cambios de fondo/fog), 1 = penumbra con la vela del héroe como luz
+ * principal (DEFAULT en esta rama), 2 = oscuridad casi total (solo la vela).
+ * Cualquier valor ausente o no reconocido cae al default 1 de esta rama.
+ */
+export function readDarkMode(): 0 | 1 | 2 {
+  const raw = new URLSearchParams(window.location.search).get('dark');
+  if (raw === '0') return 0;
+  if (raw === '2') return 2;
+  return 1;
+}
+
+/** Nombres válidos de grupo para `?glow=` (brillo propio tenue, solo aplica en dark 1-2). */
+const GLOW_GROUP_NAMES = ['fosos', 'hazards', 'items', 'puertas'] as const;
+export type GlowGroup = (typeof GLOW_GROUP_NAMES)[number];
+
+/**
+ * Grupos de elementos de jugabilidad con brillo propio (`emissive`) activo
+ * vía `?glow=fosos,hazards,items,puertas` (experimento estético, solo tiene
+ * efecto en dark 1-2 — ver assets.ts). Sin el parámetro: NINGUNO activo
+ * (default desde playtest ronda 7: "me gusta más la configuración con todos
+ * los checks apagados" — antes el default era todos). `?glow=all`: todos.
+ * `?glow=` vacío o `?glow=none`: ninguno. Nombres desconocidos en la lista
+ * se ignoran en vez de romper el parseo.
+ */
+export function readGlowGroups(): Set<GlowGroup> {
+  const raw = new URLSearchParams(window.location.search).get('glow');
+  if (raw === null) return new Set();
+  if (raw.toLowerCase() === 'all') return new Set(GLOW_GROUP_NAMES);
+  if (raw === '' || raw.toLowerCase() === 'none') return new Set();
+  const result = new Set<GlowGroup>();
+  for (const entry of raw.split(',')) {
+    const name = entry.trim().toLowerCase();
+    if ((GLOW_GROUP_NAMES as readonly string[]).includes(name)) {
+      result.add(name as GlowGroup);
+    }
+  }
+  return result;
+}
+
+/**
  * Tope defensivo para el nivel forzado de mejoras SIN `maxLevel` finito
  * (escudo: `maxLevel` Infinity) — sin esto, un `?upgrades=escudo:999999999`
  * en la URL dispararía cientos de miles de `applyUpgrade` al crear la sesión

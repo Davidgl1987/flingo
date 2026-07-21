@@ -81,6 +81,11 @@ export function fireProjectile(
     slot.velocity.y = rDirY * speed;
     slot.ttl = PROJECTILE_LIFETIME;
     slot.hitEnemyIds.length = 0;
+    // Siempre clásico: el slot puede venir reciclado de un disparo enemigo
+    // con colorTag relleno (Prisma/Tormenta) — sin esto un proyectil del
+    // héroe podría heredar el tinte de la bala enemiga que ocupaba antes ese
+    // mismo slot del pool.
+    slot.colorTag = '';
 
     if (mode === 'arrow') {
       slot.radius = PROJECTILE_RADIUS;
@@ -116,11 +121,15 @@ export function fireProjectile(
 }
 
 /**
- * Dispara un proyectil hostil (Shooter, El Prisma) hacia una dirección
- * unitaria dada. `bouncesLeft` (El Prisma, GDD §15.4, modo Sombra: "arcos
- * lentos que rebotan en las paredes"): por defecto 0 (comportamiento intacto
- * del Shooter, que nunca rebota); ver `stepEnemyProjectileCollision` para el
- * mecanismo de rebote en sí (mismo que el hechizo del héroe).
+ * Dispara un proyectil hostil (Shooter, El Prisma, La Tormenta) hacia una
+ * dirección unitaria dada. `bouncesLeft` (El Prisma, GDD §15.4, modo Sombra:
+ * "arcos lentos que rebotan en las paredes"): por defecto 0 (comportamiento
+ * intacto del Shooter, que nunca rebota); ver `stepEnemyProjectileCollision`
+ * para el mecanismo de rebote en sí (mismo que el hechizo del héroe).
+ * `colorTag` (rama `estilo-oscuro`, feedback playtest 2026-07-17): por
+ * defecto '' (color clásico rojo, comportamiento intacto del Shooter, que no
+ * rellena este campo); el Prisma/la Tormenta pasan la etiqueta de su ataque
+ * activo — ver `Projectile.colorTag` (world/types.ts) para el contrato completo.
  */
 export function fireEnemyProjectile(
   world: World,
@@ -132,6 +141,7 @@ export function fireEnemyProjectile(
   damage: number,
   radius: number,
   bouncesLeft = 0,
+  colorTag = '',
 ): boolean {
   const slot = acquireProjectile(world);
   if (!slot) return false;
@@ -148,6 +158,7 @@ export function fireEnemyProjectile(
   slot.bouncesLeft = bouncesLeft;
   slot.pierceLeft = 0;
   slot.hitEnemyIds.length = 0;
+  slot.colorTag = colorTag;
   return true;
 }
 
@@ -201,12 +212,18 @@ function stepHeroProjectileCollisions(world: World, p: Projectile, events: Event
   }
 
   if (hitBounds || hitObstacle) {
+    // Playtest 2026-07-16 ("las flechas no tienen efecto al chocar con las
+    // paredes"): un único punto de emisión para AMBAS armas, se rebote o se
+    // apague — antes solo el hechizo emitía 'wall-bounce' (y solo mientras le
+    // quedaba presupuesto de rebote), así que la flecha no tenía feedback
+    // alguno y el último rebote del hechizo (el que agota `bouncesLeft`)
+    // tampoco. label = arma, para colorear el burst en reactToEvent.ts.
+    pushEvent(events, 'projectile-wall', p.position.x, p.position.y, 1, p.kind);
     if (p.kind === 'spell' && p.bouncesLeft > 0) {
       p.bouncesLeft--;
       p.velocity.x *= SPELL_BOUNCE_FACTOR;
       p.velocity.y *= SPELL_BOUNCE_FACTOR;
       p.ttl -= 0.4;
-      pushEvent(events, 'wall-bounce', p.position.x, p.position.y, 1);
     } else {
       deactivateProjectile(p);
       return false;
@@ -224,7 +241,18 @@ function stepHeroProjectileCollisions(world: World, p: Projectile, events: Event
     const rr = enemy.radius + p.radius;
     if (dx * dx + dy * dy > rr * rr) continue;
 
-    applyDamageToEnemy(world, enemy, p.damage, p.velocity.x, p.velocity.y, events, false, p.kind === 'arrow' ? 'arrow' : 'spell');
+    // Spike (GDD §7.3, mecánica invertida 2026-07-20): "solo se le podrá
+    // hacer daño por delante" también aplica a proyectiles — una flecha u
+    // hechizo que impacta su arco trasero (misma comprobación que el
+    // contacto cuerpo a cuerpo, ver `isSpikeContactDangerous`) no le hace
+    // daño, aunque el proyectil se consume igual (pierce/deactivate
+    // normales) para no complicar la física de vuelo.
+    const spikeImmune =
+      enemy.kind === 'spike' &&
+      isSpikeContactDangerous(p.position.x, p.position.y, enemy.position.x, enemy.position.y, enemy.facing.x, enemy.facing.y);
+    if (!spikeImmune) {
+      applyDamageToEnemy(world, enemy, p.damage, p.velocity.x, p.velocity.y, events, false, p.kind === 'arrow' ? 'arrow' : 'spell');
+    }
     p.hitEnemyIds.push(enemy.id);
 
     if (p.kind === 'arrow') {
@@ -310,8 +338,9 @@ export type DamageSource = 'ram' | 'arrow' | 'spell' | 'other';
  * no es '', solo el arma de ese color (o de `bossWeaponGateB`, el solape de
  * fase 3) hace daño de verdad — cualquier otra ARMA (nunca 'other': un barril
  * no es un arma y pasa el gate igual que siempre) rebota sin efecto y emite
- * 'boss-immune-hit' en vez de bajar HP. Acertar el color durante el solape de
- * fase 3 (`bossWeaponGateB !== ''`) dobla el daño. Se comprueba ANTES que la
+ * 'boss-immune-hit' en vez de bajar HP. Acertar cualquiera de los dos colores
+ * del solape de fase 3 hace daño NORMAL (el ×2 se retiró en playtest
+ * 2026-07-17: "siempre con el daño normal"). Se comprueba ANTES que la
  * ventana de vulnerabilidad: un gate equivocado nunca debería "colarse" solo
  * por pillar al jefe fuera de ventana.
  *
@@ -353,9 +382,9 @@ export function applyDamageToEnemy(
       pushEvent(events, 'boss-immune-hit', enemy.position.x, enemy.position.y, 1);
       return;
     }
-    if (matchesGate && enemy.bossWeaponGateB !== '') {
-      damage *= 2;
-    }
+    // Sin bonus por solape de fase 3 (playtest 2026-07-17: "solo le afectan
+    // los ataques de su color, pero SIEMPRE con el daño normal"): acertar
+    // cualquiera de los dos colores válidos hace daño normal, nunca doble.
   }
   if (enemy.kind === 'boss' && !enemy.bossVulnerable && !ignoreVulnerabilityWindow) {
     // Fuera de ventana el daño del ARMA se escala por el factor del jefe. Sin
@@ -483,8 +512,12 @@ export function stepHeroEnemyContacts(
     const distSq = dx * dx + dy * dy;
     if (distSq > rr * rr) continue;
 
-    // Spike (GDD §7.3): tocar la cara de la púa daña al HÉROE aunque llegue
-    // embistiendo; solo flancos/espalda reciben daño con normalidad.
+    // Spike (GDD §7.3, mecánica invertida 2026-07-20 — David: "que si le
+    // atacas por detrás te pinche; solo se le podrá hacer daño por delante"):
+    // tocar su ARCO TRASERO (espalda, opuesto al ojo/`facing`) daña al HÉROE
+    // aunque llegue embistiendo; delante o por los flancos recibe daño con
+    // normalidad (cae al bloque `dmg > 0` de abajo, igual que cualquier otro
+    // enemigo). `isSpikeContactDangerous` ya encapsula el umbral invertido.
     if (
       enemy.kind === 'spike' &&
       isSpikeContactDangerous(
@@ -540,24 +573,30 @@ export function stepHeroEnemyContacts(
 }
 
 /**
- * Spike (GDD §7.3): determina si el contacto es "peligroso" (por la cara de
- * la púa) usando el producto escalar entre la dirección héroe→spike y la
- * normal `facing` del enemigo. Frontal (peligroso) si dot > umbral.
+ * Spike (GDD §7.3, mecánica invertida 2026-07-20 — ver comentario en
+ * `stepHeroEnemyContacts`): determina si un contacto (o un impacto de
+ * proyectil, ver `stepHeroProjectileCollisions`) es "peligroso" — ahora la
+ * cara peligrosa es la ESPALDA (arco trasero, opuesto al ojo/`facing`), no
+ * la púa — usando el producto escalar entre la dirección spike→origen del
+ * contacto y la normal `facing` del enemigo. Trasero (peligroso) si
+ * dot < -umbral; delante y flancos (incluido el propio umbral, dot=0) no lo
+ * son. Mismo umbral angular que antes (`SPIKE_DANGEROUS_DOT_THRESHOLD`),
+ * solo se invierte el signo de la comparación.
  */
 export function isSpikeContactDangerous(
-  heroX: number,
-  heroY: number,
+  originX: number,
+  originY: number,
   spikeX: number,
   spikeY: number,
   facingX: number,
   facingY: number,
 ): boolean {
-  const dx = heroX - spikeX;
-  const dy = heroY - spikeY;
+  const dx = originX - spikeX;
+  const dy = originY - spikeY;
   const len = Math.sqrt(dx * dx + dy * dy);
   if (len < 1e-6) return false;
   const dot = (dx / len) * facingX + (dy / len) * facingY;
-  return dot > SPIKE_DANGEROUS_DOT_THRESHOLD;
+  return dot < -SPIKE_DANGEROUS_DOT_THRESHOLD;
 }
 
 // ── Selección de modo de arma / disparo genérico ──────────────────────────

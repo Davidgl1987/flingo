@@ -89,4 +89,28 @@ describe('reactToEvent → pools', () => {
     reactToEvent(makeEvent('enemy-hit', 2), pool, strong, null, createRng(1));
     expect(strong.hitStopRemaining).toBeGreaterThan(0);
   });
+
+  it("'projectile-wall' (playtest 2026-07-16): chispas del color del arma que impactó, más humildes que 'enemy-hit'", () => {
+    const arrowPool = new ParticlePool(64);
+    const arrowEffects = createEffectsState();
+    reactToEvent(makeEvent('projectile-wall', 1, 'arrow'), arrowPool, arrowEffects, null, createRng(1));
+    expect(arrowPool.aliveCount).toBeGreaterThan(0);
+    // #54c7ff (WEAPON_COLOR.arrow, render/assets.ts), no el gris genérico de 'wall-bounce'.
+    expect(arrowPool.r[0]).toBeCloseTo(0x54 / 255, 2);
+    expect(arrowPool.g[0]).toBeCloseTo(0xc7 / 255, 2);
+    expect(arrowPool.b[0]).toBeCloseTo(0xff / 255, 2);
+
+    const spellPool = new ParticlePool(64);
+    const spellEffects = createEffectsState();
+    reactToEvent(makeEvent('projectile-wall', 1, 'spell'), spellPool, spellEffects, null, createRng(1));
+    // #d8b4fe (WEAPON_COLOR.spell).
+    expect(spellPool.r[0]).toBeCloseTo(0xd8 / 255, 2);
+    expect(spellPool.g[0]).toBeCloseTo(0xb4 / 255, 2);
+    expect(spellPool.b[0]).toBeCloseTo(0xfe / 255, 2);
+
+    // Más humilde que un impacto a enemigo: menos trauma de cámara.
+    const enemyHitEffects = createEffectsState();
+    reactToEvent(makeEvent('enemy-hit', 1), new ParticlePool(64), enemyHitEffects, null, createRng(1));
+    expect(arrowEffects.trauma).toBeLessThan(enemyHitEffects.trauma);
+  });
 });

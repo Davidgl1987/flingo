@@ -9,7 +9,7 @@
  */
 
 import type { GameEvent } from '@/engine/events';
-import { BURST_BY_EVENT, ITEM_PICKUP_COLOR } from './burstTable';
+import { BURST_BY_EVENT, ITEM_PICKUP_COLOR, PROJECTILE_WALL_COLOR } from './burstTable';
 import { vibrate, HAPTIC_PATTERN } from './haptics';
 import { addTrauma, triggerHitStop, type EffectsState } from './effectsState';
 import type { ParticlePool } from './particles';
@@ -37,6 +37,13 @@ export function reactToEvent(
   effects: EffectsState,
   shockwaves: ShockwavePool | null = null,
   rng: () => number = Math.random,
+  // Color hex del arma activa (WEAPON_COLOR[hero.weaponMode], resuelto por el
+  // llamador — este módulo se mantiene sin importar three.js). 'launch' cubre
+  // TANTO el lanzamiento corporal como el disparo de flecha/hechizo (un solo
+  // evento para las 3 armas, ver combat.ts/launch.ts), así que su color no
+  // puede ser fijo en BURST_BY_EVENT sin quedar desincronizado del arma activa
+  // (playtest: "las partículas al moverte mantienen el color anterior").
+  heroWeaponColorHex?: string,
 ): void {
   const spec = BURST_BY_EVENT[event.type];
 
@@ -50,6 +57,10 @@ export function reactToEvent(
   let color = spec.color;
   if (event.type === 'item-pickup' && event.label in ITEM_PICKUP_COLOR) {
     color = ITEM_PICKUP_COLOR[event.label];
+  } else if (event.type === 'launch' && heroWeaponColorHex) {
+    color = heroWeaponColorHex;
+  } else if (event.type === 'projectile-wall' && event.label in PROJECTILE_WALL_COLOR) {
+    color = PROJECTILE_WALL_COLOR[event.label];
   }
 
   if (spec.count > 0) {

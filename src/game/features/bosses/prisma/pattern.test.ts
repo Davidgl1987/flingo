@@ -1,11 +1,13 @@
 /**
  * Tests de El Prisma (GDD §15.4, Fase B3 de docs/plans/BOSSES_PLAN.md):
  * rotación de color (con telegraph de cambio y aceleración por fase), ataque
- * temático por modo (embestida/ráfaga de dardos/arcos con rebote), ventana de
- * vulnerabilidad y solape de 2 colores en fase 3. El gate de color en sí
- * (`applyDamageToEnemy`) se testea en `features/combat/combat.test.ts`; aquí
- * se valida que el propio patrón del Prisma lo alimenta correctamente
- * (`bossWeaponGateA/B`). También valida
+ * temático por modo (embestida/ráfaga de dardos/arcos con rebote) y solape de
+ * 2 colores en fase 3. SIN ventana de vulnerabilidad (tuning post-playtest
+ * 2026-07-17): `bossVulnerable` es permanentemente `true`, así que el ÚNICO
+ * filtro de daño es el gate de color. El gate en sí (`applyDamageToEnemy`) se
+ * testea en `features/combat/combat.test.ts`; aquí se valida que el propio
+ * patrón del Prisma lo alimenta correctamente (`bossWeaponGateA/B`) y que
+ * `bossVulnerable` nunca vuelve a apagarse. También valida
  * `src/game/features/dungeon/levels/boss-prisma.json` contra room-format.ts.
  */
 
@@ -38,7 +40,6 @@ import {
   PRISMA_RADIUS,
   PRISMA_SPELL_ARC_COUNT,
   PRISMA_SPELL_BOUNCES,
-  PRISMA_VULNERABLE_WINDOW,
 } from './constants';
 
 const FIXED_DT = 1 / 60;
@@ -107,6 +108,24 @@ describe('El Prisma: color inicial (GDD §15.4 "arranca aleatorio")', () => {
     expect(PRISMA_COLOR_WEAPON).toContain(boss.bossWeaponGateA);
     expect(boss.bossWeaponGateA).toBe(PRISMA_COLOR_WEAPON[boss.bossCounter]);
     expect(boss.bossWeaponGateB).toBe('');
+  });
+});
+
+describe('El Prisma: sin ventana de vulnerabilidad (tuning post-playtest 2026-07-17)', () => {
+  it('bossVulnerable arranca en true (onInit) y se mantiene true a lo largo de muchos ticks/ciclos', () => {
+    const world = makePrismaWorld();
+    const events = createEventQueue(64);
+    const boss = world.enemies[0];
+    expect(boss.bossVulnerable).toBe(true);
+
+    // Deja correr la máquina de estados completa (varios ciclos de
+    // color/ataque): bossVulnerable no debe apagarse NUNCA, a diferencia del
+    // resto de jefes (Guardián/Reina/Tormenta), que sí alternan.
+    for (let i = 0; i < 3000; i++) {
+      stepBosses(world, FIXED_DT, events);
+      world.time += FIXED_DT;
+      expect(boss.bossVulnerable).toBe(true);
+    }
   });
 });
 
@@ -257,10 +276,13 @@ describe('El Prisma: Piedra (azul/ram) — embestida corta con telegraph y daño
     advance(world, events, 30); // agota la embestida (0.45s) y resuelve el impacto
     expect(world.hero.hp).toBe(hpBefore - 1); // cap: min(1, floor(0.6*3)) = 1, un solo golpe por embestida
     expect(collectTypes(events)).toContain('player-damaged');
+    // Sin ventana de vulnerabilidad (tuning post-playtest 2026-07-17):
+    // bossVulnerable ya era true ANTES del ataque y sigue true después —
+    // nunca se apaga, a diferencia del resto de jefes.
     expect(boss.bossVulnerable).toBe(true);
 
-    advance(world, events, 70); // agota la ventana (~1s) y se cierra sola
-    expect(boss.bossVulnerable).toBe(false);
+    advance(world, events, 70);
+    expect(boss.bossVulnerable).toBe(true);
   });
 
   it('nunca hace un golpe letal a vida llena (techo de daño de jefe, GDD §15.1 punto 6)', () => {
@@ -282,7 +304,7 @@ describe('El Prisma: Piedra (azul/ram) — embestida corta con telegraph y daño
 });
 
 describe('El Prisma: Viento (amarillo/arrow) — ráfaga de dardos (GDD §15.4)', () => {
-  it('tras el telegraph, dispara PRISMA_ARROW_BURST_COUNT proyectiles kind:"enemy" y abre la ventana', () => {
+  it('tras el telegraph, dispara PRISMA_ARROW_BURST_COUNT proyectiles kind:"enemy" teñidos de "arrow" y bossVulnerable sigue true', () => {
     const world = makePrismaWorld();
     const events = createEventQueue(64);
     const boss = world.enemies[0];
@@ -300,6 +322,9 @@ describe('El Prisma: Viento (amarillo/arrow) — ráfaga de dardos (GDD §15.4)'
     const enemyProjectiles = world.projectiles.filter((p) => p.active && p.kind === 'enemy' && p.owner === 'enemy');
     expect(enemyProjectiles.length).toBe(PRISMA_ARROW_BURST_COUNT);
     expect(enemyProjectiles.length).toBe(3);
+    // Proyectiles teñidos del color de su gate activo (GDD §15.4, feedback
+    // playtest 2026-07-17: "los ataques de proyectiles de su color").
+    expect(enemyProjectiles.every((p) => p.colorTag === 'arrow')).toBe(true);
     expect(boss.bossVulnerable).toBe(true);
   });
 });
@@ -323,6 +348,8 @@ describe('El Prisma: Sombra (violeta/spell) — arcos lentos que rebotan en muro
     const arcs = world.projectiles.filter((p) => p.active && p.kind === 'enemy' && p.bouncesLeft === PRISMA_SPELL_BOUNCES);
     expect(arcs.length).toBe(PRISMA_SPELL_ARC_COUNT);
     expect(arcs.length).toBe(2);
+    // Proyectiles teñidos del color de su gate activo (feedback playtest 2026-07-17).
+    expect(arcs.every((p) => p.colorTag === 'spell')).toBe(true);
     expect(boss.bossVulnerable).toBe(true);
 
     // El héroe estaba EN la trayectoria de disparo (necesario para fijar la
@@ -343,12 +370,6 @@ describe('El Prisma: Sombra (violeta/spell) — arcos lentos que rebotan en muro
   });
 });
 
-describe('El Prisma: ventana de vulnerabilidad ~1s tras cada ataque (GDD §15.6)', () => {
-  it('PRISMA_VULNERABLE_WINDOW es ~1s', () => {
-    expect(PRISMA_VULNERABLE_WINDOW).toBeCloseTo(1, 6);
-  });
-});
-
 describe('El Prisma: fase 2 densifica los ataques (cadencia ×0.8, GDD §15.4)', () => {
   it('la cadencia tras un ataque en fase 2 es un 80% de la de fase 1', () => {
     function cadenceAfterArrowAttack(phase: 1 | 2 | 3): number {
@@ -366,14 +387,20 @@ describe('El Prisma: fase 2 densifica los ataques (cadencia ×0.8, GDD §15.4)',
       boss.bossTimer = 0;
       boss.patrolFrom.x = world.time + 1000; // que no rote durante la prueba
 
+      // Sin ventana de vulnerabilidad que sirva de "marca" de disparo (tuning
+      // post-playtest 2026-07-17: bossVulnerable ya no se apaga/enciende): se
+      // detecta el instante justo tras disparar por la transición de vuelta a
+      // IDLE (bossStage 0), que es donde `prismaFinishAttack` arma la
+      // cadencia nueva en `bossTimer`.
+      let wasIdle = boss.bossStage === 0 /* PRISMA_ATTACK_IDLE, no exportado */;
       for (let i = 0; i < 100; i++) {
         stepBosses(world, FIXED_DT, events);
         world.time += FIXED_DT;
-        // Justo el tick en el que dispara y vuelve a IDLE: bossTimer ya trae la
-        // cadencia nueva, sin decrementos posteriores que la contaminen.
-        if (boss.bossStage === 0 && boss.bossVulnerableUntil > 0) {
+        const isIdle = boss.bossStage === 0 /* PRISMA_ATTACK_IDLE, no exportado */;
+        if (isIdle && !wasIdle) {
           return boss.bossTimer;
         }
+        wasIdle = isIdle;
       }
       throw new Error('el Prisma nunca disparó en la ventana de la prueba');
     }

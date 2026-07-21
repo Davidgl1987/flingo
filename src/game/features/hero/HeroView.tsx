@@ -20,10 +20,12 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
-import { Vector3, type Mesh } from 'three';
+import { Color, Quaternion, Vector3, type Group, type Mesh } from 'three';
+import { dampAngleTowards } from '@/engine/geometry';
 import { HERO_RADIUS } from './constants';
 import { PIT_FALL_DURATION } from '@/game/features/hazards/constants';
 import { TRAIL_EMIT_INTERVAL, TRAIL_SPEED_THRESHOLD } from '@/game/features/effects/trail';
+import { HERO_WAX_EMIT_DISTANCE } from '@/game/features/effects/wax';
 import { getUpgradeLevel } from '@/game/session/upgrades';
 import type { GameSession } from '@/game/session/session';
 import type { WeaponMode } from '@/game/world/types';
@@ -34,10 +36,19 @@ import {
   heroShieldMaterial,
   heroSpikeGeometry,
   heroSpikeMaterial,
+  smallDotGeometry,
   unitCircle,
+  unitCone,
   unitSphere,
   WEAPON_COLOR,
 } from '@/game/render/assets';
+import {
+  candleEyeMaterial,
+  candleFlameMaterial,
+  HERO_WAX_COLOR,
+  heroCandleGeometry,
+} from '@/game/render/assets-dark';
+import { useDarkStore } from '@/game/render/dark-store';
 import { boulderScaleFactor, cometStretchFactor, shieldBubbleOpacity, spikeCountForLevel } from './upgrade-visuals';
 
 /** Frecuencia del parpadeo de invulnerabilidad (alternancias por segundo). */
@@ -54,7 +65,7 @@ const WEAPON_SWITCH_BURST_SPEED = 2.4;
 const WEAPON_SWITCH_BURST_SIZE = 0.08;
 const WEAPON_SWITCH_BURST_LIFE = 0.32;
 
-/** Estiramiento por u/s de velocidad, con tope de +35% a velocidad alta. */
+/** Estiramiento por u/s de velocidad, con tope de +35% a velocidad alta (esfera, dark=0: SIN CAMBIOS). */
 const STRETCH_PER_SPEED = 0.028;
 const STRETCH_MAX = 0.35;
 /** Frenada (u/s perdidos entre frames) que dispara el squash de impacto. */
@@ -65,6 +76,208 @@ const SQUASH_FLATTEN = 0.62;
 
 /** Escala uniforme de la Burbuja de Cuarzo (F5) respecto al radio del héroe: envuelve la bola, no la toca. */
 const SHIELD_BUBBLE_SCALE = 1.4;
+
+/**
+ * Inclinación de la vela hacia la dirección de movimiento (rama
+ * `estilo-oscuro`, punto 1 de playtest ronda 4: "podría estirar la parte de
+ * arriba de la vela hacia donde se está tirando"; SOLO dark>=1, la esfera de
+ * dark=0 no toca este código): ángulo objetivo proporcional a la velocidad,
+ * reutilizando el mismo tope/ratio que ya usaba el estiramiento de la esfera
+ * (STRETCH_MAX/STRETCH_PER_SPEED — velocidades ya calibradas para este
+ * juego, y el tope de 0.35 rad es justo el que pide David), amortiguado con
+ * el mismo criterio 1-exp(-k·dt) que el lerp de color de arma de arriba
+ * (WEAPON_COLOR_LERP_STIFFNESS) para que nunca dé un tirón. Se suaviza el
+ * VECTOR de inclinación entero (no solo su magnitud) para que un cambio
+ * brusco de dirección tampoco “salte”, solo se re-oriente con la misma
+ * suavidad.
+ */
+const CANDLE_TILT_MAX = STRETCH_MAX;
+const CANDLE_TILT_PER_SPEED = STRETCH_PER_SPEED;
+const CANDLE_TILT_LERP_STIFFNESS = 9;
+
+/**
+ * Inclinación al apuntar (playtest ronda 5, punto 3: "el efecto de la vela
+ * al moverse (se echa para alante) ponlo también mientras se está
+ * apuntando"): mientras `world.heroAiming` y el héroe está parado o casi
+ * (velocidad por debajo de CANDLE_AIM_TILT_SPEED_THRESHOLD — si ya iba
+ * lanzado más rápido que eso, la inclinación de vuelo por velocidad de abajo
+ * ya se está mostrando y no hace falta la de apuntado), se inclina hacia la
+ * DIRECCIÓN DE LANZAMIENTO prevista (`session.aim.dirX/dirY`, el mismo
+ * vector que ya dibuja `AimIndicatorView`), con ángulo proporcional a la
+ * fuerza del arrastre (`session.aim.force`, [0,1]) y tope menor que el de
+ * vuelo (CANDLE_TILT_MAX = 0.35). Reutiliza el MISMO `candleLean`/`tiltK` de
+ * abajo (nunca un lerp aparte): al soltar, el target simplemente pasa a
+ * depender de la velocidad en vez del aim en el frame siguiente, y como el
+ * lerp nunca salta de golpe a un valor nuevo, el relevo entre ambos es
+ * continuo (sin salto), tal como pide el encargo.
+ */
+const CANDLE_AIM_TILT_MAX = 0.18;
+/** Por debajo de esta velocidad (u/s) se considera "parado o casi" a efectos de la inclinación de apuntado. */
+const CANDLE_AIM_TILT_SPEED_THRESHOLD = 0.6;
+
+/**
+ * Estiramiento VERTICAL de la vela con la velocidad (rama `estilo-oscuro`,
+ * mismo punto de playtest): sustituye, SOLO en dark>=1, al estiramiento
+ * horizontal de la esfera — alargar un cilindro fino tumbado en el plano del
+ * suelo no se lee como "lanzada" (queda como un cilindro acostado), así que
+ * aquí se alarga verticalmente en su lugar. Tope más sutil que STRETCH_MAX
+ * ("ligero estiramiento", pedido explícito). Nota de tuning: sin
+ * herramientas de preview en esta tarea (prohibidas), valor razonado, no
+ * verificado visualmente — revisar en playtest real.
+ */
+const CANDLE_VERTICAL_STRETCH_MAX = 0.15;
+const CANDLE_VERTICAL_STRETCH_PER_SPEED = STRETCH_PER_SPEED * 0.5;
+
+/**
+ * Pivote de inclinación = "la base" de la vela (punto 1 de playtest ronda 4:
+ * "la base no debe despegarse ni hundirse en el suelo"). Con la vela fina y
+ * alta de ronda 7 (`heroCandleGeometry` = radio local 1, alto local 2.8, ver
+ * `render/assets.ts`) la fórmula anterior (fracción = 1 − mitad-de-alto-
+ * local) ya no vale: esa cuenta asumía un cilindro CHATO cuya mitad de alto
+ * era menor que el radio (0.55 < 1), y con un alto local de 2.8 (mitad 1.4)
+ * daría una fracción NEGATIVA — la base se hundiría bajo el suelo. En vez de
+ * arrastrar esa aproximación, se fija el pivote LITERALMENTE en el suelo
+ * (fracción 0 ⇒ `tiltGroup` siempre a y=0, salvo el saltito de victoria):
+ * cumple el pedido original al pie de la letra y es correcto para cualquier
+ * proporción de la vela, no solo la chata de antes.
+ */
+const CANDLE_PIVOT_HEIGHT_FRACTION = 0;
+/** Mitad del alto local de `heroCandleGeometry` (radio 1, alto 2.8): mantiene la base pinchada al pivote pase lo que pase con el escalado vertical (squash o estiramiento). */
+const CANDLE_HALF_HEIGHT = 1.4;
+
+/**
+ * Ojos de la vela, reajustados a la vela fina y alta de ronda 7 (radio local
+ * 1, alto local 2.8 — ver comentario de `CANDLE_PIVOT_HEIGHT_FRACTION` y de
+ * `heroCandleGeometry` en `render/assets.ts`).
+ *
+ * Cuenta de ALTURAS (números en × visualRadius; visualRadius ≈ HERO_RADIUS a
+ * nivel base de Firmeza): con `CANDLE_PIVOT_HEIGHT_FRACTION = 0`, `tiltGroup`
+ * (y por tanto la base del cilindro) vive en mundo a y=0 exacto. `candleGroup`
+ * (padre de los ojos) tiene y local = `visualRadius · (1 −
+ * CANDLE_PIVOT_HEIGHT_FRACTION)` = 1.00·visualRadius — nótese que esta cuenta
+ * se CANCELA sola respecto a `CANDLE_PIVOT_HEIGHT_FRACTION` (tiltGroup.y +
+ * candleGroup.y_local = fracción + (1−fracción) = 1 siempre), así que
+ * `candleGroup` cae en el mismo sitio absoluto pase lo que pase con el
+ * pivote. El cilindro (alto local 2.8, base en y=0) ocupa en altura absoluta
+ * [0, 2.8]·visualRadius, así que el origen de `candleGroup` (1.00) cae al
+ * 1.00/2.8 ≈ 36% de la altura — bastante por debajo de donde deben ir los
+ * ojos. `CANDLE_EYE_Y` = 0.68·HERO_RADIUS los sube a 1.68·visualRadius
+ * absolutos ⇒ 1.68/2.8 = 60% de la altura del cilindro (pedido original:
+ * 55-65%, se mantiene el mismo criterio que en rondas anteriores). Esta Y ya
+ * estaba bien: se verificó con la aritmética de arriba y no se toca.
+ *
+ * BUG encontrado en playtest ronda 8 ("los ojos han desaparecido"): la Z de
+ * antes (0.9·HERO_RADIUS) los dejaba DENTRO del cilindro. El radio ABSOLUTO
+ * real de la superficie del cuerpo (ver `body.scale.set(scaleXZ, ...)` en
+ * useFrame) es `scaleXZ` ≈ `visualRadius` (radio LOCAL 1 del cilindro ×
+ * `visualRadius`) — y `visualRadius` ≈ `HERO_RADIUS` a nivel base de
+ * Firmeza. Con Z = 0.9·HERO_RADIUS ≈ 0.9·visualRadius, los ojos quedaban al
+ * 90% del radio real (100% = superficie): EMBEBIDOS un 10% dentro del sólido,
+ * ocultos por el propio cuerpo en el z-test de profundidad (de ahí que "no se
+ * vean" en vez de solo "se vean mal"). Fix: sacarlos justo fuera de la
+ * superficie, al 102% del radio.
+ */
+/** Separación entre CENTROS de ambos ojos, en × HERO_RADIUS (juntos, carita del concept; misma proporción que ronda 6 respecto al nuevo diámetro del cilindro, radio local 1 en vez de 0.85). */
+const CANDLE_EYE_SEPARATION = 0.33;
+const CANDLE_EYE_X = (HERO_RADIUS * CANDLE_EYE_SEPARATION) / 2;
+const CANDLE_EYE_Y = HERO_RADIUS * 0.68;
+/** Radio local del cilindro (1, ronda 7) × visualRadius/HERO_RADIUS, al 102%: JUSTO fuera de la superficie real (100%), nunca embebidos dentro del sólido (ver BUG de arriba). */
+const CANDLE_EYE_Z = HERO_RADIUS * 1.02;
+/** Tamaño de cada ojo (sin cambios de proporción respecto a HERO_RADIUS: se achica junto con el resto de la vela al reducirse HERO_RADIUS en ronda 7). */
+/** Un punto más grandes (playtest ronda 9: "los ojos de la vela los haría un poco más grandes"). */
+const CANDLE_EYE_SCALE: [number, number, number] = [HERO_RADIUS * 0.105, HERO_RADIUS * 0.16, HERO_RADIUS * 0.06];
+
+/**
+ * Orientación de la mirada (playtest ronda 8, punto 3b: "deben mirar hacia
+ * donde se está apuntando, o hacia donde se está moviendo"): los ojos viven
+ * en un `<group>` propio (`eyeGroupRef`, hijo de `candleGroup`) que rota
+ * SOLO en Y — como `candleGroup` nunca aplica yaw propio (solo traslada), el
+ * ángulo LOCAL de este grupo coincide con el ángulo de MUNDO, sin necesidad
+ * de restarle la rotación de ningún ancestro (a diferencia de
+ * `chaser/Mesh.tsx`, cuyo grupo padre sí yawea). Los ojos cuelgan de este
+ * pivote a radio fijo `CANDLE_EYE_Z`, así que rotarlo los pasea alrededor del
+ * cilindro sin recalcular su posición cada frame (mismo resultado que la
+ * proyección seno/coseno del Chaser, más simple porque aquí basta un solo
+ * eje). Prioridad de objetivo: apuntando > moviéndose > último ángulo válido
+ * (parado, se conserva sin más). Suavizado con `dampAngleTowards`
+ * (`src/engine/geometry.ts`) por el arco más corto, mismo criterio que ya usa
+ * `chaserFaceAngle` en `chaser/Mesh.tsx`.
+ */
+const EYE_FACE_LERP_STIFFNESS = 10;
+/** Por debajo de esta velocidad (u/s) no se considera "moviéndose" a efectos de la mirada (evita que un jitter mínimo reoriente la cara). */
+const EYE_FACE_SPEED_THRESHOLD = 0.5;
+
+/**
+ * Rastro de CERA (playtest ronda 5, punto 4: "haz que la vela deje un
+ * rastro de cera al moverse", SOLO dark>=1) — REDISEÑO (playtest ronda 7,
+ * David: "la cera no se hace pequeña, como mucho que desaparezca poco a
+ * poco, pero tampoco debería... hay que dejar un rastro de TODOS los
+ * movimientos que ha hecho"): ya NO usa `session.effects.trail` (estela de
+ * vida corta, cadencia por TIEMPO, solo mientras el héroe va rápido — eso
+ * sigue existiendo pero solo para el clásico dark=0, más abajo). La cera
+ * ahora vive en su propia capa persistente (`session.effects.wax`,
+ * `features/effects/wax.ts`): puntos FIJOS que nunca se encogen ni
+ * desaparecen (se reciclan solo cuando el buffer, ~2000 puntos, se llena),
+ * depositados por DISTANCIA recorrida (no por tiempo ni umbral de
+ * velocidad — ver bloque de más abajo) para que el rastro cubra
+ * uniformemente cualquier movimiento, no solo los sprints.
+ */
+/**
+ * La cera del rastro es notablemente más OSCURA que la del cuerpo (playtest
+ * ronda 9: "la cera, incluso si se puede, la oscurecería un poco más"): cera
+ * pisada/derretida sobre piedra, que se intuye bajo la luz sin competir con
+ * el suelo iluminado.
+ */
+const WAX_TRAIL_COLOR = new Color(HERO_WAX_COLOR).multiplyScalar(0.55);
+/** Tamaño del goterón de cera (× HERO_RADIUS): más grande que el punto clásico (0.8) para que se lea sobre el suelo iluminado por la propia vela. */
+const WAX_TRAIL_SIZE_FACTOR = 1.15;
+/**
+ * Salto de posición (u) en un solo frame por encima del cual se considera un
+ * TELEPORT (caída al foso y reaparición, cambio de sala) y no un
+ * desplazamiento real del héroe: evita que la cera dibuje una fila fantasma
+ * conectando el punto de antes de caer con el de reaparecer. Muy por encima
+ * de cualquier paso real a framerate normal (velocidad máxima del héroe muy
+ * por debajo de esto × 60fps).
+ */
+const WAX_TELEPORT_GUARD = 3;
+
+/**
+ * Héroe = vela (rama `estilo-oscuro`, solo dark>=1): la llama/ojos viven en
+ * un grupo aparte (`candleGroupRef`), NO como hijo directo del mesh del
+ * cuerpo (`bodyRef`) — un hijo de `bodyRef` heredaría gratis su
+ * squash/estiramiento vertical, y una llama deformándose igual que la cera
+ * se leería raro. Ambos (`bodyRef` y `candleGroupRef`) SÍ son hijos de
+ * `candleTiltGroupRef` (el pivote de la base, ver arriba): la inclinación
+ * los arrastra a los dos por igual ("la llama y los ojos deben acompañar la
+ * inclinación", punto 1 de playtest), pero solo `bodyRef` recibe además el
+ * escalado de squash/estiramiento.
+ *
+ * Llama: pulso de tamaño (punto 3 de playtest ronda 4: "parece que se
+ * balancea, mejor que crezca y decrezca") — suma de dos senos a frecuencias
+ * inconmensuradas (barato, sin asignaciones) que modulan una escala
+ * UNIFORME, nunca su posición/rotación (eliminadas: ya no hay balanceo).
+ */
+const FLAME_PULSE_FREQ_A = 3.1;
+const FLAME_PULSE_FREQ_B = 5.7;
+/**
+ * Altura de la llama (× visualRadius, offset LOCAL dentro de `candleGroup`,
+ * que a su vez cae siempre en 1.00·visualRadius absoluto — ver comentario de
+ * `CANDLE_EYE_Y` arriba): reajustada a la vela alta de ronda 7 para que la
+ * BASE de la llama (su centro menos su propio semi-alto, `FLAME_BASE_SCALE ·
+ * 1.8 / 2`) quede justo sobre la boca del cilindro (techo en 2.8·visualRadius,
+ * ver comentario de `CANDLE_EYE_Y`).
+ *
+ * Ronda 8 (playtest, "la llama hazla un poco más grande"): `FLAME_BASE_SCALE`
+ * sube de 0.5 a 0.7 (+40%, dentro del 35-45% pedido). Recalculado
+ * `FLAME_HEIGHT_FACTOR` en consecuencia para que la base siga asentada en la
+ * boca del cilindro (si no, la llama más grande se hundiría visualmente
+ * dentro de la vela): semi-alto = 0.7 · 1.8 / 2 = 0.63·visualRadius ⇒ centro
+ * deseado = 2.8 + 0.63 = 3.43 ⇒ offset local = 3.43 − 1.00 = 2.43.
+ */
+const FLAME_HEIGHT_FACTOR = 2.43;
+const FLAME_BASE_SCALE = 0.7;
+/** Amplitud del pulso de tamaño de la llama: ±15%, pedido explícito de playtest. */
+const FLAME_PULSE_AMPLITUDE = 0.15;
 
 /**
  * Gesto de victoria (playtest 2026-07-15, David: "quizá algún gesto de
@@ -104,32 +317,85 @@ function buildSpikeDirections(): Array<{ x: number; y: number; z: number }> {
 
 const SPIKE_DIRECTIONS = buildSpikeDirections();
 
+/**
+ * Héroe-vela (dark>=1, punto 5 de playtest): los 12 pinchos del Erizo de
+ * Acero se posicionan con `SPIKE_DIRECTIONS` (puntos sobre la ESFERA
+ * unitaria, radio 1) porque en `dark=0` `bodyRef` es literalmente esa esfera
+ * — al cambiar su geometría a `heroCandleGeometry` (cilindro fino y alto de
+ * ronda 7, radio local 1 / alto local 2.8, ver assets.ts) el ecuador de la
+ * esfera unitaria seguiría cayendo justo en la superficie del cilindro (el
+ * radio local coincide, 1 = 1) pero los polos (y=±1) quedarían muy por
+ * encima/debajo del cilindro real (semialto local 1.4) y "flotarían" fuera
+ * del cuerpo. Reproyección barata: escala cada dirección unitaria por el
+ * radio/semialto reales del cilindro en vez de recalcular geometría de
+ * contacto exacta — aproximado pero "razonable" (mismo criterio que pide el
+ * playtest), sin tocar la orientación (el quaternion de abajo sigue usando
+ * la dirección ORIGINAL sin escalar, así los pinchos siguen apuntando hacia
+ * fuera).
+ */
+const CANDLE_SPIKE_SURFACE_XZ = 1;
+const CANDLE_SPIKE_SURFACE_Y = 1.4;
+
 export function HeroView({ session }: { session: GameSession }) {
+  const silhouettes = useDarkStore((s) => s.dark >= 1);
+  const candleTiltGroupRef = useRef<Group>(null);
   const bodyRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
   const shieldRef = useRef<Mesh>(null);
   const spikeRefs = useRef<(Mesh | null)[]>([]);
+  // Héroe = vela (dark>=1, ver comentario de FLAME_PULSE_FREQ_A más arriba).
+  const candleGroupRef = useRef<Group>(null);
+  const flameRef = useRef<Mesh>(null);
+  // Mirada de los ojos (playtest ronda 8, punto 3b): grupo que rota en Y
+  // (ver EYE_FACE_LERP_STIFFNESS arriba) + último ángulo válido conservado
+  // mientras el héroe está parado (mismo patrón que chaserFaceAngle en
+  // chaser/Mesh.tsx).
+  const eyeGroupRef = useRef<Group>(null);
+  const candleFaceAngle = useRef(0);
   const prevSpeed = useRef(0);
   const squashUntil = useRef(0);
   const trailAccumulator = useRef(0);
+  // Cera persistente (ver WAX_TRAIL_COLOR arriba): acumulador de DISTANCIA
+  // recorrida (no tiempo) + última posición conocida para calcularla frame a
+  // frame; waxPrevX/Z se resincronizan SIEMPRE (incluso cuando no se acumula,
+  // ver useFrame) para que un hueco (sala nueva, caída) nunca compute un
+  // salto grande de una vez.
+  const waxAccumulator = useRef(0);
+  const waxPrevX = useRef(0);
+  const waxPrevZ = useRef(0);
   // Arma del frame anterior: detecta el CAMBIO para disparar el burst de
   // partículas una sola vez (no cada frame mientras se mantiene el modo).
   const prevWeaponMode = useRef<WeaponMode | null>(null);
+  // Inclinación de la vela (punto 1 de playtest ronda 4): vector 2D (x,z)
+  // suavizado cuya magnitud es el ángulo actual y cuya dirección es hacia
+  // dónde se inclina — suavizar el VECTOR entero (no ángulo+eje por
+  // separado) evita saltos cuando la dirección de movimiento cambia bruscamente.
+  const candleLean = useRef({ x: 0, z: 0 });
+  // Escalares reutilizados cada frame (cero allocs en useFrame, mismo
+  // criterio que el resto del render de esta rama).
+  const candleTiltAxis = useRef(new Vector3());
+  const candleTiltQuat = useRef(new Quaternion());
 
-  // Pose de los pinchos (F5): fija UNA vez al montar, nunca en useFrame — son
-  // hijos estáticos del mesh del héroe (heredan su transform cada frame sin
-  // recálculo propio). Usa Quaternion.setFromUnitVectors para orientar el
-  // cono (eje +Y local) hacia fuera, en vez de trigonometría de Euler frágil.
+  // Pose de los pinchos (F5): fija al montar y cada vez que cambia de esfera
+  // a cilindro (silhouettes, ver CANDLE_SPIKE_SURFACE_* arriba) — nunca en
+  // useFrame, son hijos estáticos del mesh del héroe (heredan su transform
+  // cada frame sin recálculo propio). Usa Quaternion.setFromUnitVectors para
+  // orientar el cono (eje +Y local) hacia fuera, en vez de trigonometría de
+  // Euler frágil; la orientación usa SIEMPRE la dirección original de la
+  // esfera (no la reproyectada), así sigue apuntando "hacia fuera" en ambas
+  // geometrías sin necesitar una normal de cilindro exacta.
   useEffect(() => {
     const up = new Vector3(0, 1, 0);
+    const surfaceXZ = silhouettes ? CANDLE_SPIKE_SURFACE_XZ : 1;
+    const surfaceY = silhouettes ? CANDLE_SPIKE_SURFACE_Y : 1;
     SPIKE_DIRECTIONS.forEach((dir, i) => {
       const mesh = spikeRefs.current[i];
       if (!mesh) return;
       const dirVec = new Vector3(dir.x, dir.y, dir.z);
-      mesh.position.copy(dirVec);
+      mesh.position.set(dir.x * surfaceXZ, dir.y * surfaceY, dir.z * surfaceXZ);
       mesh.quaternion.setFromUnitVectors(up, dirVec);
     });
-  }, []);
+  }, [silhouettes]);
 
   useFrame((_, delta) => {
     const world = session.world;
@@ -138,6 +404,7 @@ export function HeroView({ session }: { session: GameSession }) {
     const x = session.heroPrevX + (hero.position.x - session.heroPrevX) * alpha;
     const z = session.heroPrevY + (hero.position.y - session.heroPrevY) * alpha;
 
+    const tiltGroup = candleTiltGroupRef.current;
     const body = bodyRef.current;
     const shadow = shadowRef.current;
     const shield = shieldRef.current;
@@ -163,10 +430,16 @@ export function HeroView({ session }: { session: GameSession }) {
     // Color del héroe según arma activa (punto 1 de playtest ronda 3): lerp
     // continuo hacia el color objetivo (nunca un corte brusco), independiente
     // del framerate. El indicador de puntería (aimDotMaterial) comparte el
-    // mismo objetivo para que apunten siempre al mismo lenguaje de color.
+    // mismo objetivo para que apunten siempre al mismo lenguaje de color. En
+    // dark>=1 (héroe = vela) el cuerpo deja de lerpear (queda cera fija,
+    // assets.ts) y el lerp se aplica a la llama en su lugar.
     const targetColor = WEAPON_COLOR[hero.weaponMode];
     const colorK = 1 - Math.exp(-WEAPON_COLOR_LERP_STIFFNESS * delta);
-    heroMaterial.color.lerp(targetColor, colorK);
+    if (silhouettes) {
+      candleFlameMaterial.color.lerp(targetColor, colorK);
+    } else {
+      heroMaterial.color.lerp(targetColor, colorK);
+    }
     aimDotMaterial.color.lerp(targetColor, colorK);
 
     // Cambio de arma: burst de partículas del color NUEVO alrededor del
@@ -194,13 +467,21 @@ export function HeroView({ session }: { session: GameSession }) {
       const remaining = world.fallingUntil - world.time;
       const t = 1 - Math.max(0, remaining) / PIT_FALL_DURATION; // 0 → 1
       const scale = visualRadius * Math.max(0.05, 1 - t);
+      if (silhouettes && tiltGroup) {
+        // Sin inclinación durante la caída (nunca la tuvo): el pivote vuelve
+        // a identidad y `body.position.set` de abajo, que sigue escribiendo
+        // coordenadas de MUNDO como siempre, vuelve a ser válido tal cual.
+        tiltGroup.position.set(0, 0, 0);
+        tiltGroup.quaternion.identity();
+      }
       if (body) {
         body.visible = true;
         body.position.set(x, visualRadius * (1 - t) - 0.4 * t, z);
-        body.rotation.y = 0;
+        body.rotation.set(0, 0, 0);
         body.scale.setScalar(scale);
       }
       if (shadow) shadow.visible = false;
+      if (silhouettes && candleGroupRef.current) candleGroupRef.current.visible = false;
       prevSpeed.current = 0;
       return;
     }
@@ -213,16 +494,45 @@ export function HeroView({ session }: { session: GameSession }) {
     }
     prevSpeed.current = speed;
 
-    // Estela mientras va rápido (cadencia fija; el pool es circular, nunca crece).
-    if (speed > TRAIL_SPEED_THRESHOLD && world.phase === 'playing') {
-      trailAccumulator.current += delta;
-      while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
-        trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
-        session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
+    // Estela CLÁSICA (dark=0 ÚNICAMENTE, GDD §12): cadencia fija por TIEMPO,
+    // solo mientras va rápido — comportamiento intacto, sin cambios. En
+    // dark>=1 el héroe ya no toca este pool (ver bloque de cera más abajo).
+    if (!silhouettes) {
+      if (speed > TRAIL_SPEED_THRESHOLD && world.phase === 'playing') {
+        trailAccumulator.current += delta;
+        while (trailAccumulator.current >= TRAIL_EMIT_INTERVAL) {
+          trailAccumulator.current -= TRAIL_EMIT_INTERVAL;
+          session.effects.trail.emit(x, z, HERO_RADIUS * 0.8, undefined, targetColor.r, targetColor.g, targetColor.b);
+        }
+      } else {
+        trailAccumulator.current = 0;
+      }
+    }
+
+    // Capa de CERA persistente (dark>=1, ver WAX_TRAIL_COLOR arriba): emisión
+    // por DISTANCIA recorrida, SIN umbral de velocidad — "un rastro de todos
+    // los movimientos que ha hecho", no solo de los sprints.
+    if (silhouettes && world.phase === 'playing') {
+      const stepDist = Math.hypot(x - waxPrevX.current, z - waxPrevZ.current);
+      if (stepDist < WAX_TELEPORT_GUARD) {
+        waxAccumulator.current += stepDist;
+        while (waxAccumulator.current >= HERO_WAX_EMIT_DISTANCE) {
+          waxAccumulator.current -= HERO_WAX_EMIT_DISTANCE;
+          session.effects.wax.emit(
+            x,
+            z,
+            HERO_RADIUS * WAX_TRAIL_SIZE_FACTOR,
+            WAX_TRAIL_COLOR.r,
+            WAX_TRAIL_COLOR.g,
+            WAX_TRAIL_COLOR.b,
+          );
+        }
       }
     } else {
-      trailAccumulator.current = 0;
+      waxAccumulator.current = 0;
     }
+    waxPrevX.current = x;
+    waxPrevZ.current = z;
 
     // Parpadeo de i-frames: alterna visibilidad a frecuencia fija.
     const invulnerable = world.time < hero.invulnerableUntil;
@@ -232,60 +542,236 @@ export function HeroView({ session }: { session: GameSession }) {
     const victoryHop =
       world.phase === 'boss-victory-pause' ? Math.abs(Math.sin(world.time * VICTORY_HOP_FREQUENCY)) * VICTORY_HOP_HEIGHT : 0;
 
-    if (body) {
-      body.visible = blinkOn;
-      body.position.set(x, visualRadius + victoryHop, z);
+    const squashing = world.time < squashUntil.current;
 
-      if (world.time < squashUntil.current) {
-        // Aplastamiento: bajo y ancho, conservando volumen aproximado.
-        const widen = 1 / Math.sqrt(SQUASH_FLATTEN);
-        body.rotation.y = 0;
-        body.scale.set(visualRadius * widen, visualRadius * SQUASH_FLATTEN, visualRadius * widen);
-      } else if (speed > 0.5) {
-        // Estiramiento a lo largo de la velocidad (eje Z local rotado hacia
-        // la dirección de movimiento), compensado en los otros ejes. La
-        // Estela de Cometa (F5) amplifica SOLO el bono que ya depende de la
-        // velocidad (nunca el "1" base), así a velocidad 0 no cambia nada.
-        const stretchBonus = Math.min(STRETCH_MAX, speed * STRETCH_PER_SPEED) * cometFactor;
-        const stretch = 1 + stretchBonus;
-        const thin = 1 / Math.sqrt(stretch);
-        body.rotation.y = Math.atan2(hero.velocity.x, hero.velocity.y);
-        body.scale.set(visualRadius * thin, visualRadius * thin, visualRadius * stretch);
-      } else {
-        body.rotation.y = 0;
-        body.scale.setScalar(visualRadius);
+    if (silhouettes) {
+      // Héroe = vela inclinándose hacia la dirección de movimiento (punto 1
+      // de playtest ronda 4): `tiltGroup` vive en el PIVOTE (la base de la
+      // vela, ver CANDLE_PIVOT_HEIGHT_FRACTION) y es el único que carga
+      // x/z/victoryHop y la rotación de inclinación; `body` (hijo) solo
+      // recibe su escala de squash/estiramiento y una posición LOCAL que
+      // mantiene su base siempre pinchada al pivote, pase lo que pase con
+      // esa escala.
+      if (tiltGroup) {
+        tiltGroup.position.set(x, visualRadius * CANDLE_PIVOT_HEIGHT_FRACTION + victoryHop, z);
+
+        // Inclinación de apuntado (ver CANDLE_AIM_TILT_MAX arriba) vs.
+        // inclinación de vuelo por velocidad: exclusivas, la de apuntado
+        // gana solo mientras se apunta parado o casi.
+        const aim = session.aim;
+        const aiming = world.heroAiming && speed < CANDLE_AIM_TILT_SPEED_THRESHOLD && aim.force > 0;
+        let targetLeanX = 0;
+        let targetLeanZ = 0;
+        if (aiming) {
+          // Signo INVERTIDO respecto al lanzamiento (playtest ronda 6): al
+          // apuntar, la vela se echa HACIA ATRÁS como la goma de un
+          // tirachinas tensándose; al soltar, la inclinación de vuelo la
+          // lleva hacia delante — anticipación → acción.
+          const aimAngle = CANDLE_AIM_TILT_MAX * aim.force;
+          targetLeanX = -aim.dirX * aimAngle;
+          targetLeanZ = -aim.dirY * aimAngle;
+        } else if (speed > 1e-4) {
+          const targetAngle = Math.min(CANDLE_TILT_MAX, speed * CANDLE_TILT_PER_SPEED);
+          targetLeanX = (hero.velocity.x / speed) * targetAngle;
+          targetLeanZ = (hero.velocity.y / speed) * targetAngle;
+        }
+        const tiltK = 1 - Math.exp(-CANDLE_TILT_LERP_STIFFNESS * delta);
+        const lean = candleLean.current;
+        lean.x += (targetLeanX - lean.x) * tiltK;
+        lean.z += (targetLeanZ - lean.z) * tiltK;
+
+        const angle = Math.hypot(lean.x, lean.z);
+        if (angle > 1e-4) {
+          // Eje horizontal perpendicular a la dirección de inclinación
+          // (derivado con la fórmula de Rodrigues para que el TOP del
+          // cilindro se incline hacia (lean.x, lean.z)): con lean = ángulo ·
+          // dirección unitaria, axis = normalize(lean.z, 0, -lean.x).
+          candleTiltAxis.current.set(lean.z / angle, 0, -lean.x / angle);
+          candleTiltQuat.current.setFromAxisAngle(candleTiltAxis.current, angle);
+          tiltGroup.quaternion.copy(candleTiltQuat.current);
+        } else {
+          tiltGroup.quaternion.identity();
+        }
+      }
+
+      if (body) {
+        body.visible = blinkOn;
+        body.rotation.set(0, 0, 0); // el cilindro es de revolución: el yaw no cambia su silueta
+
+        let scaleXZ: number;
+        let scaleY: number;
+        if (squashing) {
+          // Mismo aplastamiento de impacto que ya existía (SQUASH_FLATTEN),
+          // aplicado ahora al cilindro en vez de a la esfera.
+          const widen = 1 / Math.sqrt(SQUASH_FLATTEN);
+          scaleXZ = visualRadius * widen;
+          scaleY = visualRadius * SQUASH_FLATTEN;
+        } else {
+          // Estiramiento vertical con la velocidad (punto 1 de playtest
+          // ronda 4): "lanzada", sin tocar el radio. Amplificado por la
+          // Estela de Cometa (F5) igual que hacía el estiramiento de la
+          // esfera — mismo upgrade, mismo criterio, solo cambia el eje.
+          const stretchBonus =
+            Math.min(CANDLE_VERTICAL_STRETCH_MAX, speed * CANDLE_VERTICAL_STRETCH_PER_SPEED) * cometFactor;
+          scaleXZ = visualRadius;
+          scaleY = visualRadius * (1 + stretchBonus);
+        }
+        body.scale.set(scaleXZ, scaleY, scaleXZ);
+        // La base del cilindro (a -CANDLE_HALF_HEIGHT en su espacio local)
+        // debe quedar SIEMPRE en el origen de `tiltGroup` (el pivote): se
+        // compensa la posición local con la mitad de la altura ACTUAL, así
+        // ni el squash ni el estiramiento la despegan del suelo ni la hunden.
+        body.position.set(0, scaleY * CANDLE_HALF_HEIGHT, 0);
+      }
+    } else {
+      // Esfera clásica (dark=0): EXACTAMENTE el código de siempre. El
+      // tiltGroup se mantiene en identidad (nunca se toca aquí), así que la
+      // posición absoluta de `body.position.set` de abajo sigue siendo
+      // mundo puro — cero diferencia con el comportamiento anterior a este
+      // cambio.
+      if (tiltGroup) {
+        tiltGroup.position.set(0, 0, 0);
+        tiltGroup.quaternion.identity();
+      }
+      if (body) {
+        body.visible = blinkOn;
+        body.position.set(x, visualRadius + victoryHop, z);
+
+        if (squashing) {
+          // Aplastamiento: bajo y ancho, conservando volumen aproximado.
+          const widen = 1 / Math.sqrt(SQUASH_FLATTEN);
+          body.rotation.y = 0;
+          body.scale.set(visualRadius * widen, visualRadius * SQUASH_FLATTEN, visualRadius * widen);
+        } else if (speed > 0.5) {
+          // Estiramiento a lo largo de la velocidad (eje Z local rotado hacia
+          // la dirección de movimiento), compensado en los otros ejes. La
+          // Estela de Cometa (F5) amplifica SOLO el bono que ya depende de la
+          // velocidad (nunca el "1" base), así a velocidad 0 no cambia nada.
+          const stretchBonus = Math.min(STRETCH_MAX, speed * STRETCH_PER_SPEED) * cometFactor;
+          const stretch = 1 + stretchBonus;
+          const thin = 1 / Math.sqrt(stretch);
+          body.rotation.y = Math.atan2(hero.velocity.x, hero.velocity.y);
+          body.scale.set(visualRadius * thin, visualRadius * thin, visualRadius * stretch);
+        } else {
+          body.rotation.y = 0;
+          body.scale.setScalar(visualRadius);
+        }
       }
     }
+
     if (shadow) {
       shadow.visible = true;
       shadow.position.set(x, 0.02, z);
+    }
+
+    // Héroe = vela (dark>=1): la llama/ojos siguen al cuerpo (posición e
+    // inclinación, vía `tiltGroup`, su padre común) pero NUNCA su
+    // squash/estiramiento — grupo aparte, actualizado a mano.
+    if (silhouettes) {
+      const candleGroup = candleGroupRef.current;
+      if (candleGroup) {
+        candleGroup.visible = blinkOn;
+        // Local a `tiltGroup` (que ya lleva x/z/pivote e inclinación): solo
+        // la altura de anclaje de la llama/ojos respecto al pivote de la
+        // base, elegida para que la altura ABSOLUTA de la llama/ojos no
+        // cambie ni un milímetro respecto a como se veía antes de este
+        // cambio (ver comentario de CANDLE_PIVOT_HEIGHT_FRACTION).
+        candleGroup.position.set(0, visualRadius * (1 - CANDLE_PIVOT_HEIGHT_FRACTION), 0);
+      }
+      const flame = flameRef.current;
+      if (flame) {
+        // Pulso de tamaño (punto 3 de playtest ronda 4): SIN oscilación de
+        // posición/rotación (eliminadas, ya no "balancea"), solo escala
+        // UNIFORME, con la misma suma de senos barata de siempre
+        // (frecuencias inconmensuradas, sin asignaciones, sin estroboscopia).
+        const pulseA = Math.sin(world.time * FLAME_PULSE_FREQ_A);
+        const pulseB = Math.sin(world.time * FLAME_PULSE_FREQ_B);
+        const pulse = 1 + (pulseA * 0.6 + pulseB * 0.4) * FLAME_PULSE_AMPLITUDE;
+        flame.position.set(0, visualRadius * FLAME_HEIGHT_FACTOR, 0);
+        flame.rotation.z = 0;
+        const flameScale = visualRadius * FLAME_BASE_SCALE * pulse;
+        flame.scale.set(flameScale, flameScale * 1.8, flameScale);
+      }
+
+      // Mirada de los ojos (punto 3b de playtest ronda 8): apuntando > en
+      // movimiento > último ángulo válido (parado, ver comentario de
+      // EYE_FACE_LERP_STIFFNESS arriba). Reutiliza `speed`/`aim` ya
+      // calculados en este mismo useFrame.
+      const aimForEyes = session.aim;
+      let targetFaceAngle: number | null = null;
+      if (world.heroAiming && aimForEyes.force > 0) {
+        targetFaceAngle = Math.atan2(aimForEyes.dirX, aimForEyes.dirY);
+      } else if (speed > EYE_FACE_SPEED_THRESHOLD) {
+        targetFaceAngle = Math.atan2(hero.velocity.x, hero.velocity.y);
+      }
+      if (targetFaceAngle !== null) {
+        candleFaceAngle.current = dampAngleTowards(
+          candleFaceAngle.current,
+          targetFaceAngle,
+          EYE_FACE_LERP_STIFFNESS,
+          delta,
+        );
+      }
+      if (eyeGroupRef.current) eyeGroupRef.current.rotation.y = candleFaceAngle.current;
     }
   });
 
   return (
     <>
-      <mesh ref={bodyRef} geometry={unitSphere} material={heroMaterial} scale={HERO_RADIUS}>
-        {/* Pinchos del Erizo de Acero (F5): 12 pre-creados, visibilidad por nivel. */}
-        {SPIKE_DIRECTIONS.map((_, i) => (
-          <mesh
-            key={i}
-            ref={(el) => {
-              spikeRefs.current[i] = el;
-            }}
-            geometry={heroSpikeGeometry}
-            material={heroSpikeMaterial}
-            visible={false}
-          />
-        ))}
-        {/* Burbuja de Cuarzo (F5): visible mientras haya cargas de escudo. */}
-        <mesh ref={shieldRef} geometry={unitSphere} material={heroShieldMaterial} scale={SHIELD_BUBBLE_SCALE} visible={false} />
-      </mesh>
+      <group ref={candleTiltGroupRef}>
+        <mesh ref={bodyRef} geometry={silhouettes ? heroCandleGeometry : unitSphere} material={heroMaterial} scale={HERO_RADIUS}>
+          {/* Pinchos del Erizo de Acero (F5): 12 pre-creados, visibilidad por nivel. */}
+          {SPIKE_DIRECTIONS.map((_, i) => (
+            <mesh
+              key={i}
+              ref={(el) => {
+                spikeRefs.current[i] = el;
+              }}
+              geometry={heroSpikeGeometry}
+              material={heroSpikeMaterial}
+              visible={false}
+            />
+          ))}
+          {/* Burbuja de Cuarzo (F5): visible mientras haya cargas de escudo. */}
+          <mesh ref={shieldRef} geometry={unitSphere} material={heroShieldMaterial} scale={SHIELD_BUBBLE_SCALE} visible={false} />
+        </mesh>
+        {silhouettes && (
+          <group ref={candleGroupRef}>
+            {/* Llama (MUTABLE, ver useFrame): cono estrecho, autoiluminado. */}
+            <mesh ref={flameRef} geometry={unitCone} material={candleFlameMaterial} />
+            {/* Carita de vela: dos ojos negros ovalados simples (concept art),
+                juntos y a ~60% de la altura del cilindro (CANDLE_EYE_Y), justo
+                fuera de la superficie (CANDLE_EYE_Z, ver BUG en su comentario).
+                Cuelgan de un group que rota en Y (MUTABLE, ver useFrame /
+                candleFaceAngle) para mirar hacia el apuntado/movimiento, en
+                vez de quedar fijos mirando siempre a +Z. */}
+            <group ref={eyeGroupRef} position={[0, CANDLE_EYE_Y, 0]}>
+              <mesh
+                geometry={smallDotGeometry}
+                material={candleEyeMaterial}
+                position={[-CANDLE_EYE_X, 0, CANDLE_EYE_Z]}
+                scale={CANDLE_EYE_SCALE}
+              />
+              <mesh
+                geometry={smallDotGeometry}
+                material={candleEyeMaterial}
+                position={[CANDLE_EYE_X, 0, CANDLE_EYE_Z]}
+                scale={CANDLE_EYE_SCALE}
+              />
+            </group>
+          </group>
+        )}
+      </group>
       <mesh
         ref={shadowRef}
         geometry={unitCircle}
         material={blobShadowMaterial}
         rotation-x={-Math.PI / 2}
-        scale={HERO_RADIUS * 1.25}
+        // Silueta: sombra blob al radio real del cilindro. Ronda 7: el radio
+        // local de `heroCandleGeometry` vuelve a 1 (como la esfera clásica),
+        // así que el multiplicador ×1.0 de siempre ya coincide exactamente
+        // con el nuevo radio visual — no hace falta tocarlo.
+        scale={HERO_RADIUS * (silhouettes ? 1.0 : 1.25)}
       />
     </>
   );

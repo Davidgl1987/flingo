@@ -56,6 +56,37 @@ function createRadialTexture(): THREE.Texture {
   return texture;
 }
 
+/**
+ * Textura radial BLANCA (centro opaco → borde transparente), generada UNA vez
+ * y reutilizada por TODOS los halos de brillo falso (rama `estilo-oscuro`,
+ * punto 2 de playtest: "las monedas se ven de otra habitación sin iluminar
+ * nada"). A diferencia de `createRadialTexture` (negra, para blob shadows),
+ * esta es blanca porque cada halo la tiñe multiplicando por `material.color`
+ * con blending ADITIVO (ver más abajo) — así un único mapa sirve para
+ * cualquier color de brillo sin generar una textura por objeto.
+ */
+function createGlowHaloTexture(): THREE.Texture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.35)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/** Mapa radial blanco→transparente compartido por todos los halos de brillo (ver `createGlowHaloTexture`). */
+export const glowHaloTexture = createGlowHaloTexture();
+
 // ── Materiales ────────────────────────────────────────────────────────────
 
 /**
@@ -63,11 +94,19 @@ function createRadialTexture(): THREE.Texture {
  * cuerpo del héroe, su estela y el indicador de puntería cambian al mismo
  * color que su arma seleccionada — mismo lenguaje visual ya usado por
  * WeaponBar (`weapon-btn-<mode>`) y por los proyectiles (arrowMaterial /
- * spellMaterial más abajo). Único punto de verdad para no divergir del CSS.
+ * spellBoltMaterial más abajo). Único punto de verdad para no divergir del CSS.
+ */
+/**
+ * Intercambio de colores cuerpo↔flecha (feedback de playtest, rama
+ * `estilo-oscuro`): cuerpo pasa a amarillo, flecha pasa al azul que antes
+ * tenía el cuerpo; hechizo no cambia. Afecta a TODOS los modos (dark 0/1/2),
+ * a diferencia del resto de este bloque de cambios — ver también
+ * `weapon-bar.css` (.weapon-btn-body/.weapon-btn-arrow) y
+ * `UpgradeIcon.tsx` (CATEGORY_COLOR), que copian estos mismos valores.
  */
 export const WEAPON_COLOR: Record<'body' | 'arrow' | 'spell', THREE.Color> = {
-  body: new THREE.Color('#54c7ff'),
-  arrow: new THREE.Color('#fef08a'),
+  body: new THREE.Color('#fef08a'),
+  arrow: new THREE.Color('#54c7ff'),
   spell: new THREE.Color('#d8b4fe'),
 };
 
@@ -185,19 +224,10 @@ export const bossPhaseFlashMaterial = new THREE.MeshBasicMaterial({ color: '#fff
 export const guardianBodyMaterial = new THREE.MeshLambertMaterial({ color: '#5b6270' });
 /** Hombros/cuernos: tono más oscuro, silueta "pesada" reconocible. */
 export const guardianHornMaterial = new THREE.MeshLambertMaterial({ color: '#3c4048' });
-/** Vetas del cuerpo pétreo: tono cálido tenue (ámbar apagado), sugiere el "canto" que le da nombre. */
-export const guardianVeinMaterial = new THREE.MeshBasicMaterial({ color: '#d9a531' });
 /** Brillo/vibración del telegraph (GDD §15.2 "brilla y vibra"): sustituye al cuerpo entero mientras avisa. */
 export const guardianTelegraphGlowMaterial = new THREE.MeshBasicMaterial({ color: '#ffb84d' });
 /** Estrellitas del aturdimiento (estado INCONFUNDIBLE, entregable 3): doradas, orbitan sobre la cabeza. */
 export const guardianStunStarMaterial = new THREE.MeshBasicMaterial({ color: '#fff2c9' });
-/** Partícula de polvo de la carga: se emite como evento (burstTable.ts); geometría reutilizada de unitSphere. */
-export const guardianDustMaterial = new THREE.MeshBasicMaterial({
-  color: '#8d8367',
-  transparent: true,
-  opacity: 0.6,
-  depthWrite: false,
-});
 /** Cuerno/hombro del Guardián: cono corto y ancho (más "roca tallada" que púa afilada). */
 export const guardianHornGeometry = new THREE.ConeGeometry(0.32, 0.55, 6);
 /** Estrellita del aturdimiento: tetraedro minúsculo, barato, orbitando. */
@@ -422,10 +452,9 @@ export const smallWedgeGeometry = new THREE.BoxGeometry(1, 1, 1);
 
 // Colores alineados con los botones de arma del HUD (mapeo instantáneo
 // botón↔proyectil, feedback de playtest): flecha amarilla, hechizo violeta.
-export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#fef08a' });
+export const arrowMaterial = new THREE.MeshLambertMaterial({ color: '#54c7ff' });
 /** Asta de la flecha (detrás del cono dominante): tono más oscuro, silueta de flecha reconocible. */
-export const arrowTipMaterial = new THREE.MeshLambertMaterial({ color: '#d4a017' });
-export const spellMaterial = new THREE.MeshLambertMaterial({ color: '#d8b4fe' });
+export const arrowTipMaterial = new THREE.MeshLambertMaterial({ color: '#1f6fa1' });
 /** Zigzag eléctrico del hechizo (ronda 3, punto 11: sin núcleo, solo rayo): violeta más saturado/luminoso que el cuerpo. */
 export const spellBoltMaterial = new THREE.MeshBasicMaterial({
   color: '#c084fc',
@@ -441,6 +470,116 @@ export const spellSparkMaterial = new THREE.MeshBasicMaterial({
   depthWrite: false,
 });
 export const enemyProjectileMaterial = new THREE.MeshLambertMaterial({ color: '#ff3b3b' });
+
+/**
+ * Tinte de proyectil enemigo por `Projectile.colorTag` (rama `estilo-oscuro`,
+ * feedback playtest 2026-07-17: "que cada bola tuviera su luz" + "un color
+ * por ataque" en La Tormenta; "los ataques de proyectiles de su color" en el
+ * Prisma). Un `MeshLambertMaterial`/`MeshBasicMaterial` FIJO por etiqueta —
+ * NUNCA se muta el `.color` de un material compartido en tiempo de render
+ * (`enemyProjectileMaterial` lo usan a la vez TODOS los slots del pool;
+ * tocar su color afectaría a cualquier otro proyectil enemigo en pantalla,
+ * no solo al propio). `ProjectileView.tsx` REASIGNA la referencia
+ * `mesh.material` cada frame según `p.colorTag` (mismo truco de swap que el
+ * flash de golpe en `EnemyViews.tsx`), cero asignaciones nuevas por frame.
+ *
+ * Colores de La Tormenta (GDD §15.5, un color por patrón, "que se lean
+ * distintos en la oscuridad"): espiral=violeta, anillos=azul hielo,
+ * ráfaga=ámbar — ninguno coincide con `WEAPON_COLOR.arrow`/`.spell` del
+ * héroe, para no confundir "mi disparo" con "el suyo". El Prisma (GDD §15.4)
+ * reutiliza directamente `WEAPON_COLOR` (mismo mapeo arma↔color que
+ * `prismaCoreMaterial`/`prismaWeaponColor` en `EnemyViews.tsx`): sus
+ * proyectiles se tiñen del color de su gate activo.
+ */
+const STORM_SPIRAL_PROJECTILE_COLOR = '#b18cff';
+const STORM_RINGS_PROJECTILE_COLOR = '#7cc7ff';
+const STORM_BURST_PROJECTILE_COLOR = '#ffb36b';
+
+const enemyProjectileTintMaterials: Record<string, THREE.MeshLambertMaterial> = {
+  ram: new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.body.clone() }),
+  arrow: new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.arrow.clone() }),
+  spell: new THREE.MeshLambertMaterial({ color: WEAPON_COLOR.spell.clone() }),
+  'storm-spiral': new THREE.MeshLambertMaterial({ color: STORM_SPIRAL_PROJECTILE_COLOR }),
+  'storm-rings': new THREE.MeshLambertMaterial({ color: STORM_RINGS_PROJECTILE_COLOR }),
+  'storm-burst': new THREE.MeshLambertMaterial({ color: STORM_BURST_PROJECTILE_COLOR }),
+};
+
+/** Material de CUERPO del proyectil enemigo para su `colorTag` ('' u otra etiqueta sin mapear = clásico rojo). */
+export function enemyProjectileMaterialForTag(colorTag: string): THREE.MeshLambertMaterial {
+  return enemyProjectileTintMaterials[colorTag] ?? enemyProjectileMaterial;
+}
+
+/**
+ * Halo aditivo bajo cada proyectil enemigo (mismo mecanismo barato que
+ * `coinGlowHaloMaterial`/`keyGlowHaloMaterial`/`potionGlowHaloMaterial` más
+ * abajo: `glowHaloTexture` + `AdditiveBlending` + `depthWrite:false`), con el
+ * mismo color que el tinte de cuerpo de arriba. Generalizado a TODO
+ * proyectil enemigo (no solo los de La Tormenta): el shooter clásico (sin
+ * `colorTag`) recibe el halo rojo por defecto.
+ */
+const enemyProjectileGlowHaloMaterials: Record<string, THREE.MeshBasicMaterial> = {
+  '': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: '#ff3b3b',
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  ram: new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: WEAPON_COLOR.body.clone(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  arrow: new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: WEAPON_COLOR.arrow.clone(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  spell: new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: WEAPON_COLOR.spell.clone(),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.16,
+  }),
+  'storm-spiral': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: STORM_SPIRAL_PROJECTILE_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.18,
+  }),
+  'storm-rings': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: STORM_RINGS_PROJECTILE_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.18,
+  }),
+  'storm-burst': new THREE.MeshBasicMaterial({
+    map: glowHaloTexture,
+    color: STORM_BURST_PROJECTILE_COLOR,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    opacity: 0.18,
+  }),
+};
+
+/** Material de HALO del proyectil enemigo para su `colorTag` ('' u otra etiqueta sin mapear = clásico rojo). */
+export function enemyProjectileGlowHaloMaterialForTag(colorTag: string): THREE.MeshBasicMaterial {
+  return enemyProjectileGlowHaloMaterials[colorTag] ?? enemyProjectileGlowHaloMaterials[''];
+}
 
 // ── Hazards ────────────────────────────────────────────────────────────────
 
