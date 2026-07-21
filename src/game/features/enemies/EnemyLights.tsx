@@ -202,10 +202,23 @@ export function applyLanternAim(params: {
  * pointLight de siempre, más luminosa (punto 2a) y SIN sombra (su arena es
  * una sala entera, ver ENEMY_LIGHT_DISTANCE_BOSS) — las velas de sala
  * (BossCandlesView) hacen el resto.
+ *
+ * Perfil de calidad adaptativo (bug de pantalla negra en móvil,
+ * render/quality.ts): la linterna de ojos es, junto a la vela del héroe, una
+ * de las DOS únicas fuentes de shadow map de la escena — con hasta ~5
+ * enemigos vivos a la vez eso son ~5 shadow maps extra, la otra mitad del
+ * diagnóstico (además de agotar el presupuesto de LUCES simultáneas, no solo
+ * de sombras). `enemyLanternEnabled===false` (perfil bajo) ni siquiera monta
+ * la spotLight/target — el enemigo se queda SOLO con el relleno (barato, sin
+ * sombra, se conserva en los dos perfiles). Si algún día un perfil futuro
+ * combinase linterna montada + sombras apagadas, `shadowsEnabled` cubre ese
+ * caso también (`castShadow` más abajo).
  */
 export function EnemyLightsRig({
   kind,
   silhouettes,
+  enemyLanternEnabled,
+  shadowsEnabled,
   lightsGroupRef,
   lanternRef,
   lanternTargetRef,
@@ -214,6 +227,8 @@ export function EnemyLightsRig({
 }: {
   kind: EnemyKind;
   silhouettes: boolean;
+  enemyLanternEnabled: boolean;
+  shadowsEnabled: boolean;
   lightsGroupRef: RefObject<Group | null>;
   lanternRef: RefObject<SpotLight | null>;
   lanternTargetRef: RefObject<Object3D | null>;
@@ -222,7 +237,7 @@ export function EnemyLightsRig({
 }) {
   return (
     <group ref={lightsGroupRef}>
-      {silhouettes && kind !== 'boss' && (
+      {silhouettes && kind !== 'boss' && enemyLanternEnabled && (
         <>
           <spotLight
             ref={lanternRef}
@@ -234,25 +249,28 @@ export function EnemyLightsRig({
             decay={ENEMY_LANTERN_DECAY}
             position={[0, ENEMY_LANTERN_HEIGHT, 0]}
             // Sombra (ver ENEMY_LANTERN_SHADOW_MAP_SIZE arriba): mapa de spot
-            // pequeño, 1 sola pasada extra por enemigo vivo — nace en `true`
-            // porque este group de luces solo se monta con dark>=1; el
+            // pequeño, 1 sola pasada extra por enemigo vivo — nace en
+            // `shadowsEnabled` porque este group de luces solo se monta con
+            // dark>=1 (dentro de eso, según el perfil de calidad); el
             // useFrame de EnemyViews.tsx la apaga junto con la intensidad al
-            // morir.
-            castShadow
+            // morir, sin superar nunca `shadowsEnabled` de vuelta a `true`.
+            castShadow={shadowsEnabled}
             shadow-mapSize={[ENEMY_LANTERN_SHADOW_MAP_SIZE, ENEMY_LANTERN_SHADOW_MAP_SIZE]}
             shadow-camera-near={ENEMY_LANTERN_SHADOW_NEAR}
             shadow-camera-far={ENEMY_LANTERN_SHADOW_FAR}
           />
           <object3D ref={lanternTargetRef} position={[0, -ENEMY_RADIUS_RENDER, ENEMY_LANTERN_TARGET_DISTANCE]} />
-          <pointLight
-            ref={fillLightRef}
-            color={ENEMY_LIGHT_COLOR[kind]}
-            intensity={ENEMY_FILL_LIGHT_INTENSITY}
-            distance={ENEMY_FILL_LIGHT_DISTANCE}
-            decay={ENEMY_LIGHT_DECAY}
-            position={[0, ENEMY_LIGHT_HEIGHT, 0]}
-          />
         </>
+      )}
+      {silhouettes && kind !== 'boss' && (
+        <pointLight
+          ref={fillLightRef}
+          color={ENEMY_LIGHT_COLOR[kind]}
+          intensity={ENEMY_FILL_LIGHT_INTENSITY}
+          distance={ENEMY_FILL_LIGHT_DISTANCE}
+          decay={ENEMY_LIGHT_DECAY}
+          position={[0, ENEMY_LIGHT_HEIGHT, 0]}
+        />
       )}
       {silhouettes && kind === 'boss' && (
         <pointLight

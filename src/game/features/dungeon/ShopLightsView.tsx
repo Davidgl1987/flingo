@@ -75,6 +75,11 @@ export function ShopLightsView({ session }: { session: GameSession }) {
     return {
       x: shopkeeper.position.x,
       z: shopkeeper.position.y,
+      // `false` = sin puntos medios, YA por diseño (comentario de cabecera:
+      // sala pequeña y cuadrada, 4 esquinas bastan) en TODOS los perfiles de
+      // calidad — no depende de `budget.wallTorchMidpoints` (perfil de
+      // calidad adaptativo, render/quality.ts): esta vista ya cumple lo que
+      // el perfil bajo pide, sin necesitar el store aquí.
       torches: wallTorchLayout(bounds, false),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

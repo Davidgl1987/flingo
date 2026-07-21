@@ -16,29 +16,34 @@
  * leer la mazmorra/topología aparte ni duplicar esa búsqueda.
  *
  * Cantidad: 4 esquinas + puntos medios de los muros largos (hasta 6) cuando
- * la sala es suficientemente grande (`wallTorchLayout`, `includeMidpoints`);
- * las salas de jefe reales (11-21 u) siempre califican. El recuento se fija
- * al montar (una sola vez por sala; la sala de jefe no cambia durante la
- * partida) y nunca varía por frame.
+ * la sala es suficientemente grande (`wallTorchLayout`, `includeMidpoints`)
+ * Y el perfil de calidad lo permite (`wallTorchMidpoints`, perfil de calidad
+ * adaptativo — bug de pantalla negra en móvil, render/quality.ts: en perfil
+ * bajo, solo 4 esquinas, nunca puntos medios); las salas de jefe reales
+ * (11-21 u) siempre calificarían por tamaño. El recuento se fija al montar
+ * (una sola vez por sala; la sala de jefe no cambia durante la partida) y
+ * nunca varía por frame.
  */
 
 import { useMemo } from 'react';
 import type { GameSession } from '@/game/session/session';
 import { bossRoomBounds } from '@/game/features/bosses/movement';
 import { WallTorch, wallTorchLayout } from '@/game/features/dungeon/TorchView';
+import { useQualityStore } from '@/game/render/quality';
 
 export function BossCandlesView({ session }: { session: GameSession }) {
   const world = session.world;
   const boss = world.enemies.find((e) => e.kind === 'boss');
+  const wallTorchMidpoints = useQualityStore((s) => s.budget.wallTorchMidpoints);
   // La sala del jefe no cambia durante la partida (mazmorra fija tras
   // generarse): recalcular solo si cambia qué enemigo boss existe (en la
   // práctica, solo al montar) evita recomputar el layout cada render.
   const positions = useMemo(() => {
     if (!boss) return [];
     const bounds = bossRoomBounds(world, boss);
-    return wallTorchLayout(bounds, true);
+    return wallTorchLayout(bounds, wallTorchMidpoints);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boss]);
+  }, [boss, wallTorchMidpoints]);
 
   if (positions.length === 0) return null;
 

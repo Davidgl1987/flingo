@@ -21,6 +21,7 @@ import type { Material, Object3D } from 'three';
 import { getRoomPool } from '@/game/features/dungeon/rooms';
 import { applyForcedUpgrades, readForcedBossPhase, readForcedBossRoom, readForcedSeed, readForcedUpgrades, readGodMode } from './debug-params';
 import { useDarkStore } from './dark-store';
+import { resolveQualityProfile, useQualityStore } from './quality';
 import { AimInput } from '@/game/features/hero/AimInput';
 import { CandleLightView } from '@/game/features/hero/CandleLightView';
 import { ParticleView } from '@/game/features/effects/ParticleView';
@@ -79,11 +80,23 @@ function SimDriver({ session }: { session: GameSession }) {
  * Defensivo con `background`/`fog`: aunque `attach` (RoomView.tsx/GameRoot
  * JSX de abajo) ya debería limpiarlos solo al desmontar el JSX condicional
  * de dark=0, forzarlos a `null` aquí es gratis y cierra cualquier resquicio.
+ *
+ * Perfil de calidad (bug de pantalla negra en móvil, render/quality.ts):
+ * `shadowsEnabled` del presupuesto es la autoridad en RUNTIME sobre si el
+ * shadow map del renderer se activa — el prop `shadows` del Canvas (más
+ * abajo) solo puede leer el perfil ya resuelto en un SEGUNDO montaje (la
+ * primera vez que se crea el Canvas, `onCreated` —que resuelve el perfil—
+ * aún no ha corrido cuando se evalúa ese prop), así que este efecto es el
+ * único punto que garantiza `gl.shadowMap.enabled=false` en perfil bajo
+ * desde el primer frame. `shadowsEnabled` es dependencia del efecto: si el
+ * store se resolviese DESPUÉS del primer render (no debería, ver cabecera
+ * de quality.ts) el efecto se re-ejecutaría solo igualmente.
  */
 function DarkModeSync({ dark }: { dark: 0 | 1 | 2 }) {
   const { gl, scene, setDpr } = useThree();
+  const shadowsEnabled = useQualityStore((s) => s.budget.shadowsEnabled);
   useEffect(() => {
-    gl.shadowMap.enabled = dark >= 1;
+    gl.shadowMap.enabled = dark >= 1 && shadowsEnabled;
     // Presupuesto de píxeles (playtest ronda 6: 23 FPS en ventana grande):
     // en dark>=1 cada frame paga la escena + 6 caras de sombra cúbica de la
     // vela — a dpr 2 en un monitor grande eso hunde el framerate. Tope 1.5
@@ -105,7 +118,7 @@ function DarkModeSync({ dark }: { dark: 0 | 1 | 2 }) {
       scene.background = null;
       scene.fog = null;
     }
-  }, [dark, gl, scene, setDpr]);
+  }, [dark, gl, scene, setDpr, shadowsEnabled]);
   return null;
 }
 
@@ -152,6 +165,13 @@ export function GameRoot({
   // partir de ahí el store manda — este selector reacciona a cada cambio.
   const darkMode = useDarkStore((s) => s.dark);
 
+  // Perfil de calidad adaptativo (bug de pantalla negra en móvil,
+  // render/quality.ts): selector del presupuesto de sombras, mismo criterio
+  // que `darkMode` de arriba. Solo importa para el prop `shadows` del Canvas
+  // más abajo — el punto que de verdad manda en runtime es `DarkModeSync`
+  // (ver su cabecera), que lee el store directamente.
+  const qualityShadowsEnabled = useQualityStore((s) => s.budget.shadowsEnabled);
+
   const handleRestart = useCallback(() => {
     restartSession(session);
     useUiStore.getState().resetRun();
@@ -171,6 +191,12 @@ export function GameRoot({
       <Canvas
         key={runSeq}
         onCreated={(state) => {
+          // Perfil de calidad adaptativo (bug de pantalla negra en móvil,
+          // render/quality.ts): se resuelve UNA vez aquí, por capacidades
+          // REALES del contexto WebGL recién creado — SIEMPRE (no solo dev),
+          // antes de que monte cualquier hijo del Canvas (ver cabecera de
+          // quality.ts para la garantía de orden de React Three Fiber).
+          resolveQualityProfile(state.gl.getContext());
           // Solo dev: expone la escena para el puente de verificación
           // (inspección de objetos huérfanos; complementa a __flingo).
           if (import.meta.env.DEV) {
@@ -197,8 +223,13 @@ export function GameRoot({
         // (paridad EXACTA con `main`) el motor de sombras ni se activa, cero
         // coste y cero diferencia visual con el look clásico. Una única luz
         // con sombra (CandleLightView, cúbica por ser pointLight) es
-        // asumible en forward rendering.
-        shadows={darkMode >= 1}
+        // asumible en forward rendering EN PERFIL ALTO — `qualityShadowsEnabled`
+        // (perfil de calidad adaptativo, bug de pantalla negra en móvil,
+        // render/quality.ts) la apaga en perfil bajo. Este prop solo puede
+        // ver el perfil ya resuelto de un montaje ANTERIOR (primer Canvas:
+        // siempre lee el default 'alto' de la store, ver quality.ts) —
+        // `DarkModeSync` es quien manda de verdad en runtime, ver su cabecera.
+        shadows={darkMode >= 1 && qualityShadowsEnabled}
       >
         <SimDriver session={session} />
         <DarkModeSync dark={darkMode} />

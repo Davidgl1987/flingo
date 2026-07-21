@@ -41,6 +41,7 @@ import type { Projectile } from '@/game/world/types';
 import { getUpgradeLevel } from '@/game/session/upgrades';
 import { arrowMaterial, arrowShaftGeometry, arrowTipMaterial, enemyProjectileGlowHaloMaterialForTag, enemyProjectileMaterial, enemyProjectileMaterialForTag, spellBoltMaterial, spellBoltSegmentGeometry, spellSparkGeometry, spellSparkMaterial, unitCircle, unitCone, unitSphere, WEAPON_COLOR } from '@/game/render/assets';
 import { useDarkStore } from '@/game/render/dark-store';
+import { useQualityStore } from '@/game/render/quality';
 import { PROJECTILE_WAX_EMIT_DISTANCE } from '@/game/features/effects/wax';
 import { arrowWidthScaleForLevel } from './upgrade-visuals';
 
@@ -54,8 +55,8 @@ import { arrowWidthScaleForLevel } from './upgrade-visuals';
  * recompila TODOS los programas de shader cada vez que cambia el Nº de
  * luces VISIBLES en la escena — con un bullet hell (decenas de proyectiles
  * apareciendo/muriendo por segundo) eso era una recompilación constante.
- * Fix: POOL FIJO de `PROJECTILE_LIGHT_POOL_SIZE` pointLights, montadas UNA
- * vez (mismo Nº de luces en escena SIEMPRE, cero recompilaciones) en
+ * Fix: POOL FIJO de `budget.projectileLightPoolSize` pointLights, montadas
+ * UNA vez (mismo Nº de luces en escena SIEMPRE, cero recompilaciones) en
  * `ProjectileLightPool`, reasignadas cada frame por prioridad — (a)
  * proyectiles del héroe, (b) proyectiles enemigos más CERCANOS al héroe — a
  * los proyectiles activos; las sobrantes quedan con intensity=0 (nunca
@@ -63,8 +64,15 @@ import { arrowWidthScaleForLevel } from './upgrade-visuals';
  * Color del arma activa (`WEAPON_COLOR`, arrow/spell); el proyectil del
  * shooter enemigo (`kind==='enemy'`) recibe una versión bastante más débil,
  * en su propio color. SIN sombra (coste).
+ *
+ * Tamaño del pool (perfil de calidad adaptativo, bug de pantalla negra en
+ * móvil, render/quality.ts): antes fijo a 6, ahora leído de
+ * `budget.projectileLightPoolSize` (6 en perfil alto —idéntico a hoy—, 2 en
+ * perfil bajo) — sigue siendo FIJO durante toda la sesión (el perfil no
+ * cambia tras `onCreated`, ver quality.ts), así que la invariante de "mismo
+ * Nº de luces siempre" se mantiene intacta, solo con un valor de partida
+ * distinto según GPU.
  */
-const PROJECTILE_LIGHT_POOL_SIZE = 6;
 const PROJECTILE_LIGHT_INTENSITY = 6;
 const PROJECTILE_LIGHT_DISTANCE = 3;
 const PROJECTILE_LIGHT_DECAY = 2;
@@ -375,35 +383,42 @@ function ProjectileSlot({ session, index }: { session: GameSession; index: numbe
 
 /**
  * Pool FIJO de luces de proyectil (ver cabecera del fichero): SIEMPRE monta
- * exactamente `PROJECTILE_LIGHT_POOL_SIZE` pointLights cuando `dark>=1`
+ * exactamente `poolSize` (`budget.projectileLightPoolSize`, perfil de
+ * calidad adaptativo — render/quality.ts) pointLights cuando `dark>=1`
  * (nunca más, nunca menos — el propio componente entero no monta nada si
  * `silhouettes` es false, un único toggle global al cambiar de modo, no un
- * problema de recuento variable como el que arregla este pool). Cada frame
- * reasigna las luces a los proyectiles activos por prioridad, sin asignar
- * memoria nueva (arrays de scratch creados una vez vía useRef).
+ * problema de recuento variable como el que arregla este pool). El perfil se
+ * resuelve UNA vez al arrancar y no cambia durante la sesión (ver cabecera
+ * de quality.ts), así que `poolSize` es efectivamente una constante para
+ * toda la vida de este componente — se lee una vez por instancia y se
+ * reutiliza en el useRef/useFrame/JSX de abajo, sin volver a variar el
+ * recuento montado. Cada frame reasigna las luces a los proyectiles activos
+ * por prioridad, sin asignar memoria nueva (arrays de scratch creados una
+ * vez vía useRef).
  */
 function ProjectileLightPool({ session }: { session: GameSession }) {
   const silhouettes = useDarkStore((s) => s.dark >= 1);
+  const poolSize = useQualityStore((s) => s.budget.projectileLightPoolSize);
   const lightRefs = useRef<(PointLight | null)[]>([]);
   // Scratch reutilizado cada frame (cero `new`/allocs en useFrame):
   // `assignedSlot[k]` = índice en world.projectiles asignado a la luz k (-1
   // si ninguno); `assignedDist2[k]` = distancia² al héroe del candidato
   // ocupando el slot k durante la fase 2 (selección top-K de enemigos más
   // cercanos, ver abajo).
-  const assignedSlot = useRef<number[]>(new Array(PROJECTILE_LIGHT_POOL_SIZE).fill(-1));
-  const assignedDist2 = useRef<number[]>(new Array(PROJECTILE_LIGHT_POOL_SIZE).fill(Infinity));
+  const assignedSlot = useRef<number[]>(new Array(poolSize).fill(-1));
+  const assignedDist2 = useRef<number[]>(new Array(poolSize).fill(Infinity));
 
   useFrame(() => {
     const world = session.world;
     const projectiles = world.projectiles;
     const slots = assignedSlot.current;
     const dist2 = assignedDist2.current;
-    for (let k = 0; k < PROJECTILE_LIGHT_POOL_SIZE; k++) slots[k] = -1;
+    for (let k = 0; k < poolSize; k++) slots[k] = -1;
 
     // Fase 1 — prioridad máxima: proyectiles del héroe (flecha/hechizo), en
     // orden de pool (orden de disparo).
     let filled = 0;
-    for (let i = 0; i < projectiles.length && filled < PROJECTILE_LIGHT_POOL_SIZE; i++) {
+    for (let i = 0; i < projectiles.length && filled < poolSize; i++) {
       const p = projectiles[i];
       if (p.active && p.owner === 'hero') {
         slots[filled] = i;
@@ -415,8 +430,8 @@ function ProjectileLightPool({ session }: { session: GameSession }) {
     // (selección top-K acotada sobre los slots libres [filled..POOL), sin
     // ordenar ni asignar arrays nuevos — sustituye el peor candidato ya
     // ocupado si el nuevo está más cerca).
-    if (filled < PROJECTILE_LIGHT_POOL_SIZE) {
-      for (let k = filled; k < PROJECTILE_LIGHT_POOL_SIZE; k++) dist2[k] = Infinity;
+    if (filled < poolSize) {
+      for (let k = filled; k < poolSize; k++) dist2[k] = Infinity;
       const heroX = world.hero.position.x;
       const heroY = world.hero.position.y;
       for (let i = 0; i < projectiles.length; i++) {
@@ -427,7 +442,7 @@ function ProjectileLightPool({ session }: { session: GameSession }) {
         const d2 = dx * dx + dy * dy;
         let worstSlot = -1;
         let worstDist2 = -1;
-        for (let k = filled; k < PROJECTILE_LIGHT_POOL_SIZE; k++) {
+        for (let k = filled; k < poolSize; k++) {
           if (dist2[k] > worstDist2) {
             worstDist2 = dist2[k];
             worstSlot = k;
@@ -443,7 +458,7 @@ function ProjectileLightPool({ session }: { session: GameSession }) {
     // Aplica la asignación a las luces montadas: posición + color/intensidad
     // del proyectil asignado, o intensity=0 (NUNCA visible=false/desmontar:
     // cambiaría el recuento) si el slot quedó sin candidato.
-    for (let k = 0; k < PROJECTILE_LIGHT_POOL_SIZE; k++) {
+    for (let k = 0; k < poolSize; k++) {
       const light = lightRefs.current[k];
       if (!light) continue;
       const idx = slots[k];
@@ -470,7 +485,7 @@ function ProjectileLightPool({ session }: { session: GameSession }) {
   if (!silhouettes) return null;
   return (
     <>
-      {Array.from({ length: PROJECTILE_LIGHT_POOL_SIZE }, (_, k) => (
+      {Array.from({ length: poolSize }, (_, k) => (
         <pointLight
           key={k}
           ref={(el) => {

@@ -108,6 +108,7 @@ import {
   unitSphere,
 } from '@/game/render/assets';
 import { useDarkStore } from '@/game/render/dark-store';
+import { useQualityStore } from '@/game/render/quality';
 import { ChaserMesh } from '@/game/features/enemies/chaser/Mesh';
 import { DummyMesh } from '@/game/features/enemies/dummy/Mesh';
 import { ShooterMesh } from '@/game/features/enemies/shooter/Mesh';
@@ -219,6 +220,12 @@ function EnemyMesh({
   bossId?: BossId;
 }) {
   const silhouettes = useDarkStore((s) => s.dark >= 1);
+  // Perfil de calidad adaptativo (bug de pantalla negra en móvil,
+  // render/quality.ts): fijo desde el arranque (nunca cambia durante la
+  // sesión), controla el montaje de la linterna de ojos (EnemyLightsRig) y
+  // si esta/la vela pueden proyectar sombra.
+  const enemyLanternEnabled = useQualityStore((s) => s.budget.enemyLanternEnabled);
+  const shadowsEnabled = useQualityStore((s) => s.budget.shadowsEnabled);
   const bodyRef = useRef<Mesh>(null);
   const shadowRef = useRef<Mesh>(null);
   const groupRef = useRef<Group>(null);
@@ -299,8 +306,11 @@ function EnemyMesh({
       lanternRef.current.intensity = alive ? ENEMY_LANTERN_INTENSITY : 0;
       // castShadow se apaga A LA VEZ que la intensidad (ver comentario de
       // ENEMY_LANTERN_SHADOW_MAP_SIZE arriba): nunca sombra activa con
-      // intensidad 0.
-      lanternRef.current.castShadow = alive;
+      // intensidad 0. Y nunca por encima de `shadowsEnabled` (perfil de
+      // calidad, render/quality.ts): en perfil bajo esta ref ni siquiera
+      // llega a existir (spotLight no montada), pero el guard es defensivo
+      // por si un perfil futuro monta la linterna sin sombra.
+      lanternRef.current.castShadow = alive && shadowsEnabled;
     }
     if (fillLightRef.current) fillLightRef.current.intensity = alive ? ENEMY_FILL_LIGHT_INTENSITY : 0;
     if (bossLightRef.current) bossLightRef.current.intensity = alive ? ENEMY_LIGHT_INTENSITY_BOSS : 0;
@@ -571,6 +581,8 @@ function EnemyMesh({
     <EnemyLightsRig
       kind={kind}
       silhouettes={silhouettes}
+      enemyLanternEnabled={enemyLanternEnabled}
+      shadowsEnabled={shadowsEnabled}
       lightsGroupRef={lightsGroupRef}
       lanternRef={lanternRef}
       lanternTargetRef={lanternTargetRef}

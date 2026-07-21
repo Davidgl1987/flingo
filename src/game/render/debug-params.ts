@@ -108,6 +108,20 @@ export function readGlowGroups(): Set<GlowGroup> {
 }
 
 /**
+ * Perfil de calidad forzado vía `?quality=alto|bajo` (ver render/quality.ts):
+ * verificación del perfil 'bajo' (recorte de luces/sombras para GPU
+ * limitada, bug de pantalla negra en móvil, David 2026-07-21) desde un
+ * navegador de escritorio, sin depender de un dispositivo real — el perfil
+ * real se decide por capacidades del contexto WebGL
+ * (`detectQualityProfile`), este parámetro solo lo SOBRESCRIBE. Cualquier
+ * valor ausente o no reconocido devuelve null (sin forzar).
+ */
+export function readQualityOverride(): 'alto' | 'bajo' | null {
+  const raw = new URLSearchParams(window.location.search).get('quality');
+  return raw === 'alto' || raw === 'bajo' ? raw : null;
+}
+
+/**
  * Tope defensivo para el nivel forzado de mejoras SIN `maxLevel` finito
  * (escudo: `maxLevel` Infinity) — sin esto, un `?upgrades=escudo:999999999`
  * en la URL dispararía cientos de miles de `applyUpgrade` al crear la sesión
